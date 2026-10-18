@@ -1,182 +1,61 @@
-# AGENTS.md — Working Agreement for Folio
+# Folio
 
-This document is the authoritative contributor and AI agent guide for the **Folio** repository. All code additions and modifications must adhere to these policies and architectural constraints.
+Local-first office app. Windows desktop is Tauri 2 (`src-tauri`). The browser build is Vite on port 5188, using the File System Access API with a download fallback. There is no PWA manifest and no service worker. Files stay on the machine: no accounts, telemetry, or uploads.
 
----
+`spec/` holds the long product rules. Open a spec only when the task changes that area. This file is the working constraint for every edit.
 
-## 1. What Folio Is
+## Rules
 
-Folio is a **local-first office suite** for Windows and modern web browsers. It provides focused, clean productivity tooling for:
-- **Documents**: Word processing powered by Tiptap (DOCX, ODT, RTF, Markdown, HTML, Plain Text).
-- **Spreadsheets**: Multi-sheet workbooks powered by FortuneSheet (XLSX, CSV, TSV).
-- **Presentations**: Slide decks and slide editing (PPTX).
-- **PDF Viewing**: Document preview and rendering via PDF.js.
+- Sanitize HTML in `src/document/sanitize.ts` (DOMPurify) before parse or render. `EditorState` holds Tiptap `JSONContent`, FortuneSheet sheets, or `PresentationModel`. HTML stays inside adapters.
+- Reject `.doc`, `.xls`, `.ppt`, and OLE headers (`D0 CF 11 E0`) in `src/files/detect.ts`. Do not add a binary parser. Keep the messages already in that file.
+- `.docm`, `.xlsm`, `.pptm`: import the body, strip macros, set `isMacroFile`, and warn on `ImportReport`. Never execute macros.
+- Do not send document bytes, analytics, or identifiers over the network. Do not add remote script or font hosts. The PDF.js worker stays bundled.
+- New UI copy says Document, Spreadsheet, or Presentation. Do not add Word, Excel, PowerPoint, or Microsoft. A few dialog filters and MIME strings already use those names; do not copy them into new UI.
+- No Electron. Editors (`src/document`, `src/spreadsheet`, `src/slides`, `src/pdf`) must not import `@tauri-apps/*` or `src/platform/desktop.ts`. Host and OS I/O go through `src/platform`.
+- Desktop disk I/O goes through the Rust commands in `src-tauri/src/lib.rs`. `folio_read` and `folio_write` allow only paths added this session: open dialog, save dialog, an existing CLI file arg, a window drop, or `folio_allow_path`.
 
-### Core Principle: Local-First and Private
-- **Files stay on this PC**: Zero data transmission, zero telemetry, zero cloud accounts, and zero background analytics.
-- **Document Boundary**: Importers translate external file formats into structured in-memory application models. The editing canvas works strictly on this in-app model. Exporters translate the structured model back to file bytes upon save. HTML is an intermediate serialization format only inside sanitized adapters and never passes across component state.
-- **Desktop Shell**: Folio runs as a standard Windows desktop application packaged via **Tauri 2**. In web browsers, it operates as a standard Progressive Web App relying on the File System Access API with download fallback.
+## Where to change things
 
----
+- Shell and file flow: `src/App.tsx`, `src/shell/`, `src/files/open.ts`, `src/files/save.ts`.
+- Platform: `src/platform/types.ts` (`PlatformAdapter`), `desktop.ts`, `browser.ts`, `index.ts`. `__TAURI_INTERNALS__` selects the desktop adapter.
+- Formats: `src/files/detect.ts`, then `src/document/`, `src/spreadsheet/adapters.ts`, `src/slides/pptxAdapter.ts`, `src/pdf/PdfViewer.tsx`.
+- Drafts and recents use IndexedDB (`idb-keyval`). Drafts use `folio_draft_*` and save 1.5s after a dirty edit. Recents use `folio_recent_files` (browser handle or desktop path).
+- Rust commands live in `src-tauri/src/lib.rs` (crate `folio_lib`). `src-tauri/src/main.rs` only calls `folio_lib::run()`.
 
-## 2. Command Reference
+## Desktop (already built)
 
-All workflow commands are run via `npm`:
+Window is `1280×800`, minimum `960×640`. The installer is NSIS. WebView2 uses `downloadBootstrapper`. App id is `app.folio.local`. A second launch focuses `main` and emits `folio://open-file` with the path. Startup CLI file args are allow-listed. Drops are allow-listed in Rust, then read by `DesktopPlatformAdapter`. Save writes the existing path with `folio_write` and calls `folio_pick_save` only when there is no path. The title is `Folio - {name}`, with ` *` when dirty. Closing with unsaved edits asks, then destroys the window.
 
-| Command | Action |
-| --- | --- |
-| `npm install` | Install all dependencies for the web shell and Tauri CLI. |
-| `npm run dev` | Launch the local Vite development server in browser mode at `http://localhost:5188`. |
-| `npm test` | Run fast unit test suites with Vitest across all format adapters and platform boundaries. |
-| `npm run test:watch` | Run Vitest in interactive watch mode. |
-| `npm run test:e2e` | Run Playwright end-to-end smoke tests (verifying start screen, typing, formatting, and fixtures). |
-| `npm run build` | Validate TypeScript (`tsc`) and compile production static web bundles into `dist/`. |
-| `npm run desktop` | Launch the native Windows desktop app via `tauri dev`. |
-| `npm run desktop:build` | Build the signed, bundled NSIS installer under `src-tauri/target/release/bundle/nsis/`. |
+Shell associations, and no others: `docx odt rtf txt md html htm xlsx csv tsv pptx pdf`.
 
----
+IPC: `folio_pick_open`, `folio_pick_save`, `folio_read`, `folio_write`, `folio_allow_path`.
 
-## 3. Directory Map
+### Adding a desktop feature
 
-```
-app_for_office/
-├── AGENTS.md                 # Working agreement and agent guidelines (this file)
-├── package.json              # Web dependencies, scripts, and build metadata
-├── tsconfig.json             # TypeScript compiler configuration
-├── vite.config.ts            # Vite & Vitest configuration
-├── playwright.config.ts      # Playwright smoke test configuration
-├── index.html                # Vite entry template with teal book favicon
-│
-├── src/                      # Application source code
-│   ├── main.tsx              # React entry root
-│   ├── App.tsx               # Top-level shell orchestrator (State, Title, Close Guard)
-│   ├── types/                # Canonical TypeScript interfaces (EditorState, RecentItem, Models)
-│   │
-│   ├── platform/             # Platform abstraction boundary
-│   │   ├── types.ts          # PlatformFileResult, PlatformSaveResult, PlatformAdapter
-│   │   ├── browser.ts        # File System Access API, in-place handle writes, download fallback
-│   │   ├── desktop.ts        # Tauri IPC caller (folio_pick_open, folio_pick_save, folio_read, folio_write)
-│   │   └── index.ts          # Runtime detection (__TAURI_INTERNALS__) and adapter dispatch
-│   │
-│   ├── document/             # Document editor and formats
-│   │   ├── model.ts          # DocumentModel (Tiptap JSONContent), htmlToDocument, documentToHtml
-│   │   ├── sanitize.ts       # DOMPurify HTML sanitizer
-│   │   ├── textMdHtml.ts     # Markdown, HTML, and Plain Text converters
-│   │   ├── DocumentEditor.tsx# Tiptap React canvas with Find & Replace
-│   │   ├── extensions/       # Custom Tiptap extensions (FontSize, Indent, PageBreak)
-│   │   ├── docx/             # DOCX importer (docx4js/mammoth) and exporter (docx library)
-│   │   ├── odt/              # OpenDocument Text ZIP parser and XML builder
-│   │   └── rtf/              # Rich Text Format parser and RTF generator
-│   │
-│   ├── spreadsheet/          # Spreadsheet workbook engine
-│   │   ├── adapters.ts       # ExcelJS importer/exporter, CSV/TSV parser/builder
-│   │   └── SpreadsheetEditor.tsx # FortuneSheet React grid wrapper
-│   │
-│   ├── slides/               # Presentation engine
-│   │   ├── pptxAdapter.ts    # PPTX ZIP/XML slide importer and PptxGenJS builder
-│   │   └── SlideEditor.tsx   # Canvas slide thumbnail list and element inspector
-│   │
-│   ├── pdf/                  # PDF viewer
-│   │   └── PdfViewer.tsx     # PDF.js page renderer and toolbar
-│   │
-│   ├── files/                # File orchestration
-│   │   ├── detect.ts         # Magic bytes and extension sniffing
-│   │   ├── open.ts           # Central loadFileToEditor pipeline
-│   │   ├── save.ts           # Central saveEditorContent pipeline
-│   │   ├── drafts.ts         # IndexedDB draft auto-saving
-│   │   ├── recent.ts         # Recent files manager (IndexedDB storage)
-│   │   └── fileSystem.ts     # Platform proxy bridge
-│   │
-│   ├── shell/                # Application UI chrome
-│   │   ├── StartScreen.tsx   # Welcome dashboard with templates and recent files
-│   │   ├── Ribbon.tsx        # Fluent command ribbon (Home, Insert, Page & View, File)
-│   │   ├── StatusBar.tsx     # Bottom status bar with word count, sheet count, zoom
-│   │   ├── ImportReportDialog.tsx # Notice dialog for warnings and skipped features
-│   │   └── SaveAsDialog.tsx  # Format conversion dialog
-│   │
-│   └── styles/
-│       └── theme.css         # CSS design tokens (warm paper, ink text, teal accents)
-│
-├── fixtures/                 # Canonical test documents
-│   ├── sample.docx           # Open XML Word document fixture
-│   ├── sample.xlsx           # Open XML Excel workbook fixture
-│   ├── sample.pptx           # Open XML PowerPoint presentation fixture
-│   ├── sample.odt            # OpenDocument Text fixture
-│   ├── sample.rtf            # Rich Text Format fixture
-│   ├── sample.md             # Markdown fixture
-│   ├── sample.txt            # Plain text fixture
-│   ├── sample.html           # HTML fixture
-│   ├── sample.csv            # Comma-separated values fixture
-│   ├── sample.tsv            # Tab-separated values fixture
-│   └── sample_binary.doc     # Office 97-2003 binary rejection fixture
-│
-├── tests/                    # Unit and integration test suites
-│   ├── detect.test.ts        # Format sniffing tests
-│   ├── docx.test.ts          # DOCX roundtrip tests
-│   ├── odt.test.ts           # ODT roundtrip tests
-│   ├── rtf.test.ts           # RTF roundtrip tests
-│   ├── text_md_html.test.ts  # Text/MD/HTML tests
-│   ├── spreadsheet.test.ts   # XLSX/CSV/TSV tests
-│   ├── slides.test.ts        # PPTX slide model tests
-│   └── open_save.test.ts     # Central pipeline and platform boundary tests
-│
-├── e2e/                      # End-to-end integration tests
-│   └── smoke.spec.ts         # Playwright smoke test run against live UI
-│
-├── src-tauri/                # Tauri 2 native Windows desktop shell
-│   ├── Cargo.toml            # Rust manifest with tauri, serde, rfd, and single-instance
-│   ├── tauri.conf.json       # App configuration, window dimensions, file associations, NSIS
-│   ├── build.rs              # Tauri build script
-│   ├── src/main.rs           # Rust commands (folio_pick_open, folio_read, etc.) and allow-list
-│   └── icons/                # Teal book mark icons (32x32, 128x128, icon.ico, icon.png)
-│
-└── spec/                     # Normative architectural specifications
-    ├── README.md             # Spec directory manifest and reading hierarchy
-    ├── product.md            # Product rules, format matrix, non-goals
-    ├── architecture.md       # Architectural boundaries and data flow
-    ├── document-model.md     # In-app document representations
-    ├── file-pipelines.md     # File import, export, and fallback behavior
-    ├── shell.md              # User interface chrome, ribbon, shortcuts
-    ├── security.md           # Sanitization, macros, binary rejection, allow-list
-    ├── desktop-windows.md    # Tauri shell, dialogs, single-instance, associations
-    ├── ui.md                 # Design system, theme colors, typography
-    └── testing.md            # Testing strategy and verification criteria
-```
+1. Add the command in `src-tauri/src/lib.rs` and register it in `generate_handler!`. If it takes a path, check `AppState::is_allowed` first.
+2. Add the method on `PlatformAdapter`. Implement it in `desktop.ts` with `tauriInvoke`. Give `browser.ts` a real fallback or an explicit no-op. Export it from `src/platform/index.ts`.
+3. Call it from `App.tsx` or `src/shell/`. Do not call Tauri from an editor.
+4. Do not add a plugin that phones home. `app.security.csp` is null; do not open it to the network.
+5. Register file types only in `src-tauri/tauri.conf.json` `bundle.fileAssociations`, and only for formats Folio already opens.
 
----
+## Formats
 
-## 4. Hard Architectural Rules
+| Ext | In | Out | Engine |
+| --- | --- | --- | --- |
+| docx | yes | yes | JSZip + fast-xml-parser; mammoth if that parse fails; write with `docx` |
+| odt | yes | yes | ZIP/XML (`content.xml`) |
+| rtf | yes | yes | tokenizer / writer |
+| txt, md, html | yes | yes | text; markdown-it + DOMPurify in, turndown out |
+| xlsx, csv, tsv | yes | yes | ExcelJS ↔ FortuneSheet; RFC 4180 for csv/tsv |
+| pptx | yes | yes | slide XML in; pptxgenjs out |
+| pdf | yes | no | pdfjs-dist |
 
-1. **DOMPurify Before Render**: All incoming HTML from files, markdown transformations, or clipboard pastes must pass through `DOMPurify` before being parsed or rendered.
-2. **Macros Never Execute**: `.docm`, `.xlsm`, and `.pptm` files have their VBA macro streams stripped or ignored on import. Macros never execute, and a warning notice is added to the `ImportReport`.
-3. **Legacy Office Binaries Refused**: Pre-OpenXML binary formats (`.doc`, `.xls`, `.ppt`) cannot be parsed cleanly in modern web environments. They must be explicitly rejected with the standard message: `"Legacy Office binary format (.doc, .xls, .ppt) cannot be opened directly. Please save the file as modern .docx, .xlsx, or .pptx."`
-4. **No Network Upload**: The application must never transmit document data, telemetry, analytics, or user identifiers over the network.
-5. **No Microsoft Trademarks in UI**: Never use Microsoft brand names or logos in the interface (e.g. do not label buttons as "Word", "Excel", or "PowerPoint"). Use neutral format descriptors: "Document", "Spreadsheet", "Presentation".
-6. **No Electron Dependency**: Editor components and client utilities must never import Electron or assume an Electron environment. Platform integration is abstracted through `src/platform/`.
-7. **Strict Desktop Path Allow-List**: On desktop, disk I/O must go exclusively through the Rust commands (`folio_pick_open`, `folio_read`, `folio_write`). Reading and writing are only permitted for paths explicitly chosen by the user, dropped into the window, passed via CLI args, or saved during the current session. The allow-list resides inside the Rust process.
+To add a format: sniff it in `detect.ts`, import into the in-app model, export from that model, add a fixture under `fixtures/`, and add a Vitest file under `tests/`. Open and save go through `src/files/open.ts` and `save.ts` only.
 
----
+## Commands
 
-## 5. How to Add or Extend a File Format
+`npm run dev` (port 5188) · `npm test` · `npm run test:e2e` · `npm run build` · `npm run desktop` · `npm run desktop:build` (NSIS under `src-tauri/target/release/bundle/nsis/`). The `@` alias maps to `src/`.
 
-To add or extend a format in Folio, follow this standard pattern:
-1. **Sniffing**: Register the magic byte signature or extension detection in `src/files/detect.ts`.
-2. **Import Adapter**: Implement the parser to translate external bytes into the corresponding structured model:
-   - For text documents: produce sanitized HTML and convert with `htmlToDocument`.
-   - For spreadsheets: produce FortuneSheet sheet objects.
-   - For presentations: produce `PresentationModel` slide objects.
-3. **Export Adapter**: Implement serialization from the structured model into the destination format bytes.
-4. **Fixture**: Add a representative fixture file in `fixtures/` exercising typical formatting.
-5. **Vitest Suite**: Add or expand a unit test in `tests/` verifying bidirectional import/export and error handling.
+## Out of scope
 
----
-
-## 6. Out of Scope for This Version
-
-The following features are explicitly out of scope:
-- Real-time multiplayer collaboration or cloud syncing.
-- Complex embedded interactive Excel charts and dynamic pivot tables.
-- Advanced PowerPoint transitions, timing animations, and sound effects.
-- Direct PDF vector shape editing (PDF is read-only).
-- Binary Office 97–2003 reverse-engineered compound document parsers.
-
+Collaboration and cloud sync. Pivot tables and live charts. Slide animation and sound. PDF editing. Office 97–2003 binary parsers. Macro runtimes.
