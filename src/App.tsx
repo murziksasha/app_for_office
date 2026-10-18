@@ -1,448 +1,860 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { EditorState, DocumentKind, SupportedFormat, RecentItem, DraftItem } from './types';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { DraftItem, DocumentKind, EditorState, RecentItem, SupportedFormat } from './types';
 import {
-  pickFileToOpen,
-  verifyPermission,
+  getPlatformAdapter,
+  isDesktopPlatform,
+  pickFilesToOpen,
   readFileFromPath,
   setWindowTitle,
   setupCloseGuard,
   setupFileDropHandler,
   setupOpenRequestHandler,
-  isDesktopPlatform,
+  verifyPermission,
+  type PlatformFileResult,
 } from './platform';
 import { loadFileToEditor } from './files/open';
 import { saveEditorContent } from './files/save';
-import { saveDraft, clearDraft } from './files/drafts';
-import { defaultDocumentModel } from './document/model';
+import { clearDraft, getAllDrafts, saveDraft } from './files/drafts';
+import { getRecentFiles, removeRecentFile } from './files/recent';
+import {
+  CONFLICT_BUTTONS,
+  DRAFT_OPEN_BUTTONS,
+  DRAFT_REPLACE_BUTTONS,
+  RELOAD_BUTTONS,
+  SAVE_BUTTONS,
+  closeContinues,
+  decideSave,
+  findTabByHandle,
+  isDiskNewer,
+  nextDirtyIndex,
+  pathsMatch,
+  planOpenBatch,
+  printButtons,
+  printScopeFromChoice,
+  printScopeNeeded,
+  shouldRemoveRecent,
+  type OpenCandidate,
+  type PathStatus,
+  type TabRef,
+} from './files/session';
+import { applyEdit, blankTab, draftContent, stampClean, tabFromDraft } from './files/tabs';
 import { StartScreen } from './shell/StartScreen';
 import { Ribbon } from './shell/Ribbon';
 import { StatusBar } from './shell/StatusBar';
 import { ImportReportDialog } from './shell/ImportReportDialog';
 import { SaveAsDialog } from './shell/SaveAsDialog';
+import { ChoiceDialog } from './shell/ChoiceDialog';
+import { TabStrip } from './shell/TabStrip';
+import { PrintView } from './shell/PrintView';
 import { DocumentEditor } from './document/DocumentEditor';
 import { SpreadsheetEditor } from './spreadsheet/SpreadsheetEditor';
-import { createEmptySheet } from './spreadsheet/adapters';
 import { SlideEditor } from './slides/SlideEditor';
-import { createEmptySlide } from './slides/pptxAdapter';
 import { PdfViewer } from './pdf/PdfViewer';
 
+interface ChoiceState {
+  title: string;
+  message: string;
+  buttons: string[];
+}
+
+interface Incoming extends OpenCandidate {
+  name: string;
+  file?: File;
+  handle?: FileSystemFileHandle;
+  draft?: DraftItem;
+}
+
+type SaveOutcome = 'ok' | 'cancelled' | 'failed';
+
 export const App: React.FC = () => {
-  const [editorState, setEditorState] = useState<EditorState | null>(null);
+  const [tabs, setTabs] = useState<EditorState[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [documentEditorInstance, setDocumentEditorInstance] = useState<any>(null);
   const [pageSize, setPageSize] = useState<'letter' | 'a4'>('letter');
   const [zoom, setZoom] = useState<number>(100);
-  const [showSaveAs, setShowSaveAs] = useState<boolean>(false);
-  const [showImportReport, setShowImportReport] = useState<boolean>(false);
+  const [showSaveAs, setShowSaveAs] = useState(false);
+  const [showImportReport, setShowImportReport] = useState(false);
+  const [recentFiles, setRecentFiles] = useState<RecentItem[]>([]);
+  const [drafts, setDrafts] = useState<DraftItem[]>([]);
+  const [listsRevision, setListsRevision] = useState(0);
+  const [choice, setChoice] = useState<ChoiceState | null>(null);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfCount, setPdfCount] = useState(1);
+  const [printJob, setPrintJob] = useState<{ tab: EditorState; scope: 'current' | 'all' } | null>(null);
 
-  const autosaveTimeoutRef = useRef<any>(null);
+  const tabsRef = useRef<EditorState[]>([]);
+  const activeRef = useRef<string | null>(null);
+  const choiceRef = useRef<((value: string | null) => void) | null>(null);
+  const busyRef = useRef(false);
+  const actionsRef = useRef({
+    confirmClose: async () => true,
+    openPaths: async (_paths: string[]) => {},
+    openFiles: async (_files: PlatformFileResult[]) => {},
+    saveActive: async () => {},
+    closeActive: async () => {},
+    printActive: async () => {},
+    newActive: () => {},
+    cycle: (_backward: boolean) => {},
+  });
 
-  // Update window title (shows file name and dirty mark)
+  const commit = (next: EditorState[], active?: string | null) => {
+    tabsRef.current = next;
+    setTabs(next);
+    if (active !== undefined) {
+      activeRef.current = active;
+      setActiveId(active);
+    }
+  };
+
+  const refreshLists = useCallback(async () => {
+    setRecentFiles(await getRecentFiles());
+    setDrafts(await getAllDrafts());
+    setListsRevision((value) => value + 1);
+  }, []);
+
+  const ask = useCallback((title: string, message: string, buttons: string[]) => {
+    if (isDesktopPlatform()) return getPlatformAdapter().choose(title, message, buttons);
+    return new Promise<string | null>((resolve) => {
+      choiceRef.current = resolve;
+      setChoice({ title, message, buttons });
+    });
+  }, []);
+
+  const resolveChoice = (value: string | null) => {
+    setChoice(null);
+    const resolve = choiceRef.current;
+    choiceRef.current = null;
+    resolve?.(value);
+  };
+
+  const activeTab = tabs.find((tab) => tab.id === activeId) || null;
+
   useEffect(() => {
-    const title = editorState
-      ? `Folio - ${editorState.fileName}${editorState.isDirty ? ' *' : ''}`
-      : 'Folio';
+    const title = activeTab ? `Folio — ${activeTab.fileName}${activeTab.isDirty ? ' *' : ''}` : 'Folio';
     setWindowTitle(title);
-  }, [editorState?.fileName, editorState?.isDirty]);
+  }, [activeTab?.fileName, activeTab?.isDirty, activeTab]);
 
-  // Unsaved guard before closing window (Tauri close-requested & browser beforeunload)
   useEffect(() => {
-    const cleanup = setupCloseGuard(() => Boolean(editorState?.isDirty));
-    return cleanup;
-  }, [editorState?.isDirty]);
+    refreshLists();
+  }, [refreshLists]);
 
-  // Desktop native file drop listener (using Tauri's file-drop event and folio_read)
   useEffect(() => {
-    const cleanup = setupFileDropHandler(async (file, path) => {
-      try {
-        const loaded = await loadFileToEditor(file, file.name, undefined, path);
-        setEditorState(loaded);
-        if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-          setShowImportReport(true);
-        }
-      } catch (err: any) {
-        alert(err.message || 'Failed to open dropped file');
-      }
-    });
-    return cleanup;
-  }, []);
-
-  // Desktop second-launch / CLI open request listener
-  useEffect(() => {
-    const cleanup = setupOpenRequestHandler(async (path) => {
-      try {
-        const loadedFile = await readFileFromPath(path);
-        const loaded = await loadFileToEditor(loadedFile.file, loadedFile.name, undefined, path);
-        setEditorState(loaded);
-        if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-          setShowImportReport(true);
-        }
-      } catch (err: any) {
-        console.error('Failed to open requested path:', err);
-      }
-    });
-    return cleanup;
-  }, []);
-
-  // Browser Drag & Drop handler (DataTransfer.files)
-  useEffect(() => {
-    const handleDragOver = (e: DragEvent) => e.preventDefault();
-    const handleDrop = async (e: DragEvent) => {
-      e.preventDefault();
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        try {
-          const loaded = await loadFileToEditor(file, file.name);
-          setEditorState(loaded);
-          if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-            setShowImportReport(true);
-          }
-        } catch (err: any) {
-          alert(err.message || 'Failed to open file');
-        }
-      }
+    if (!choice) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      resolveChoice(null);
     };
-    window.addEventListener('dragover', handleDragOver);
-    window.addEventListener('drop', handleDrop);
-    return () => {
-      window.removeEventListener('dragover', handleDragOver);
-      window.removeEventListener('drop', handleDrop);
-    };
-  }, []);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [choice]);
 
-  // Autosave draft to IndexedDB when dirty
   useEffect(() => {
-    if (!editorState || !editorState.isDirty) return;
-
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current);
-    }
-
-    autosaveTimeoutRef.current = setTimeout(async () => {
-      const draftPayload =
-        editorState.kind === 'document'
-          ? editorState.documentContent
-          : editorState.kind === 'spreadsheet'
-          ? editorState.spreadsheetData
-          : editorState.kind === 'presentation'
-          ? editorState.presentationData
-          : null;
-
-      if (draftPayload) {
-        await saveDraft({
-          id: editorState.fileName,
-          name: editorState.fileName,
-          kind: editorState.kind,
-          format: editorState.format,
-          content: draftPayload,
+    const dirtyTabs = tabs.filter((tab) => tab.isDirty && tab.kind !== 'pdf' && tab.id);
+    if (dirtyTabs.length === 0) return;
+    const timers = dirtyTabs.map((tab) =>
+      window.setTimeout(() => {
+        saveDraft({
+          id: tab.id!,
+          name: tab.fileName,
+          kind: tab.kind,
+          format: tab.format,
+          content: draftContent(tab),
           updatedAt: Date.now(),
-        });
-      }
-    }, 1500);
+          path: tab.filePath,
+          cleanHash: tab.cleanHash,
+          diskStamp: tab.diskStamp,
+        }).then(() => refreshLists());
+      }, 1500)
+    );
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [tabs, refreshLists]);
 
-    return () => {
-      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
-    };
-  }, [editorState]);
+  const snapshotTabs = (): TabRef[] =>
+    tabsRef.current
+      .filter((tab) => tab.id)
+      .map((tab) => ({ id: tab.id!, path: tab.filePath, dirty: Boolean(tab.isDirty) }));
 
-  // Create New File
-  const handleNew = (kind: DocumentKind) => {
-    if (editorState?.isDirty) {
-      const confirmDiscard = window.confirm('You have unsaved changes. Create new file without saving?');
-      if (!confirmDiscard) return;
-    }
-
-    let defaultName = 'Document1.docx';
-    let defaultFormat: SupportedFormat = 'docx';
-    let docContent = defaultDocumentModel;
-    let sheets = [createEmptySheet('Sheet1')];
-    let presentation = { title: 'Presentation1', slides: [createEmptySlide(1)] };
-
-    if (kind === 'spreadsheet') {
-      defaultName = 'Workbook1.xlsx';
-      defaultFormat = 'xlsx';
-    } else if (kind === 'presentation') {
-      defaultName = 'Presentation1.pptx';
-      defaultFormat = 'pptx';
-    }
-
-    setEditorState({
-      kind,
-      fileName: defaultName,
-      format: defaultFormat,
-      isDirty: false,
-      lastSavedAt: new Date(),
-      documentContent: docContent,
-      spreadsheetData: sheets,
-      presentationData: presentation,
-    });
-  };
-
-  // Open File
-  const handleOpen = async () => {
-    if (editorState?.isDirty) {
-      const confirmDiscard = window.confirm('You have unsaved changes. Open another file without saving?');
-      if (!confirmDiscard) return;
-    }
-
-    const picked = await pickFileToOpen();
-    if (!picked) return;
-
+  const rememberStamp = async (path?: string): Promise<EditorState['diskStamp']> => {
+    if (!path || !isDesktopPlatform()) return null;
     try {
-      const loaded = await loadFileToEditor(picked.file, picked.file.name, picked.handle, picked.path);
-      setEditorState(loaded);
-      if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-        setShowImportReport(true);
+      const status = await getPlatformAdapter().pathStatus(path);
+      if (status?.exists && status.modifiedMs != null && status.len != null) {
+        return { modifiedMs: status.modifiedMs, len: status.len };
       }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+
+  const openLoaded = async (item: Incoming): Promise<{ id?: string; error?: string }> => {
+    try {
+      let file = item.file;
+      let name = item.name;
+      let handle = item.handle;
+      if (!file && item.path) {
+        const read = await readFileFromPath(item.path);
+        file = read.file;
+        name = read.name;
+        handle = read.handle;
+      }
+      if (!file) return { error: 'Could not read the file.' };
+      const loaded = await loadFileToEditor(file, name || file.name, handle, item.path);
+      const tab = stampClean(loaded);
+      tab.diskStamp = await rememberStamp(tab.filePath);
+      commit([...tabsRef.current, tab]);
+      return { id: tab.id };
     } catch (err: any) {
-      alert(err.message || 'Failed to open file');
+      return { error: err?.message || 'Could not open the file.' };
     }
   };
 
-  // Open Recent File
-  const handleOpenRecent = async (item: RecentItem) => {
-    if (editorState?.isDirty) {
-      const confirmDiscard = window.confirm('You have unsaved changes. Open another file without saving?');
-      if (!confirmDiscard) return;
+  const insertDraft = (draft: DraftItem, replaceId?: string): string => {
+    const tab = tabFromDraft({ ...draft, id: replaceId || draft.id });
+    if (replaceId) {
+      commit(tabsRef.current.map((item) => (item.id === replaceId ? { ...tab, id: replaceId } : item)));
+      return replaceId;
+    }
+    const already = tabsRef.current.find((item) => item.id === tab.id);
+    if (already?.id) return already.id;
+    commit([...tabsRef.current, tab]);
+    return tab.id!;
+  };
+
+  const writeTab = async (
+    tab: EditorState,
+    target?: { path?: string; handle?: FileSystemFileHandle; format?: SupportedFormat; fileName?: string }
+  ): Promise<SaveOutcome> => {
+    try {
+      const result = await saveEditorContent(
+        { ...tab, filePath: target?.path ?? tab.filePath, fileHandle: target?.handle ?? tab.fileHandle },
+        {
+          saveAs: false,
+          format: target?.format || tab.format,
+          fileName: target?.fileName || tab.fileName,
+        }
+      );
+      if (!result.success || !result.updatedState) return 'cancelled';
+      const saved = stampClean({ ...tab, ...result.updatedState, id: tab.id });
+      saved.diskStamp = await rememberStamp(saved.filePath);
+      commit(tabsRef.current.map((item) => (item.id === tab.id ? saved : item)));
+      if (tab.id) await clearDraft(tab.id);
+      await refreshLists();
+      return 'ok';
+    } catch (err: any) {
+      await ask('Save failed', err?.message || 'The file could not be saved.', ['OK']);
+      return 'failed';
+    }
+  };
+
+  const pickAndWrite = async (tab: EditorState, format?: SupportedFormat, fileName?: string): Promise<SaveOutcome> => {
+    const name = fileName || tab.fileName;
+    const fmt = format || tab.format;
+    const picked = await getPlatformAdapter().pickSaveTarget(name, fmt);
+    if (picked?.path || picked?.handle) {
+      if (picked.path) {
+        const decision = decideSave({
+          selfId: tab.id || '',
+          targetPath: picked.path,
+          // A picked path is created on write. This status only lets already-open refuse the save.
+          status: { exists: true, parentExists: true, modifiedMs: null, len: null },
+          openTabs: snapshotTabs(),
+        });
+        if (decision.kind === 'already-open') {
+          await ask('Already open', `${picked.name} is already open in another tab.`, ['OK']);
+          return 'failed';
+        }
+      }
+      if (picked.handle) {
+        const owner = await findTabByHandle(
+          tabsRef.current.filter((item) => item.id && item.id !== tab.id),
+          picked.handle
+        );
+        if (owner) {
+          await ask('Already open', 'That file is already open in another tab.', ['OK']);
+          return 'failed';
+        }
+      }
+      return writeTab(tab, { path: picked.path, handle: picked.handle, format: fmt, fileName: picked.name || name });
+    }
+    if (!isDesktopPlatform()) {
+      try {
+        const result = await saveEditorContent(tab, { saveAs: true, format: fmt, fileName: name });
+        if (!result.success || !result.updatedState) return 'cancelled';
+        const saved = stampClean({ ...tab, ...result.updatedState, id: tab.id });
+        commit(tabsRef.current.map((item) => (item.id === tab.id ? saved : item)));
+        if (tab.id) await clearDraft(tab.id);
+        await refreshLists();
+        return 'ok';
+      } catch (err: any) {
+        await ask('Save failed', err?.message || 'The file could not be saved.', ['OK']);
+        return 'failed';
+      }
+    }
+    return 'cancelled';
+  };
+
+  const saveTab = async (
+    tab: EditorState,
+    mode: 'save' | 'save-as' = 'save',
+    format?: SupportedFormat,
+    fileName?: string,
+    held = false
+  ): Promise<SaveOutcome> => {
+    if (!held) {
+      if (busyRef.current) return 'cancelled';
+      busyRef.current = true;
+    }
+    try {
+    const current = tabsRef.current.find((item) => item.id === tab.id) || tab;
+    if (mode === 'save-as' || (!current.filePath && !current.fileHandle)) {
+      return pickAndWrite(current, format || current.format, fileName || current.fileName);
     }
 
-    // In desktop, if path exists, open directly with no extra prompt
+    if (current.filePath && isDesktopPlatform()) {
+      let status: PathStatus | null = null;
+      try {
+        await getPlatformAdapter().allowPath(current.filePath);
+        status = await getPlatformAdapter().pathStatus(current.filePath);
+      } catch {
+        status = null;
+      }
+      const decision = decideSave({
+        selfId: current.id || '',
+        targetPath: current.filePath,
+        status,
+        stamp: current.diskStamp,
+        openTabs: snapshotTabs(),
+      });
+      if (decision.kind === 'already-open') {
+        await ask('Already open', 'That file is already open in another tab.', ['OK']);
+        return 'failed';
+      }
+      if (decision.kind === 'save-as') return pickAndWrite(current, format, fileName);
+      if (decision.kind === 'conflict') {
+        const choice = await ask(
+          'File changed',
+          `${current.fileName} changed on disk. Overwrite it, Save As, or Cancel?`,
+          [...CONFLICT_BUTTONS]
+        );
+        if (choice === 'Overwrite') return writeTab(current, { format, fileName });
+        if (choice === 'Save As') return pickAndWrite(current, format, fileName);
+        return 'cancelled';
+      }
+    }
+
+    return writeTab(current, { format, fileName });
+    } finally {
+      if (!held) busyRef.current = false;
+    }
+  };
+
+  const runOpen = async (items: Incoming[], held = false) => {
+    if (!held) {
+      if (busyRef.current) return;
+      busyRef.current = true;
+    }
+    try {
+    const draftsNow = drafts.length ? drafts : await getAllDrafts();
+    const prepared = await Promise.all(
+      items.map(async (item) => {
+        const next = { ...item };
+        if (next.handle && !next.existingTabId) {
+          const match = await findTabByHandle(tabsRef.current, next.handle);
+          if (match) next.existingTabId = match;
+        }
+        if (next.path) {
+          if (next.hasDraft == null) {
+            next.hasDraft = draftsNow.some((draft) => draft.path && pathsMatch(draft.path, next.path));
+            next.draft = next.draft || draftsNow.find((draft) => draft.path && pathsMatch(draft.path, next.path));
+          }
+        }
+        return next;
+      })
+    );
+
+    const hadActive = Boolean(activeRef.current);
+    const plan = planOpenBatch(prepared, snapshotTabs(), hadActive);
+    const failures: { name: string; message: string }[] = [];
+    let opened = false;
+
+    for (const step of plan.actions) {
+      const item = prepared.find((entry) => entry.key === step.key);
+      if (!item) continue;
+      const action = step.action;
+      if (action.type === 'ignore' || action.type === 'skip') continue;
+      if (action.type === 'fail') {
+        failures.push({ name: item.name || item.key, message: action.message });
+        continue;
+      }
+      if (action.type === 'focus' || action.type === 'focus-dirty') {
+        commit(tabsRef.current, action.tabId);
+        if (action.type === 'focus-dirty') {
+          await ask('Already open', action.message, ['OK']);
+        }
+        continue;
+      }
+      if (action.type === 'ask-reload') {
+        commit(tabsRef.current, action.tabId);
+        const choice = await ask('File changed', `${item.name} changed on disk. Reload it?`, [...RELOAD_BUTTONS]);
+        if (choice === 'Reload') {
+          const loaded = await openLoaded({ ...item, path: undefined });
+          const fresh = loaded.id ? tabsRef.current.find((tab) => tab.id === loaded.id) : undefined;
+          const previous = tabsRef.current.find((tab) => tab.id === action.tabId);
+          if (!loaded.id || !fresh || !previous) {
+            failures.push({ name: item.name, message: loaded.error || 'Could not reload the file.' });
+            if (fresh) commit(tabsRef.current.filter((tab) => tab.id !== fresh.id), action.tabId);
+          } else {
+            const replaced = {
+              ...fresh,
+              id: previous.id,
+              filePath: previous.filePath || fresh.filePath,
+              fileHandle: previous.fileHandle || fresh.fileHandle,
+            };
+            replaced.diskStamp = await rememberStamp(replaced.filePath);
+            commit(
+              tabsRef.current.filter((tab) => tab.id !== fresh.id).map((tab) => (tab.id === previous.id ? replaced : tab)),
+              previous.id
+            );
+          }
+        }
+        continue;
+      }
+      if (action.type === 'ask-draft') {
+        const choice = await ask(
+          'Recovered draft',
+          `An unsaved copy of ${item.name} was recovered. Restore it, or open the file on disk?`,
+          [...DRAFT_OPEN_BUTTONS]
+        );
+        if (choice === 'Restore' && item.draft) {
+          const id = insertDraft(item.draft);
+          if (!hadActive && !opened) commit(tabsRef.current, id);
+          opened = true;
+        } else {
+          const loaded = await openLoaded(item);
+          if (loaded.id) {
+            if (!hadActive && !opened) commit(tabsRef.current, loaded.id);
+            opened = true;
+          } else failures.push({ name: item.name, message: loaded.error || 'Could not open the file.' });
+        }
+        continue;
+      }
+      if (action.type === 'ask-replace') {
+        const choice = await ask(
+          'Recovered draft',
+          `${item.name} is already open. Replace it with the recovered unsaved copy?`,
+          [...DRAFT_REPLACE_BUTTONS]
+        );
+        if (choice === 'Replace' && item.draft) insertDraft(item.draft, action.tabId);
+        commit(tabsRef.current, action.tabId);
+        continue;
+      }
+      if (item.intent === 'draft' && item.draft) {
+        const id = insertDraft(item.draft);
+        if (!hadActive && !opened) commit(tabsRef.current, id);
+        opened = true;
+        continue;
+      }
+      const loaded = await openLoaded(item);
+      if (loaded.id) {
+        if (!hadActive && !opened) commit(tabsRef.current, loaded.id);
+        opened = true;
+      } else failures.push({ name: item.name, message: loaded.error || 'Could not open the file.' });
+    }
+
+    if (failures.length) {
+      await ask('Some files did not open', failures.map((failure) => `${failure.name}: ${failure.message}`).join('\n'), ['OK']);
+    }
+    await refreshLists();
+    } finally {
+      if (!held) busyRef.current = false;
+    }
+  };
+
+  const filesToIncoming = async (files: PlatformFileResult[]): Promise<Incoming[]> => {
+    const knownDrafts = await getAllDrafts();
+    const incoming: Incoming[] = [];
+    for (const file of files) {
+      let diskNewer = false;
+      if (file.path && isDesktopPlatform()) {
+        try {
+          await getPlatformAdapter().allowPath(file.path);
+          const status = await getPlatformAdapter().pathStatus(file.path);
+          const tab = tabsRef.current.find((item) => item.filePath && pathsMatch(item.filePath, file.path));
+          diskNewer = isDiskNewer(tab?.diskStamp, status);
+        } catch {
+          diskNewer = false;
+        }
+      }
+      const draft = file.path ? knownDrafts.find((item) => item.path && pathsMatch(item.path, file.path)) : undefined;
+      incoming.push({
+        key: file.path || `${file.name}-${incoming.length}`,
+        path: file.path,
+        name: file.name,
+        file: file.file,
+        handle: file.handle,
+        hasDraft: Boolean(draft),
+        draft,
+        diskNewer,
+      });
+    }
+    return incoming;
+  };
+
+  const openPicked = async (files: PlatformFileResult[], held = false) => {
+    if (!files.length) return;
+    await runOpen(await filesToIncoming(files), held);
+  };
+
+  const openPaths = async (paths: string[], held = false) => {
+    const files: PlatformFileResult[] = [];
+    const failures: Incoming[] = [];
+    for (const path of paths) {
+      try {
+        if (isDesktopPlatform()) await getPlatformAdapter().allowPath(path);
+        files.push(await readFileFromPath(path));
+      } catch (err: any) {
+        failures.push({ key: path, path, name: path.split(/[\\/]/).pop() || path, error: err?.message || 'Could not open the file.' });
+      }
+    }
+    await runOpen([...(await filesToIncoming(files)), ...failures], held);
+  };
+
+  const openRecent = async (item: RecentItem) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
     if (isDesktopPlatform() && item.path) {
       try {
-        const result = await readFileFromPath(item.path);
-        const loaded = await loadFileToEditor(result.file, result.name, undefined, result.path);
-        setEditorState(loaded);
-        if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-          setShowImportReport(true);
-        }
-        return;
-      } catch (err: any) {
-        console.warn('Could not open via path:', err);
-        alert(`Failed to open recent file: ${err.message || String(err)}`);
-        return;
-      }
-    }
-
-    // In browser, if handle exists, request permission again on reopen
-    if (item.handle) {
-      try {
-        const permitted = await verifyPermission(item.handle, false);
-        if (permitted) {
-          const file = await item.handle.getFile();
-          const loaded = await loadFileToEditor(file, file.name, item.handle);
-          setEditorState(loaded);
-          if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-            setShowImportReport(true);
-          }
+        await getPlatformAdapter().allowPath(item.path);
+        const status = await getPlatformAdapter().pathStatus(item.path);
+        if (status && !status.exists) {
+          await ask('Cannot find file', `${item.name} cannot be found.`, ['OK']);
+          if (shouldRemoveRecent(status)) await removeRecentFile(item.id);
+          await refreshLists();
           return;
         }
-      } catch (err) {
-        console.warn('Could not open via stored file handle:', err);
+      } catch (err: any) {
+        await ask('Cannot open file', err?.message || 'Could not open the file.', ['OK']);
+        return;
+      }
+      await openPaths([item.path], true);
+      return;
+    }
+    if (item.handle) {
+      const permitted = await verifyPermission(item.handle, false);
+      if (permitted) {
+        const file = await item.handle.getFile();
+        await openPicked([{ file, name: file.name, handle: item.handle }], true);
+        return;
       }
     }
-
-    // Fallback if handle expired or inaccessible
-    handleOpen();
+    const picked = await pickFilesToOpen();
+    await openPicked(picked, true);
+    } finally {
+      busyRef.current = false;
+    }
   };
 
-  // Restore Draft
-  const handleRestoreDraft = (draft: DraftItem) => {
-    setEditorState({
-      kind: draft.kind,
-      fileName: draft.name,
-      format: draft.format,
-      isDirty: true,
-      lastSavedAt: new Date(draft.updatedAt),
-      documentContent: draft.kind === 'document' ? draft.content : defaultDocumentModel,
-      spreadsheetData: draft.kind === 'spreadsheet' ? draft.content : undefined,
-      presentationData: draft.kind === 'presentation' ? draft.content : undefined,
-    });
-  };
-
-  // Save current file
-  const handleSave = useCallback(async () => {
-    if (!editorState) return;
+  const closeTab = async (id: string, quitting = false, held = false): Promise<boolean> => {
+    if (!held) {
+      if (busyRef.current) return false;
+      busyRef.current = true;
+    }
     try {
-      const result = await saveEditorContent(editorState);
-      if (result.success && result.updatedState) {
-        setEditorState(result.updatedState);
-        await clearDraft(editorState.fileName);
+      const tab = tabsRef.current.find((item) => item.id === id);
+      if (!tab) return true;
+      if (tab.isDirty) {
+        commit(tabsRef.current, id);
+        const choice = await ask('Save changes', `${tab.fileName} has unsaved changes. Save before closing?`, [...SAVE_BUTTONS]);
+        if (choice === 'Save') {
+          const outcome = await saveTab(tab, 'save', undefined, undefined, true);
+          if (!closeContinues('Save', outcome)) {
+            commit(tabsRef.current, id);
+            return false;
+          }
+        } else if (!closeContinues(choice)) {
+          commit(tabsRef.current, id);
+          return false;
+        } else {
+          if (tab.id) await clearDraft(tab.id);
+          commit(tabsRef.current.map((item) => (item.id === id ? { ...item, isDirty: false } : item)));
+        }
       }
-    } catch (err: any) {
-      alert(`Save failed: ${err.message || String(err)}`);
+      if (!quitting) {
+        const remaining = tabsRef.current.filter((item) => item.id !== id);
+        const nextActive = activeRef.current === id ? remaining[remaining.length - 1]?.id || null : activeRef.current;
+        commit(remaining, nextActive);
+      }
+      await refreshLists();
+      return true;
+    } finally {
+      if (!held) busyRef.current = false;
     }
-  }, [editorState]);
+  };
 
-  // Save As
-  const handleSaveAsConfirm = async (targetFormat: SupportedFormat, newName: string) => {
-    if (!editorState) return;
+  const confirmClose = async () => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
     try {
-      const result = await saveEditorContent(editorState, {
-        format: targetFormat,
-        fileName: newName,
-        saveAs: true,
-      });
-      if (result.success && result.updatedState) {
-        setEditorState(result.updatedState);
-        setShowSaveAs(false);
-        await clearDraft(editorState.fileName);
+      let index = 0;
+      while (index < tabsRef.current.length) {
+        const dirtyAt = nextDirtyIndex(
+          tabsRef.current.map((tab) => ({ dirty: Boolean(tab.isDirty) })),
+          index
+        );
+        if (dirtyAt < 0) break;
+        const tab = tabsRef.current[dirtyAt];
+        const closed = await closeTab(tab.id!, true, true);
+        if (!closed) return false;
+        if (tabsRef.current.some((item) => item.id === tab.id && item.isDirty)) return false;
+        index = dirtyAt + 1;
       }
-    } catch (err: any) {
-      alert(`Save As failed: ${err.message || String(err)}`);
+      for (const tab of tabsRef.current) {
+        if (tab.id) await clearDraft(tab.id);
+      }
+      return true;
+    } finally {
+      busyRef.current = false;
     }
   };
 
-  // Close File
-  const handleCloseFile = () => {
-    if (editorState?.isDirty) {
-      const confirmClose = window.confirm('You have unsaved changes. Are you sure you want to close?');
-      if (!confirmClose) return;
-    }
-    setEditorState(null);
-    setDocumentEditorInstance(null);
-  };
-
-  // Print Document
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // Keyboard shortcut Ctrl+S at window level
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        handleSave();
-      }
+    const stopClose = setupCloseGuard(
+      () => tabsRef.current.some((tab) => tab.isDirty),
+      () => actionsRef.current.confirmClose()
+    );
+    const stopDrop = setupFileDropHandler((files) => {
+      void actionsRef.current.openFiles(files);
+    });
+    const stopOpen = setupOpenRequestHandler((paths) => {
+      void actionsRef.current.openPaths(paths);
+    });
+    if (isDesktopPlatform()) {
+      getPlatformAdapter()
+        .takeLaunchPaths()
+        .then((paths) => {
+          if (paths.length) void actionsRef.current.openPaths(paths);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      stopClose();
+      stopDrop();
+      stopOpen();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave]);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return;
+      const key = event.key.toLowerCase();
+      const handled = key === 's' || key === 'w' || key === 'o' || key === 'p' || key === 'n' || key === 'tab';
+      if (!handled) return;
+      event.preventDefault();
+      if (busyRef.current) return;
+      if (key === 's') void actionsRef.current.saveActive();
+      else if (key === 'w') void actionsRef.current.closeActive();
+      else if (key === 'o') void pickFilesToOpen().then((files) => actionsRef.current.openFiles(files));
+      else if (key === 'p') void actionsRef.current.printActive();
+      else if (key === 'n') actionsRef.current.newActive();
+      else actionsRef.current.cycle(event.shiftKey);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const createNew = (kind: DocumentKind) => {
+    const tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+    commit([...tabsRef.current, tab], tab.id || null);
+  };
+
+  const updateActive = (partial: Partial<EditorState>) => {
+    const id = activeRef.current;
+    if (!id) return;
+    commit(tabsRef.current.map((tab) => (tab.id === id ? applyEdit(tab, partial) : tab)));
+  };
+
+  const printActive = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      const tab = tabsRef.current.find((item) => item.id === activeRef.current);
+      if (!tab) return;
+      const count = tab.kind === 'spreadsheet' ? tab.spreadsheetData?.length || 1 : tab.kind === 'presentation' ? tab.presentationData?.slides.length || 1 : tab.kind === 'pdf' ? pdfCount : 1;
+      let scope: 'current' | 'all' = tab.kind === 'spreadsheet' ? 'current' : 'all';
+      if (tab.kind !== 'document' && printScopeNeeded(tab.kind, count)) {
+        const selected = printScopeFromChoice(await ask('Print', `What should Folio print from ${tab.fileName}?`, printButtons(tab.kind)));
+        if (selected === 'cancel') return;
+        scope = selected;
+      }
+      if (tab.kind === 'document') {
+        document.body.dataset.folioPrint = 'document';
+        window.print();
+        delete document.body.dataset.folioPrint;
+        return;
+      }
+      setPrintJob({ tab, scope });
+    } finally {
+      busyRef.current = false;
+    }
+  };
+
+  actionsRef.current = {
+    confirmClose,
+    openPaths,
+    openFiles: openPicked,
+    saveActive: async () => {
+      const tab = tabsRef.current.find((item) => item.id === activeRef.current);
+      if (tab) await saveTab(tab);
+    },
+    closeActive: async () => {
+      if (activeRef.current) await closeTab(activeRef.current);
+    },
+    printActive,
+    newActive: () => {
+      if (busyRef.current) return;
+      const current = tabsRef.current.find((item) => item.id === activeRef.current);
+      createNew(current?.kind && current.kind !== 'pdf' ? current.kind : 'document');
+    },
+    cycle: (backward: boolean) => {
+      if (busyRef.current) return;
+      const list = tabsRef.current;
+      if (list.length < 2) return;
+      const index = Math.max(0, list.findIndex((item) => item.id === activeRef.current));
+      const next = backward ? (index - 1 + list.length) % list.length : (index + 1) % list.length;
+      commit(list, list[next].id || null);
+    },
+  };
+
+  const onBrowserDrop = async (files: File[]) => {
+    await openPicked(files.map((file) => ({ file, name: file.name })));
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <input
         type="file"
+        multiple
         data-testid="global-file-input"
         style={{ display: 'none' }}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (file) {
-            try {
-              const loaded = await loadFileToEditor(file, file.name);
-              setEditorState(loaded);
-              if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-                setShowImportReport(true);
-              }
-            } catch (err: any) {
-              alert(err.message || 'Failed to open file');
-            }
-          }
+        onChange={(event) => {
+          const files = event.target.files ? Array.from(event.target.files) : [];
+          event.target.value = '';
+          if (files.length) void onBrowserDrop(files);
         }}
       />
-      {!editorState ? (
+      {tabs.length > 0 && (
+        <TabStrip
+          tabs={tabs}
+          activeId={activeId || undefined}
+          onSelect={(id) => commit(tabsRef.current, id)}
+          onClose={(id) => void closeTab(id)}
+        />
+      )}
+      {tabs.length === 0 || !activeTab ? (
         <StartScreen
-          onNew={handleNew}
-          onOpen={handleOpen}
-          onOpenRecent={handleOpenRecent}
-          onRestoreDraft={handleRestoreDraft}
-          onFileDrop={async (file) => {
-            try {
-              const loaded = await loadFileToEditor(file, file.name);
-              setEditorState(loaded);
-              if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
-                setShowImportReport(true);
-              }
-            } catch (err: any) {
-              alert(err.message || 'Failed to open file');
-            }
-          }}
+          onNew={createNew}
+          onOpen={() => void pickFilesToOpen().then((files) => openPicked(files))}
+          onOpenRecent={(item) => void openRecent(item)}
+          onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
+          onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
+          onFileDrop={(files) => void onBrowserDrop(files)}
+          listsRevision={listsRevision}
         />
       ) : (
         <>
-          {/* Ribbon */}
           <Ribbon
-            editorState={editorState}
+            editorState={activeTab}
             documentEditor={documentEditorInstance}
             pageSize={pageSize}
             onPageSizeChange={setPageSize}
             zoom={zoom}
             onZoomChange={setZoom}
-            onSave={handleSave}
+            onSave={() => void saveTab(activeTab)}
             onSaveAs={() => setShowSaveAs(true)}
-            onPrint={handlePrint}
-            onCloseFile={handleCloseFile}
-            onNew={handleNew}
-            onOpen={handleOpen}
+            onPrint={() => void printActive()}
+            onCloseFile={() => activeTab.id && void closeTab(activeTab.id)}
+            onNew={createNew}
+            onOpen={() => void pickFilesToOpen().then((files) => openPicked(files))}
             onOpenReport={() => setShowImportReport(true)}
+            recentFiles={recentFiles}
+            drafts={drafts}
+            onOpenRecent={(item) => void openRecent(item)}
+            onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
+            onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
           />
-
-          {/* Active Workspace / Editor */}
-          <main style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-            {editorState.kind === 'document' && (
+          <main className="folio-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+            {activeTab.kind === 'document' && (
               <DocumentEditor
-                content={editorState.documentContent || defaultDocumentModel}
+                key={activeTab.id}
+                content={activeTab.documentContent || { type: 'doc', content: [{ type: 'paragraph' }] }}
                 pageSize={pageSize}
                 zoom={zoom}
-                onChange={(doc) => {
-                  setEditorState((prev) => (prev ? { ...prev, documentContent: doc, isDirty: true } : prev));
-                }}
+                onChange={(doc) => updateActive({ documentContent: doc })}
                 onEditorReady={setDocumentEditorInstance}
-                onSaveShortcut={handleSave}
+                onSaveShortcut={() => void saveTab(activeTab)}
               />
             )}
-
-            {editorState.kind === 'spreadsheet' && (
+            {activeTab.kind === 'spreadsheet' && (
               <SpreadsheetEditor
-                sheets={editorState.spreadsheetData || [createEmptySheet('Sheet1')]}
-                onChange={(sheets) => {
-                  setEditorState((prev) => (prev ? { ...prev, spreadsheetData: sheets, isDirty: true } : prev));
-                }}
-                onSaveShortcut={handleSave}
+                key={activeTab.id}
+                sheets={activeTab.spreadsheetData || []}
+                onChange={(sheets) => updateActive({ spreadsheetData: sheets })}
+                onSaveShortcut={() => void saveTab(activeTab)}
               />
             )}
-
-            {editorState.kind === 'presentation' && (
+            {activeTab.kind === 'presentation' && (
               <SlideEditor
-                presentation={
-                  editorState.presentationData || {
-                    title: editorState.fileName,
-                    slides: [createEmptySlide(1)],
-                  }
-                }
-                onChange={(pres) => {
-                  setEditorState((prev) => (prev ? { ...prev, presentationData: pres, isDirty: true } : prev));
-                }}
-                onSaveShortcut={handleSave}
+                key={activeTab.id}
+                presentation={activeTab.presentationData || { title: activeTab.fileName, slides: [] }}
+                onChange={(presentation) => updateActive({ presentationData: presentation })}
+                onSaveShortcut={() => void saveTab(activeTab)}
+                onActiveSlideChange={setSlideIndex}
               />
             )}
-
-            {editorState.kind === 'pdf' && editorState.pdfData && <PdfViewer pdfData={editorState.pdfData} />}
+            {activeTab.kind === 'pdf' && activeTab.pdfData && (
+              <PdfViewer
+                key={activeTab.id}
+                pdfData={activeTab.pdfData}
+                onPageInfo={({ page, pages }) => {
+                  setPdfPage(page);
+                  setPdfCount(pages);
+                }}
+              />
+            )}
           </main>
-
-          {/* Status Bar */}
-          <StatusBar
-            editorState={editorState}
-            documentEditor={documentEditorInstance}
-            pageSize={pageSize}
-            zoom={zoom}
-            onZoomChange={setZoom}
-          />
+          <StatusBar editorState={activeTab} documentEditor={documentEditorInstance} pageSize={pageSize} zoom={zoom} onZoomChange={setZoom} />
         </>
       )}
 
-      {/* Import Report Dialog */}
-      {showImportReport && editorState?.importReport && (
-        <ImportReportDialog report={editorState.importReport} onClose={() => setShowImportReport(false)} />
+      {showImportReport && activeTab?.importReport && (
+        <ImportReportDialog report={activeTab.importReport} onClose={() => setShowImportReport(false)} />
       )}
-
-      {/* Save As Dialog */}
-      {showSaveAs && editorState && (
+      {showSaveAs && activeTab && (
         <SaveAsDialog
-          currentKind={editorState.kind}
-          currentFormat={editorState.format}
-          currentFileName={editorState.fileName}
-          onSave={handleSaveAsConfirm}
+          currentKind={activeTab.kind}
+          currentFormat={activeTab.format}
+          currentFileName={activeTab.fileName}
+          onSave={(format, name) => {
+            setShowSaveAs(false);
+            void saveTab(activeTab, 'save-as', format, name);
+          }}
           onClose={() => setShowSaveAs(false)}
+        />
+      )}
+      {choice && <ChoiceDialog title={choice.title} message={choice.message} buttons={choice.buttons} onChoose={resolveChoice} />}
+      {printJob && (
+        <PrintView
+          tab={printJob.tab}
+          scope={printJob.scope}
+          slideIndex={slideIndex}
+          pdfPage={pdfPage}
+          onDone={() => setPrintJob(null)}
         />
       )}
     </div>

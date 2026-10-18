@@ -91,6 +91,10 @@ input, select, textarea {
   animation: fadeIn 0.15s ease-out;
 }
 
+.folio-print-root {
+  display: none;
+}
+
 /* Paper page print styles */
 @media print {
   body {
@@ -117,6 +121,12 @@ input, select, textarea {
     border: none !important;
     height: 0 !important;
     margin: 0 !important;
+  }
+  body[data-folio-print='extra'] .folio-workspace {
+    display: none !important;
+  }
+  body[data-folio-print='extra'] .folio-print-root {
+    display: block !important;
   }
 }
 

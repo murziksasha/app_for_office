@@ -26,6 +26,10 @@ export async function pickFileToOpen(): Promise<PlatformFileResult | null> {
   return getPlatformAdapter().pickFile();
 }
 
+export async function pickFilesToOpen(): Promise<PlatformFileResult[]> {
+  return getPlatformAdapter().pickFiles();
+}
+
 /**
  * Uniform file save across desktop (Rust commands / in-place) and browser (FS Access / download).
  */
@@ -55,21 +59,21 @@ export async function setWindowTitle(title: string): Promise<void> {
 /**
  * Set up window close guard for unsaved changes.
  */
-export function setupCloseGuard(isDirty: () => boolean): () => void {
-  return getPlatformAdapter().setupCloseGuard(isDirty);
+export function setupCloseGuard(isDirty: () => boolean, confirmClose?: () => Promise<boolean>): () => void {
+  return getPlatformAdapter().setupCloseGuard(isDirty, confirmClose);
 }
 
 /**
  * Set up file drop handling.
  */
-export function setupFileDropHandler(onFileDrop: (file: File, path?: string) => void): () => void {
-  return getPlatformAdapter().setupFileDropHandler(onFileDrop);
+export function setupFileDropHandler(onFiles: (files: PlatformFileResult[]) => void): () => void {
+  return getPlatformAdapter().setupFileDropHandler(onFiles);
 }
 
 /**
  * Set up external open requests (single-instance / CLI args).
  */
-export function setupOpenRequestHandler(onOpen: (path: string) => void): () => void {
+export function setupOpenRequestHandler(onOpen: (paths: string[]) => void): () => void {
   return getPlatformAdapter().setupOpenRequestHandler(onOpen);
 }
 

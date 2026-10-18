@@ -86,4 +86,53 @@ test.describe('Folio Smoke Test Suite', () => {
     await expect(canvas).toBeVisible();
     await expect(canvas).toContainText('Folio Presentation Deck');
   });
+
+  test('6. Opens a second tab without a prompt and closes a dirty tab', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('heading', { name: 'New Document' }).click();
+
+    const editor = page.locator('.folio-prose .ProseMirror');
+    await editor.click();
+    await page.keyboard.type('First file');
+    await expect(page.getByText('Unsaved changes').first()).toBeVisible();
+
+    await page.keyboard.press('Control+n');
+    await expect(page.getByTestId('tab-strip').getByRole('button', { name: 'Document2.docx', exact: true })).toBeVisible();
+    await expect(page.getByTestId('choice-dialog')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Close Document2.docx' }).click();
+    await expect(page.getByTestId('choice-dialog')).toHaveCount(0);
+    await expect(editor).toContainText('First file');
+
+    await page.getByRole('button', { name: 'Close Document1.docx' }).click();
+    const dialog = page.getByTestId('choice-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('choice-Save')).toBeVisible();
+    await expect(dialog.getByTestId("choice-Don't save")).toBeVisible();
+    await expect(dialog.getByTestId('choice-Cancel')).toBeVisible();
+
+    await dialog.getByTestId('choice-Cancel').click();
+    await expect(editor).toContainText('First file');
+    await expect(page.getByTestId('tab-strip')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Close Document1.docx' }).click();
+    await page.getByTestId('choice-dialog').getByTestId("choice-Don't save").click();
+    await expect(page.getByRole('heading', { name: 'Folio' })).toBeVisible();
+    await expect(page.getByTestId('tab-strip')).toHaveCount(0);
+  });
+
+  test('7. Ctrl+S on a new dirty document downloads it', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('heading', { name: 'New Document' }).click();
+    const editor = page.locator('.folio-prose .ProseMirror');
+    await editor.click();
+    await page.keyboard.type('Save me');
+    await page.evaluate(() => {
+      delete (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker;
+    });
+    const downloadPromise = page.waitForEvent('download');
+    await page.keyboard.press('Control+s');
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('Document1.docx');
+  });
 });

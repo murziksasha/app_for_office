@@ -1,4 +1,4 @@
-import { PlatformAdapter, PlatformFileResult, PlatformSaveResult } from './types';
+import { PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
 
 export const FORMAT_MIME_TYPES: Record<string, { description: string; mime: string; extensions: string[] }> = {
   docx: {
@@ -95,12 +95,12 @@ export function downloadBlob(blob: Blob, fileName: string): void {
 export class BrowserPlatformAdapter implements PlatformAdapter {
   readonly isDesktop = false;
 
-  async pickFile(): Promise<PlatformFileResult | null> {
+  async pickFiles(): Promise<PlatformFileResult[]> {
     if (hasFileSystemAccess()) {
       try {
         // @ts-ignore
-        const [handle] = await window.showOpenFilePicker({
-          multiple: false,
+        const handles = await window.showOpenFilePicker({
+          multiple: true,
           types: [
             {
               description: 'All Supported Office Files',
@@ -111,36 +111,70 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
             },
           ],
         });
-        if (handle) {
+        const opened: PlatformFileResult[] = [];
+        for (const handle of handles || []) {
           const file = await handle.getFile();
-          return { file, name: file.name, handle };
+          opened.push({ file, name: file.name, handle });
         }
+        return opened;
       } catch (err: any) {
-        if (err.name === 'AbortError') return null;
+        if (err.name === 'AbortError') return [];
         console.warn('showOpenFilePicker failed, falling back to input:', err);
       }
     }
 
-    // Fallback file input
     return new Promise((resolve) => {
       if (typeof document === 'undefined') {
-        resolve(null);
+        resolve([]);
         return;
       }
       const input = document.createElement('input');
       input.type = 'file';
+      input.multiple = true;
       input.accept =
         '.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.csv,.tsv,.pptx,.pdf,.doc,.xls,.ppt,.docm,.xlsm,.pptm';
       input.onchange = () => {
-        if (input.files && input.files.length > 0) {
-          const file = input.files[0];
-          resolve({ file, name: file.name });
-        } else {
-          resolve(null);
-        }
+        const files = input.files ? Array.from(input.files) : [];
+        resolve(files.map((file) => ({ file, name: file.name })));
       };
+      input.oncancel = () => resolve([]);
       input.click();
     });
+  }
+
+  async pickFile(): Promise<PlatformFileResult | null> {
+    const files = await this.pickFiles();
+    return files[0] ?? null;
+  }
+
+  async pickSaveTarget(fileName: string, format: string): Promise<SaveTarget | null> {
+    if (!hasFileSystemAccess()) return null;
+    try {
+      const typeConfig = FORMAT_MIME_TYPES[format];
+      const types = typeConfig
+        ? [{ description: typeConfig.description, accept: { [typeConfig.mime]: typeConfig.extensions } }]
+        : undefined;
+      // @ts-ignore
+      const handle = await window.showSaveFilePicker({ suggestedName: fileName, types });
+      return { handle, name: handle.name };
+    } catch (err: any) {
+      if (err.name === 'AbortError') return null;
+      return null;
+    }
+  }
+
+  async pathStatus(_path: string): Promise<PathStatus | null> {
+    return null;
+  }
+
+  async allowPath(_path: string): Promise<void> {}
+
+  async takeLaunchPaths(): Promise<string[]> {
+    return [];
+  }
+
+  async choose(): Promise<string | null> {
+    return null;
   }
 
   async saveFile(
@@ -219,7 +253,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
     }
   }
 
-  setupCloseGuard(isDirty: () => boolean): () => void {
+  setupCloseGuard(isDirty: () => boolean, _confirmClose?: () => Promise<boolean>): () => void {
     if (typeof window === 'undefined') return () => {};
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirty()) {
@@ -232,12 +266,12 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }
 
-  setupFileDropHandler(_onFileDrop: (file: File, path?: string) => void): () => void {
+  setupFileDropHandler(_onFiles: (files: PlatformFileResult[]) => void): () => void {
     // In browser, drag & drop is handled via DOM drop events in the React tree
     return () => {};
   }
 
-  setupOpenRequestHandler(_onOpen: (path: string) => void): () => void {
+  setupOpenRequestHandler(_onOpen: (paths: string[]) => void): () => void {
     return () => {};
   }
 }

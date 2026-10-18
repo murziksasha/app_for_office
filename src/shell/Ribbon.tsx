@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { EditorState, DocumentKind, SupportedFormat } from '../types';
+import { DraftItem, EditorState, DocumentKind, RecentItem, SupportedFormat } from '../types';
 import {
   Save,
   Printer,
@@ -46,6 +46,11 @@ interface RibbonProps {
   onNew: (kind: DocumentKind) => void;
   onOpen: () => void;
   onOpenReport?: () => void;
+  recentFiles?: RecentItem[];
+  drafts?: DraftItem[];
+  onOpenRecent?: (item: RecentItem) => void;
+  onRestoreDraft?: (draft: DraftItem) => void;
+  onDismissDraft?: (draft: DraftItem) => void;
 }
 
 export const Ribbon: React.FC<RibbonProps> = ({
@@ -62,6 +67,11 @@ export const Ribbon: React.FC<RibbonProps> = ({
   onNew,
   onOpen,
   onOpenReport,
+  recentFiles = [],
+  drafts = [],
+  onOpenRecent,
+  onRestoreDraft,
+  onDismissDraft,
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'insert' | 'layout' | 'file'>('home');
 
@@ -122,12 +132,10 @@ export const Ribbon: React.FC<RibbonProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Logo */}
           <div
-            onClick={onCloseFile}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              cursor: 'pointer',
               fontWeight: 700,
               color: 'var(--folio-teal)',
             }}
@@ -317,7 +325,8 @@ export const Ribbon: React.FC<RibbonProps> = ({
       >
         {/* FILE TAB */}
         {activeTab === 'file' && (
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={() => onNew('document')}
               style={{
@@ -396,6 +405,36 @@ export const Ribbon: React.FC<RibbonProps> = ({
             >
               <Printer size={14} /> Print
             </button>
+          </div>
+          {(recentFiles.length > 0 || drafts.length > 0) && (
+            <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', fontSize: '12px' }}>
+              {drafts.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>Recovered drafts</span>
+                  {drafts.map((draft) => (
+                    <span key={draft.id} style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+                      <button onClick={() => onRestoreDraft?.(draft)} style={{ textDecoration: 'underline', color: 'var(--folio-teal)' }}>
+                        {draft.name}
+                      </button>
+                      <button aria-label={`Dismiss ${draft.name}`} onClick={() => onDismissDraft?.(draft)} style={{ color: 'var(--folio-ink-muted)' }}>
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {recentFiles.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>Recent</span>
+                  {recentFiles.slice(0, 8).map((item) => (
+                    <button key={item.id} onClick={() => onOpenRecent?.(item)} style={{ textDecoration: 'underline', color: 'var(--folio-ink)' }}>
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           </div>
         )}
 

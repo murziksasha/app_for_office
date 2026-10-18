@@ -46,6 +46,9 @@ export interface DraftItem {
   format: SupportedFormat;
   content: any;
   updatedAt: number;
+  path?: string;
+  cleanHash?: string;
+  diskStamp?: { modifiedMs: number; len: number } | null;
 }
 
 // Slide model
@@ -86,12 +89,16 @@ export interface PresentationModel {
 }
 
 export interface EditorState {
+  id?: string;
   kind: DocumentKind;
   fileName: string;
   format: SupportedFormat;
   filePath?: string;
   fileHandle?: FileSystemFileHandle;
   isDirty: boolean;
+  cleanHash?: string;
+  contentHash?: string;
+  diskStamp?: { modifiedMs: number; len: number } | null;
   lastSavedAt?: Date;
   importReport?: ImportReport | null;
   // Payload for document, spreadsheet, presentation, or pdf

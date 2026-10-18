@@ -10,9 +10,7 @@ import {
   Clock,
   Trash2,
   Upload,
-  ArrowRight,
   Shield,
-  FileCheck,
 } from 'lucide-react';
 
 interface StartScreenProps {
@@ -20,7 +18,9 @@ interface StartScreenProps {
   onOpen: () => void;
   onOpenRecent: (item: RecentItem) => void;
   onRestoreDraft: (draft: DraftItem) => void;
-  onFileDrop: (file: File) => void;
+  onDismissDraft: (draft: DraftItem) => void;
+  onFileDrop: (files: File[]) => void;
+  listsRevision?: number;
 }
 
 export const StartScreen: React.FC<StartScreenProps> = ({
@@ -28,7 +28,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   onOpen,
   onOpenRecent,
   onRestoreDraft,
+  onDismissDraft,
   onFileDrop,
+  listsRevision = 0,
 }) => {
   const [recentFiles, setRecentFiles] = useState<RecentItem[]>([]);
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
@@ -37,7 +39,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   useEffect(() => {
     getRecentFiles().then(setRecentFiles);
     getAllDrafts().then(setDrafts);
-  }, []);
+  }, [listsRevision]);
 
   const handleClearHistory = async () => {
     await clearRecentFiles();
@@ -57,7 +59,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onFileDrop(e.dataTransfer.files[0]);
+      onFileDrop(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -163,31 +165,34 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               alignItems: 'center',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <FileCheck size={20} color="#b45309" />
-              <div>
-                <strong style={{ fontSize: '13px', color: '#92400e' }}>Restore Unsaved Work</strong>
-                <p style={{ fontSize: '12px', color: '#b45309' }}>
-                  Folio autosaved a local draft from your recent session: "{drafts[0].name}"
-                </p>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              <strong style={{ fontSize: '13px', color: '#92400e' }}>Recovered drafts</strong>
+              {drafts.map((draft) => (
+                <div key={draft.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#92400e' }}>{draft.name}</span>
+                  <span style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      onClick={() => onRestoreDraft(draft)}
+                      style={{
+                        padding: '4px 10px',
+                        backgroundColor: '#b45309',
+                        color: 'white',
+                        borderRadius: 'var(--folio-radius-md)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={() => onDismissDraft(draft)}
+                      style={{ padding: '4px 10px', fontSize: '12px', color: '#92400e' }}
+                    >
+                      Dismiss
+                    </button>
+                  </span>
+                </div>
+              ))}
             </div>
-            <button
-              onClick={() => onRestoreDraft(drafts[0])}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                backgroundColor: '#b45309',
-                color: 'white',
-                borderRadius: 'var(--folio-radius-md)',
-                fontSize: '12px',
-                fontWeight: 500,
-              }}
-            >
-              Restore Draft <ArrowRight size={14} />
-            </button>
           </div>
         )}
 

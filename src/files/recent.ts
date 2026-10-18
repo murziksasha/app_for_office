@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval';
 import { RecentItem } from '../types';
+import { pathsMatch } from './session';
 
 const RECENT_STORAGE_KEY = 'folio_recent_files';
 const MAX_RECENT_ITEMS = 20;
@@ -24,7 +25,10 @@ export async function addRecentFile(item: Omit<RecentItem, 'lastOpened'>): Promi
       lastOpened: Date.now(),
     };
     // Filter out item with same id or name
-    const filtered = existing.filter((f) => f.id !== item.id && f.name !== item.name);
+    const filtered = existing.filter((f) => {
+      if (item.path && f.path) return !pathsMatch(f.path, item.path);
+      return f.id !== item.id && f.name !== item.name;
+    });
     const result = [updated, ...filtered].slice(0, MAX_RECENT_ITEMS);
     await set(RECENT_STORAGE_KEY, result);
   } catch (err) {

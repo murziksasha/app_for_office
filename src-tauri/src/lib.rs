@@ -7,6 +7,15 @@ use tauri_plugin_single_instance::init as single_instance_init;
 #[derive(Default)]
 pub struct AppState {
     allowed_paths: Mutex<HashSet<PathBuf>>,
+    launch_paths: Mutex<Vec<String>>,
+}
+
+#[derive(serde::Serialize)]
+pub struct PathStatus {
+    pub exists: bool,
+    pub parent_exists: bool,
+    pub modified_ms: Option<u64>,
+    pub len: Option<u64>,
 }
 
 impl AppState {
@@ -42,8 +51,8 @@ pub struct FilePayload {
 }
 
 #[tauri::command]
-pub fn folio_pick_open(state: tauri::State<AppState>) -> Result<Option<FilePayload>, String> {
-    let file = rfd::FileDialog::new()
+pub fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, String> {
+    let files = rfd::FileDialog::new()
         .add_filter(
             "Supported Office Files",
             &[
@@ -51,36 +60,110 @@ pub fn folio_pick_open(state: tauri::State<AppState>) -> Result<Option<FilePaylo
                 "pdf",
             ],
         )
-        .add_filter("Word Documents (*.docx)", &["docx"])
+        .add_filter("Documents (*.docx)", &["docx"])
         .add_filter("OpenDocument Text (*.odt)", &["odt"])
         .add_filter("Rich Text Format (*.rtf)", &["rtf"])
         .add_filter(
             "Text & Markdown (*.txt, *.md, *.html)",
             &["txt", "md", "html", "htm"],
         )
-        .add_filter("Excel Spreadsheets (*.xlsx)", &["xlsx"])
+        .add_filter("Spreadsheets (*.xlsx)", &["xlsx"])
         .add_filter("Delimited Text (*.csv, *.tsv)", &["csv", "tsv"])
-        .add_filter("PowerPoint Presentations (*.pptx)", &["pptx"])
+        .add_filter("Presentations (*.pptx)", &["pptx"])
         .add_filter("PDF Documents (*.pdf)", &["pdf"])
-        .pick_file();
+        .pick_files();
 
-    if let Some(path) = file {
-        let path_str = path.to_string_lossy().to_string();
-        let name = path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
-        state.allow_path(&path);
-        Ok(Some(FilePayload {
-            path: path_str,
-            name,
-            bytes,
-        }))
-    } else {
-        Ok(None)
+    let mut opened = Vec::new();
+    if let Some(paths) = files {
+        for path in paths {
+            let path_str = path.to_string_lossy().to_string();
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+            state.allow_path(&path);
+            opened.push(FilePayload {
+                path: path_str,
+                name,
+                bytes,
+            });
+        }
     }
+    Ok(opened)
+}
+
+#[tauri::command]
+pub fn folio_path_status(path: String, state: tauri::State<AppState>) -> Result<PathStatus, String> {
+    let p = PathBuf::from(&path);
+    if !state.is_allowed(&p) {
+        return Err(format!(
+            "Access denied: path '{}' is not in the allowed session list.",
+            path
+        ));
+    }
+    let parent_exists = p.parent().map(|parent| parent.exists()).unwrap_or(false);
+    let exists = p.is_file();
+    let (modified_ms, len) = if exists {
+        match std::fs::metadata(&p) {
+            Ok(meta) => {
+                let modified = meta.modified().ok().and_then(|time| {
+                    time.duration_since(std::time::UNIX_EPOCH)
+                        .ok()
+                        .map(|duration| duration.as_millis() as u64)
+                });
+                (modified, Some(meta.len()))
+            }
+            Err(_) => (None, None),
+        }
+    } else {
+        (None, None)
+    };
+    Ok(PathStatus {
+        exists,
+        parent_exists,
+        modified_ms,
+        len,
+    })
+}
+
+#[tauri::command]
+pub fn folio_take_launch_paths(state: tauri::State<AppState>) -> Vec<String> {
+    let mut paths = state.launch_paths.lock().unwrap();
+    std::mem::take(&mut *paths)
+}
+
+#[tauri::command]
+pub fn folio_choose(
+    window: tauri::WebviewWindow,
+    title: String,
+    message: String,
+    buttons: Vec<String>,
+) -> Result<Option<String>, String> {
+    if buttons.is_empty() || buttons.len() > 3 {
+        return Err("Folio dialogs support 1 to 3 buttons.".to_string());
+    }
+    let button_set = match buttons.as_slice() {
+        [only] => rfd::MessageButtons::OkCustom(only.clone()),
+        [yes, no] => rfd::MessageButtons::OkCancelCustom(yes.clone(), no.clone()),
+        [yes, no, cancel] => {
+            rfd::MessageButtons::YesNoCancelCustom(yes.clone(), no.clone(), cancel.clone())
+        }
+        _ => unreachable!(),
+    };
+    let result = rfd::MessageDialog::new()
+        .set_title(&title)
+        .set_description(&message)
+        .set_buttons(button_set)
+        .set_parent(&window)
+        .show();
+    Ok(match result {
+        rfd::MessageDialogResult::Custom(text) => Some(text),
+        rfd::MessageDialogResult::Ok | rfd::MessageDialogResult::Yes => buttons.first().cloned(),
+        rfd::MessageDialogResult::No => buttons.get(1).cloned(),
+        rfd::MessageDialogResult::Cancel => None,
+    })
 }
 
 #[tauri::command]
@@ -147,14 +230,16 @@ pub fn folio_allow_path(path: String, state: tauri::State<AppState>) -> Result<(
 pub fn run() {
     let app_state = AppState::default();
 
-    // Check command line arguments on initial launch
     let args: Vec<String> = std::env::args().collect();
+    let mut launch_paths = Vec::new();
     for arg in args.iter().skip(1) {
         let p = PathBuf::from(arg);
         if p.exists() && p.is_file() {
             app_state.allow_path(&p);
+            launch_paths.push(arg.clone());
         }
     }
+    *app_state.launch_paths.lock().unwrap() = launch_paths;
 
     tauri::Builder::default()
         .manage(app_state)
@@ -162,14 +247,17 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
+                let mut paths = Vec::new();
                 for arg in argv.iter().skip(1) {
-                    let p = PathBuf::from(&arg);
+                    let p = PathBuf::from(arg);
                     if p.exists() && p.is_file() {
                         let state = app.state::<AppState>();
                         state.allow_path(&p);
-                        let _ = window.emit("folio://open-file", serde_json::json!({ "path": arg }));
-                        break;
+                        paths.push(arg.clone());
                     }
+                }
+                if !paths.is_empty() {
+                    let _ = window.emit("folio://open-files", serde_json::json!({ "paths": paths }));
                 }
             }
         }))
@@ -186,7 +274,10 @@ pub fn run() {
             folio_pick_save,
             folio_read,
             folio_write,
-            folio_allow_path
+            folio_allow_path,
+            folio_path_status,
+            folio_take_launch_paths,
+            folio_choose
         ])
         .run(tauri::generate_context!())
         .expect("error while running folio tauri application");

@@ -8,9 +8,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
 interface PdfViewerProps {
   pdfData: Uint8Array;
+  onPageInfo?: (info: { page: number; pages: number }) => void;
 }
 
-export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData }) => {
+export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,6 +77,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData }) => {
       }
     }
   }, [pdfDoc, currentPage, scale]);
+
+  useEffect(() => {
+    onPageInfo?.({ page: currentPage, pages: numPages });
+  }, [currentPage, numPages, onPageInfo]);
 
   useEffect(() => {
     renderPage();

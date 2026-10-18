@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PresentationModel, Slide, SlideElement } from '../types';
 import { createEmptySlide } from './pptxAdapter';
 import {
@@ -21,14 +21,20 @@ interface SlideEditorProps {
   presentation: PresentationModel;
   onChange: (presentation: PresentationModel) => void;
   onSaveShortcut?: () => void;
+  onActiveSlideChange?: (index: number) => void;
 }
 
 export const SlideEditor: React.FC<SlideEditorProps> = ({
   presentation,
   onChange,
   onSaveShortcut,
+  onActiveSlideChange,
 }) => {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+
+  useEffect(() => {
+    onActiveSlideChange?.(activeSlideIndex);
+  }, [activeSlideIndex, onActiveSlideChange]);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
   const slides = presentation.slides || [];
