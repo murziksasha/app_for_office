@@ -1,0 +1,62 @@
+import DOMPurify from 'dompurify';
+
+/**
+ * Sanitize any incoming HTML string to protect against XSS or script execution.
+ */
+export function sanitizeHtml(rawHtml: string): string {
+  if (!rawHtml) return '';
+  return DOMPurify.sanitize(rawHtml, {
+    ALLOWED_TAGS: [
+      'p',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'strong',
+      'em',
+      'u',
+      's',
+      'del',
+      'span',
+      'ul',
+      'ol',
+      'li',
+      'blockquote',
+      'pre',
+      'code',
+      'hr',
+      'br',
+      'a',
+      'img',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+      'div',
+      'mark',
+      'sub',
+      'sup',
+    ],
+    ALLOWED_ATTR: [
+      'href',
+      'target',
+      'rel',
+      'src',
+      'alt',
+      'title',
+      'width',
+      'height',
+      'style',
+      'class',
+      'colspan',
+      'rowspan',
+      'align',
+    ],
+    ALLOW_DATA_ATTR: false,
+  });
+}
+

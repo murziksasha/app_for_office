@@ -1,0 +1,115 @@
+:root {
+  --folio-bg: #f5f3ed;
+  --folio-bg-alt: #eae7df;
+  --folio-panel: #ffffff;
+  --folio-ribbon-bg: #fbfaf7;
+  --folio-ribbon-border: #ded9cf;
+  --folio-ink: #1f2328;
+  --folio-ink-muted: #656d76;
+  --folio-ink-faint: #8d95a0;
+  --folio-border: #d8d3c8;
+  --folio-border-light: #ece8e0;
+  --folio-teal: #0f766e;
+  --folio-teal-hover: #0d9488;
+  --folio-teal-light: #ccfbf1;
+  --folio-teal-tint: #f0fdfa;
+  --folio-amber: #b45309;
+  --folio-amber-light: #fef3c7;
+  --folio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --folio-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --folio-shadow-paper: 0 4px 20px rgba(35, 30, 20, 0.08), 0 1px 3px rgba(35, 30, 20, 0.04);
+  --folio-radius-sm: 4px;
+  --folio-radius-md: 6px;
+  --folio-radius-lg: 10px;
+  --folio-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --folio-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--folio-font);
+  background-color: var(--folio-bg);
+  color: var(--folio-ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Button & input resets */
+button {
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* Utility animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* Paper page print styles */
+@media print {
+  body {
+    background: white !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .folio-paper-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+}
+
