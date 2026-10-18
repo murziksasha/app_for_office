@@ -1,0 +1,117 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Folio",
+  "version": "1.0.0",
+  "identifier": "app.folio.local",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5188",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Folio",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "languages": ["en-US"],
+        "displayLanguageSelector": false
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["docx"],
+        "name": "Word Document",
+        "description": "Microsoft Word Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["odt"],
+        "name": "OpenDocument Text",
+        "description": "OpenDocument Text Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["rtf"],
+        "name": "Rich Text Document",
+        "description": "Rich Text Format Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["txt"],
+        "name": "Plain Text Document",
+        "description": "Plain Text Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["md"],
+        "name": "Markdown Document",
+        "description": "Markdown Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["html", "htm"],
+        "name": "HTML Document",
+        "description": "HTML Document",
+        "role": "Editor"
+      },
+      {
+        "ext": ["xlsx"],
+        "name": "Excel Spreadsheet",
+        "description": "Microsoft Excel Spreadsheet",
+        "role": "Editor"
+      },
+      {
+        "ext": ["csv"],
+        "name": "CSV Document",
+        "description": "Comma-Separated Values Spreadsheet",
+        "role": "Editor"
+      },
+      {
+        "ext": ["tsv"],
+        "name": "TSV Document",
+        "description": "Tab-Separated Values Spreadsheet",
+        "role": "Editor"
+      },
+      {
+        "ext": ["pptx"],
+        "name": "PowerPoint Presentation",
+        "description": "Microsoft PowerPoint Presentation",
+        "role": "Editor"
+      },
+      {
+        "ext": ["pdf"],
+        "name": "PDF Document",
+        "description": "Portable Document Format",
+        "role": "Viewer"
+      }
+    ]
+  }
+}
+

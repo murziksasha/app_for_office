@@ -1,25 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Underline } from '@tiptap/extension-underline';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableHeader } from '@tiptap/extension-table-header';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { Image } from '@tiptap/extension-image';
-import { Link } from '@tiptap/extension-link';
-import { TextStyle } from '@tiptap/extension-text-style';
-import { Color } from '@tiptap/extension-color';
-import { Highlight } from '@tiptap/extension-highlight';
-import { TextAlign } from '@tiptap/extension-text-align';
-import { FontFamily } from '@tiptap/extension-font-family';
-import { CharacterCount } from '@tiptap/extension-character-count';
-import { Placeholder } from '@tiptap/extension-placeholder';
+import type { JSONContent } from '@tiptap/core';
+import { documentExtensions, defaultDocumentModel } from './model';
 import { Search, ChevronDown, ChevronUp, X, Replace } from 'lucide-react';
 
 interface DocumentEditorProps {
-  content: string;
-  onChange: (html: string) => void;
+  content: JSONContent;
+  onChange: (doc: JSONContent) => void;
   pageSize?: 'letter' | 'a4';
   zoom?: number;
   onEditorReady?: (editor: any) => void;
@@ -40,44 +27,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [matchCount, setMatchCount] = useState(0);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-        link: false,
-        underline: false,
-      }),
-      Underline,
-      Table.configure({
-        resizable: true,
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Image.configure({
-        inline: true,
-        allowBase64: true,
-      }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'folio-link',
-        },
-      }),
-      TextStyle,
-      Color,
-      Highlight.configure({ multicolor: true }),
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-      }),
-      FontFamily,
-      CharacterCount,
-      Placeholder.configure({
-        placeholder: 'Type your document here...',
-      }),
-    ],
-    content: content || '<p></p>',
+    extensions: documentExtensions,
+    content: content || defaultDocumentModel,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      onChange(editor.getJSON());
     },
   });
 
@@ -87,13 +40,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     }
   }, [editor, onEditorReady]);
 
-  // Update editor content if content prop changes drastically (e.g. file switched)
+  // Update editor content if content prop changes from outside (e.g. file switched)
+  const prevContentRef = useRef<JSONContent | null>(null);
   useEffect(() => {
-    if (editor && content !== undefined) {
-      const currentHtml = editor.getHTML();
-      if (currentHtml !== content && content !== '') {
+    if (editor && content) {
+      const currentJson = editor.getJSON();
+      // Only setContent if different from internal editor content
+      if (JSON.stringify(currentJson) !== JSON.stringify(content)) {
         editor.commands.setContent(content, { emitUpdate: false });
       }
+      prevContentRef.current = content;
     }
   }, [content, editor]);
 
@@ -347,6 +303,35 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           color: var(--folio-teal);
           text-decoration: underline;
           cursor: pointer;
+        }
+        .folio-page-break {
+          break-after: page;
+          page-break-after: always;
+          height: 1px;
+          border-top: 1px dashed var(--folio-teal);
+          margin: 24px 0;
+          position: relative;
+        }
+        .folio-page-break::after {
+          content: 'Page Break';
+          position: absolute;
+          top: -9px;
+          right: 12px;
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--folio-teal);
+          background: #ffffff;
+          padding: 0 4px;
+        }
+        @media print {
+          .folio-page-break {
+            border-top: none;
+            margin: 0;
+            height: 0;
+          }
+          .folio-page-break::after {
+            display: none;
+          }
         }
         .folio-prose .ProseMirror p.is-editor-empty:first-child::before {
           color: var(--folio-ink-faint);

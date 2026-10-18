@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { EditorState, DocumentKind, SupportedFormat, RecentItem, DraftItem } from './types';
-import { pickFileToOpen, verifyPermission } from './files/fileSystem';
+import {
+  pickFileToOpen,
+  verifyPermission,
+  readFileFromPath,
+  setWindowTitle,
+  setupCloseGuard,
+  setupFileDropHandler,
+  setupOpenRequestHandler,
+  isDesktopPlatform,
+} from './platform';
 import { loadFileToEditor } from './files/open';
 import { saveEditorContent } from './files/save';
 import { saveDraft, clearDraft } from './files/drafts';
+import { defaultDocumentModel } from './document/model';
 import { StartScreen } from './shell/StartScreen';
 import { Ribbon } from './shell/Ribbon';
 import { StatusBar } from './shell/StatusBar';
@@ -26,20 +36,54 @@ export const App: React.FC = () => {
 
   const autosaveTimeoutRef = useRef<any>(null);
 
-  // Unsaved guard before closing window
+  // Update window title (shows file name and dirty mark)
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (editorState?.isDirty) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    const title = editorState
+      ? `Folio - ${editorState.fileName}${editorState.isDirty ? ' *' : ''}`
+      : 'Folio';
+    setWindowTitle(title);
+  }, [editorState?.fileName, editorState?.isDirty]);
+
+  // Unsaved guard before closing window (Tauri close-requested & browser beforeunload)
+  useEffect(() => {
+    const cleanup = setupCloseGuard(() => Boolean(editorState?.isDirty));
+    return cleanup;
   }, [editorState?.isDirty]);
 
-  // Global Drag & Drop handler
+  // Desktop native file drop listener (using Tauri's file-drop event and folio_read)
+  useEffect(() => {
+    const cleanup = setupFileDropHandler(async (file, path) => {
+      try {
+        const loaded = await loadFileToEditor(file, file.name, undefined, path);
+        setEditorState(loaded);
+        if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
+          setShowImportReport(true);
+        }
+      } catch (err: any) {
+        alert(err.message || 'Failed to open dropped file');
+      }
+    });
+    return cleanup;
+  }, []);
+
+  // Desktop second-launch / CLI open request listener
+  useEffect(() => {
+    const cleanup = setupOpenRequestHandler(async (path) => {
+      try {
+        const loadedFile = await readFileFromPath(path);
+        const loaded = await loadFileToEditor(loadedFile.file, loadedFile.name, undefined, path);
+        setEditorState(loaded);
+        if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
+          setShowImportReport(true);
+        }
+      } catch (err: any) {
+        console.error('Failed to open requested path:', err);
+      }
+    });
+    return cleanup;
+  }, []);
+
+  // Browser Drag & Drop handler (DataTransfer.files)
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => e.preventDefault();
     const handleDrop = async (e: DragEvent) => {
@@ -109,7 +153,7 @@ export const App: React.FC = () => {
 
     let defaultName = 'Document1.docx';
     let defaultFormat: SupportedFormat = 'docx';
-    let docContent = '<p></p>';
+    let docContent = defaultDocumentModel;
     let sheets = [createEmptySheet('Sheet1')];
     let presentation = { title: 'Presentation1', slides: [createEmptySlide(1)] };
 
@@ -144,7 +188,7 @@ export const App: React.FC = () => {
     if (!picked) return;
 
     try {
-      const loaded = await loadFileToEditor(picked.file, picked.file.name, picked.handle);
+      const loaded = await loadFileToEditor(picked.file, picked.file.name, picked.handle, picked.path);
       setEditorState(loaded);
       if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
         setShowImportReport(true);
@@ -156,6 +200,29 @@ export const App: React.FC = () => {
 
   // Open Recent File
   const handleOpenRecent = async (item: RecentItem) => {
+    if (editorState?.isDirty) {
+      const confirmDiscard = window.confirm('You have unsaved changes. Open another file without saving?');
+      if (!confirmDiscard) return;
+    }
+
+    // In desktop, if path exists, open directly with no extra prompt
+    if (isDesktopPlatform() && item.path) {
+      try {
+        const result = await readFileFromPath(item.path);
+        const loaded = await loadFileToEditor(result.file, result.name, undefined, result.path);
+        setEditorState(loaded);
+        if (loaded.importReport && (loaded.importReport.warnings.length > 0 || loaded.importReport.fallbackUsed)) {
+          setShowImportReport(true);
+        }
+        return;
+      } catch (err: any) {
+        console.warn('Could not open via path:', err);
+        alert(`Failed to open recent file: ${err.message || String(err)}`);
+        return;
+      }
+    }
+
+    // In browser, if handle exists, request permission again on reopen
     if (item.handle) {
       try {
         const permitted = await verifyPermission(item.handle, false);
@@ -172,6 +239,7 @@ export const App: React.FC = () => {
         console.warn('Could not open via stored file handle:', err);
       }
     }
+
     // Fallback if handle expired or inaccessible
     handleOpen();
   };
@@ -184,7 +252,7 @@ export const App: React.FC = () => {
       format: draft.format,
       isDirty: true,
       lastSavedAt: new Date(draft.updatedAt),
-      documentContent: draft.kind === 'document' ? draft.content : '<p></p>',
+      documentContent: draft.kind === 'document' ? draft.content : defaultDocumentModel,
       spreadsheetData: draft.kind === 'spreadsheet' ? draft.content : undefined,
       presentationData: draft.kind === 'presentation' ? draft.content : undefined,
     });
@@ -312,11 +380,11 @@ export const App: React.FC = () => {
           <main style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
             {editorState.kind === 'document' && (
               <DocumentEditor
-                content={editorState.documentContent || ''}
+                content={editorState.documentContent || defaultDocumentModel}
                 pageSize={pageSize}
                 zoom={zoom}
-                onChange={(html) => {
-                  setEditorState((prev) => (prev ? { ...prev, documentContent: html, isDirty: true } : prev));
+                onChange={(doc) => {
+                  setEditorState((prev) => (prev ? { ...prev, documentContent: doc, isDirty: true } : prev));
                 }}
                 onEditorReady={setDocumentEditorInstance}
                 onSaveShortcut={handleSave}

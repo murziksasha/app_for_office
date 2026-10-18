@@ -1,5 +1,6 @@
 import { EditorState, SupportedFormat } from '../types';
 import { saveToFileSystem } from './fileSystem';
+import { documentToHtml } from '../document/model';
 import { exportDocx } from '../document/docx/exporter';
 import { exportOdt } from '../document/odt/exporter';
 import { exportRtf } from '../document/rtf/exporter';
@@ -29,7 +30,8 @@ export async function saveEditorContent(
   try {
     switch (state.kind) {
       case 'document': {
-        const html = state.documentContent || '<p></p>';
+        // DocumentToHtml runs only inside save and export boundaries
+        const html = state.documentContent ? documentToHtml(state.documentContent) : '<p></p>';
         if (format === 'docx') {
           blob = await exportDocx(html);
         } else if (format === 'odt') {
@@ -83,7 +85,8 @@ export async function saveEditorContent(
     }
 
     const handleToUse = options.saveAs ? undefined : state.fileHandle;
-    const saveResult = await saveToFileSystem(blob, targetName, format, handleToUse);
+    const pathToUse = options.saveAs ? undefined : state.filePath;
+    const saveResult = await saveToFileSystem(blob, targetName, format, handleToUse, pathToUse);
 
     if (!saveResult.success) {
       return { success: false };
@@ -93,7 +96,8 @@ export async function saveEditorContent(
       ...state,
       fileName: saveResult.newFileName,
       format,
-      fileHandle: saveResult.handle || state.fileHandle,
+      fileHandle: saveResult.handle || (options.saveAs ? undefined : state.fileHandle),
+      filePath: saveResult.path || (options.saveAs ? undefined : state.filePath),
       isDirty: false,
       lastSavedAt: new Date(),
     };

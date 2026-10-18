@@ -27,6 +27,9 @@ import {
   Search,
   Highlighter,
   Palette,
+  Indent as IndentIcon,
+  Outdent as OutdentIcon,
+  SeparatorHorizontal,
 } from 'lucide-react';
 
 interface RibbonProps {
@@ -459,6 +462,25 @@ export const Ribbon: React.FC<RibbonProps> = ({
               <option value="'Courier New', monospace">Courier (Mono)</option>
             </select>
 
+            {/* Font size */}
+            <select
+              title="Font Size"
+              defaultValue="11pt"
+              onChange={(e) => {
+                documentEditor.chain().focus().setFontSize(e.target.value).run();
+              }}
+              style={{
+                padding: '4px 6px',
+                borderRadius: '4px',
+                border: '1px solid var(--folio-border)',
+                outline: 'none',
+              }}
+            >
+              {['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt', '28pt', '36pt', '48pt', '72pt'].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
             <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--folio-border)' }} />
 
             {/* Formatting marks */}
@@ -610,6 +632,27 @@ export const Ribbon: React.FC<RibbonProps> = ({
             >
               <ListOrdered size={16} />
             </button>
+
+            <button
+              onClick={() => documentEditor.chain().focus().outdent().run()}
+              title="Decrease Indent"
+              style={{
+                padding: '4px',
+                borderRadius: '4px',
+              }}
+            >
+              <OutdentIcon size={16} />
+            </button>
+            <button
+              onClick={() => documentEditor.chain().focus().indent().run()}
+              title="Increase Indent"
+              style={{
+                padding: '4px',
+                borderRadius: '4px',
+              }}
+            >
+              <IndentIcon size={16} />
+            </button>
           </div>
         )}
 
@@ -708,6 +751,21 @@ export const Ribbon: React.FC<RibbonProps> = ({
               }}
             >
               <Minus size={16} /> Divider
+            </button>
+
+            <button
+              onClick={() => documentEditor.chain().focus().setPageBreak().run()}
+              title="Page Break"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                backgroundColor: 'var(--folio-bg)',
+              }}
+            >
+              <SeparatorHorizontal size={16} /> Page Break
             </button>
           </div>
         )}

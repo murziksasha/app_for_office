@@ -5,14 +5,15 @@ import { importDocx } from '../document/docx/importer';
 import { importOdt } from '../document/odt/importer';
 import { importRtf } from '../document/rtf/importer';
 import { plainTextToHtml, markdownToHtml } from '../document/textMdHtml';
-import { sanitizeHtml } from '../document/sanitize';
+import { htmlToDocument } from '../document/model';
 import { importXlsx, importCsvTsv } from '../spreadsheet/adapters';
 import { importPptx } from '../slides/pptxAdapter';
 
 export async function loadFileToEditor(
   fileOrBuffer: File | ArrayBuffer,
   fileName: string,
-  handle?: FileSystemFileHandle
+  handle?: FileSystemFileHandle,
+  path?: string
 ): Promise<EditorState> {
   const buffer = fileOrBuffer instanceof File ? await fileOrBuffer.arrayBuffer() : fileOrBuffer;
 
@@ -30,6 +31,7 @@ export async function loadFileToEditor(
     fileName,
     format: detection.format,
     fileHandle: handle,
+    filePath: path,
     isDirty: false,
     lastSavedAt: new Date(),
   };
@@ -40,27 +42,27 @@ export async function loadFileToEditor(
     case 'document': {
       if (detection.format === 'docx') {
         const { html, report } = await importDocx(buffer, fileName);
-        editorState.documentContent = html;
+        editorState.documentContent = htmlToDocument(html);
         editorState.importReport = report;
       } else if (detection.format === 'odt') {
         const { html, report } = await importOdt(buffer, fileName);
-        editorState.documentContent = html;
+        editorState.documentContent = htmlToDocument(html);
         editorState.importReport = report;
       } else if (detection.format === 'rtf') {
         const text = textDecoder.decode(buffer);
         const { html, report } = importRtf(text, fileName);
-        editorState.documentContent = html;
+        editorState.documentContent = htmlToDocument(html);
         editorState.importReport = report;
       } else if (detection.format === 'md') {
         const text = textDecoder.decode(buffer);
-        editorState.documentContent = markdownToHtml(text);
+        editorState.documentContent = htmlToDocument(markdownToHtml(text));
       } else if (detection.format === 'html') {
         const text = textDecoder.decode(buffer);
-        editorState.documentContent = sanitizeHtml(text);
+        editorState.documentContent = htmlToDocument(text);
       } else {
         // Plain text
         const text = textDecoder.decode(buffer);
-        editorState.documentContent = plainTextToHtml(text);
+        editorState.documentContent = htmlToDocument(plainTextToHtml(text));
       }
       break;
     }
@@ -117,11 +119,12 @@ export async function loadFileToEditor(
 
   // Register in recent files
   await addRecentFile({
-    id: `file_${fileName}_${Date.now()}`,
+    id: `file_${path || fileName}_${Date.now()}`,
     name: fileName,
     kind: detection.kind,
     format: detection.format,
     handle,
+    path,
   });
 
   return editorState;

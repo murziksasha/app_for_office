@@ -1,3 +1,5 @@
+import type { JSONContent } from '@tiptap/core';
+
 export type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'pdf';
 
 export type SupportedFormat =
@@ -34,6 +36,7 @@ export interface RecentItem {
   format: SupportedFormat;
   lastOpened: number;
   handle?: FileSystemFileHandle;
+  path?: string;
 }
 
 export interface DraftItem {
@@ -86,12 +89,13 @@ export interface EditorState {
   kind: DocumentKind;
   fileName: string;
   format: SupportedFormat;
+  filePath?: string;
   fileHandle?: FileSystemFileHandle;
   isDirty: boolean;
   lastSavedAt?: Date;
   importReport?: ImportReport | null;
   // Payload for document, spreadsheet, presentation, or pdf
-  documentContent?: any; // HTML string or Tiptap JSON
+  documentContent?: JSONContent; // Tiptap JSON
   spreadsheetData?: any[]; // FortuneSheet sheets
   presentationData?: PresentationModel;
   pdfData?: Uint8Array;

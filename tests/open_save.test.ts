@@ -1,18 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { loadFileToEditor } from '../src/files/open';
 import { saveEditorContent } from '../src/files/save';
+import { htmlToDocument, documentToHtml } from '../src/document/model';
+import { isDesktopPlatform, getPlatformAdapter } from '../src/platform';
 
 describe('Central Open and Save Pipeline', () => {
-  it('loads sample.docx into Document EditorState', async () => {
+  it('loads sample.docx into Document EditorState as DocumentModel', async () => {
     const fixturePath = path.resolve(import.meta.dirname, '../fixtures/sample.docx');
     const buf = fs.readFileSync(fixturePath);
     const state = await loadFileToEditor(buf.buffer as ArrayBuffer, 'sample.docx');
 
     expect(state.kind).toBe('document');
     expect(state.format).toBe('docx');
-    expect(state.documentContent).toContain('Executive Summary');
+    expect(state.documentContent?.type).toBe('doc');
+    const html = documentToHtml(state.documentContent!);
+    expect(html).toContain('Executive Summary');
     expect(state.isDirty).toBe(false);
   });
 
@@ -38,14 +42,16 @@ describe('Central Open and Save Pipeline', () => {
     expect(state.presentationData!.slides.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('loads sample.md into Document EditorState', async () => {
+  it('loads sample.md into Document EditorState as DocumentModel', async () => {
     const fixturePath = path.resolve(import.meta.dirname, '../fixtures/sample.md');
     const buf = fs.readFileSync(fixturePath);
     const state = await loadFileToEditor(buf.buffer as ArrayBuffer, 'sample.md');
 
     expect(state.kind).toBe('document');
     expect(state.format).toBe('md');
-    expect(state.documentContent).toContain('Quarterly Review');
+    expect(state.documentContent?.type).toBe('doc');
+    const html = documentToHtml(state.documentContent!);
+    expect(html).toContain('Quarterly Review');
   });
 
   it('refuses legacy binary files with error message', async () => {
@@ -76,5 +82,34 @@ describe('Central Open and Save Pipeline', () => {
     expect(resHtml.success).toBe(true);
     expect(resHtml.updatedState?.format).toBe('html');
   });
-});
 
+  it('htmlToDocument drops a <script> tag safely', () => {
+    const dirtyHtml = `<p>Safe text</p><script>alert("malicious xss");</script><img src="x" onerror="alert(1)" />`;
+    const doc = htmlToDocument(dirtyHtml);
+
+    expect(doc.type).toBe('doc');
+    const serialized = JSON.stringify(doc);
+    expect(serialized).not.toContain('<script>');
+    expect(serialized).not.toContain('malicious xss');
+    expect(serialized).not.toContain('onerror');
+    expect(serialized).toContain('Safe text');
+  });
+
+  it('desktop vs browser selection does not throw in jsdom', () => {
+    // Default in jsdom without __TAURI_INTERNALS__
+    delete (window as any).__TAURI_INTERNALS__;
+    expect(isDesktopPlatform()).toBe(false);
+    const browserPlatform = getPlatformAdapter();
+    expect(browserPlatform.isDesktop).toBe(false);
+
+    // When __TAURI_INTERNALS__ is present
+    (window as any).__TAURI_INTERNALS__ = { invoke: vi.fn() };
+    expect(isDesktopPlatform()).toBe(true);
+    const desktopPlatform = getPlatformAdapter();
+    expect(desktopPlatform.isDesktop).toBe(true);
+
+    // Clean up
+    delete (window as any).__TAURI_INTERNALS__;
+    expect(isDesktopPlatform()).toBe(false);
+  });
+});

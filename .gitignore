@@ -10,6 +10,7 @@ build/
 out/
 *.tsbuildinfo
 .vite/
+src-tauri/target/
 
 # Testing & Coverage
 coverage/
