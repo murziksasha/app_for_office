@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DocumentKind, SupportedFormat } from '../types';
 import { X, Save } from 'lucide-react';
+import { saveFiltersForKind } from '../files/session';
 
 interface SaveAsDialogProps {
   currentKind: DocumentKind;
@@ -9,24 +10,6 @@ interface SaveAsDialogProps {
   onSave: (targetFormat: SupportedFormat, newName: string) => void;
   onClose: () => void;
 }
-
-const FORMAT_OPTIONS: Record<DocumentKind, { label: string; format: SupportedFormat; ext: string }[]> = {
-  document: [
-    { label: 'Word Document (.docx)', format: 'docx', ext: '.docx' },
-    { label: 'OpenDocument Text (.odt)', format: 'odt', ext: '.odt' },
-    { label: 'Rich Text Format (.rtf)', format: 'rtf', ext: '.rtf' },
-    { label: 'Markdown Document (.md)', format: 'md', ext: '.md' },
-    { label: 'Web Page (.html)', format: 'html', ext: '.html' },
-    { label: 'Plain Text (.txt)', format: 'txt', ext: '.txt' },
-  ],
-  spreadsheet: [
-    { label: 'Excel Workbook (.xlsx)', format: 'xlsx', ext: '.xlsx' },
-    { label: 'Comma Separated Values (.csv)', format: 'csv', ext: '.csv' },
-    { label: 'Tab Separated Values (.tsv)', format: 'tsv', ext: '.tsv' },
-  ],
-  presentation: [{ label: 'PowerPoint Presentation (.pptx)', format: 'pptx', ext: '.pptx' }],
-  pdf: [{ label: 'PDF Document (.pdf)', format: 'pdf', ext: '.pdf' }],
-};
 
 export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
   currentKind,
@@ -39,11 +22,11 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
   const baseName = currentFileName.replace(/\.[^/.]+$/, '');
   const [nameInput, setNameInput] = useState(baseName);
 
-  const availableFormats = FORMAT_OPTIONS[currentKind] || [];
+  const availableFormats = saveFiltersForKind(currentKind, currentFormat);
 
   const handleConfirm = () => {
     const chosenOption = availableFormats.find((f) => f.format === selectedFormat);
-    const ext = chosenOption ? chosenOption.ext : `.${selectedFormat}`;
+    const ext = chosenOption ? `.${chosenOption.extensions[0]}` : `.${selectedFormat}`;
     const cleanName = nameInput.trim() || 'Untitled';
     const finalName = cleanName.endsWith(ext) ? cleanName : `${cleanName}${ext}`;
     onSave(selectedFormat, finalName);
@@ -86,7 +69,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
             justifyContent: 'space-between',
           }}
         >
-          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>Save Copy As</h3>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>Save As</h3>
           <button onClick={onClose} style={{ padding: '4px', color: 'var(--folio-ink-muted)' }}>
             <X size={16} />
           </button>
@@ -137,7 +120,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
                     checked={selectedFormat === opt.format}
                     onChange={() => setSelectedFormat(opt.format)}
                   />
-                  <span>{opt.label}</span>
+                  <span>{opt.label} (.{opt.extensions[0]})</span>
                 </label>
               ))}
             </div>

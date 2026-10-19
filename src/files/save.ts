@@ -7,6 +7,7 @@ import { exportRtf } from '../document/rtf/exporter';
 import { htmlToMarkdown, htmlToPlainText, wrapInHtmlDocument } from '../document/textMdHtml';
 import { exportXlsx, exportCsvTsv } from '../spreadsheet/adapters';
 import { exportPptx } from '../slides/pptxAdapter';
+import { getActiveSheet } from './session';
 
 export async function saveEditorContent(
   state: EditorState,
@@ -15,13 +16,14 @@ export async function saveEditorContent(
     fileName?: string;
     saveAs?: boolean;
   } = {}
-): Promise<{ success: boolean; updatedState?: EditorState }> {
+): Promise<{ success: boolean; updatedState?: EditorState; bytes?: Uint8Array }> {
   const format = options.format || state.format;
   let targetName = options.fileName || state.fileName;
 
   // Ensure file name has matching extension
   const currentExt = targetName.split('.').pop()?.toLowerCase();
-  if (currentExt !== format) {
+  const isHtmlHtm = format === 'html' && (currentExt === 'html' || currentExt === 'htm');
+  if (currentExt !== format && !isHtmlHtm) {
     targetName = `${targetName.replace(/\.[^/.]+$/, '')}.${format}`;
   }
 
@@ -51,15 +53,24 @@ export async function saveEditorContent(
 
       case 'spreadsheet': {
         const sheets = state.spreadsheetData || [];
+        const activeSheet = getActiveSheet(sheets) || {
+          name: 'Sheet1',
+          id: '1',
+          status: 1,
+          order: 0,
+          row: 0,
+          column: 0,
+          data: [],
+        };
         if (format === 'xlsx') {
           blob = await exportXlsx(sheets);
         } else if (format === 'tsv') {
-          blob = new Blob([sheets.length > 0 ? exportCsvTsv(sheets[0], true) : ''], {
+          blob = new Blob([exportCsvTsv(activeSheet, true)], {
             type: 'text/tab-separated-values;charset=utf-8',
           });
         } else {
           // csv
-          blob = new Blob([sheets.length > 0 ? exportCsvTsv(sheets[0], false) : ''], {
+          blob = new Blob([exportCsvTsv(activeSheet, false)], {
             type: 'text/csv;charset=utf-8',
           });
         }
@@ -84,6 +95,9 @@ export async function saveEditorContent(
         throw new Error(`Unsupported document kind: ${state.kind}`);
     }
 
+    const arrayBuffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
     const handleToUse = options.saveAs ? undefined : state.fileHandle;
     const pathToUse = options.saveAs ? undefined : state.filePath;
     const saveResult = await saveToFileSystem(blob, targetName, format, handleToUse, pathToUse);
@@ -102,7 +116,7 @@ export async function saveEditorContent(
       lastSavedAt: new Date(),
     };
 
-    return { success: true, updatedState };
+    return { success: true, updatedState, bytes };
   } catch (err) {
     console.error('Error saving file:', err);
     throw err;

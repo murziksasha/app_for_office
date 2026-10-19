@@ -46,20 +46,27 @@ A sticky dirty flag survives undo and punishes people for looking at the ribbon.
 ## 3. Save, Save As, and Disk Conflicts
 
 ### The Rule
-Ctrl+S saves the active tab. The first save of a file with no path opens the save dialog. After that, Ctrl+S overwrites that path.
+Ctrl+S saves the active tab. Save, Save As, F12, or Ctrl+Shift+S on a tab with no safe path opens the save dialog. A macro path (`.docm`, `.xlsm`, `.pptm`) is not a safe path and is never overwritten; Save As suggests `.docx`, `.xlsx`, or `.pptx`. After that, Ctrl+S overwrites a normal existing path only.
 
+- Save As opens one system dialog (folder, name, type) listing every format that kind can write, with the current type first. Type labels use neutral names (Document, Spreadsheet, Presentation). A host without a save picker keeps an in-app name-and-type fallback step with the same neutral labels.
+- The tab becomes the new file. Unsaved edits are written only there; the old path is left at its last save.
+- A successful save clears that tab's draft. Recents keeps the old file and puts the new path first. A download with no path is not added to Recents.
+- Same-type saves and saves to docx, odt, rtf, html, xlsx, or pptx do not warn and do not reload. Editing history stays; Ctrl+Z changes the new file and marks it dirty.
+- Switching to txt, md, csv, or tsv warns on lossy switch with Save and Cancel. Cancel writes nothing and leaves the tab alone. Save writes, reloads the editor from written bytes through format importers, and bumps `historyEpoch` so the editor remounts with an empty undo stack.
+- CSV and TSV write the sheet on screen (`status === 1`, otherwise the first sheet) as displayed values, and the warning names that sheet.
+- The extension on the picked name wins. `.htm` is HTML. A bare name gets the open file's current extension. Any other extension writes nothing and is refused with an OK message.
 - If the path is gone, Ctrl+S does not recreate it. The save dialog opens with the old name. A successful pick retargets the tab. A locked file that still exists shows the error and keeps the old path.
-- If another tab already owns the target path, Save As is refused, nothing is written, and both tabs stay as they are. Save As onto this tab's own path is a normal save.
+- The system replace prompt is the only overwrite confirm. If another tab already owns the target path, Save As is refused, nothing is written, and both tabs stay as they are.
 - If the disk copy's modified time or size differs from the stamp taken at open or last save, Ctrl+S asks Overwrite, Save As, or Cancel. If the stamp cannot be compared, Ctrl+S overwrites.
 - Cancelling a save that was started by closing the tab stops the close.
 
 Names for new files are `DocumentN.docx`, `WorkbookN.xlsx`, and `PresentationN.pptx`, using the smallest N not used by an open tab of that kind.
 
 ### The Reason
-One path cannot have two tabs, and a silent overwrite can destroy a save made by another program.
+One path cannot have two tabs, a silent overwrite can destroy a save made by another program, and lossy format conversions must be acknowledged before discarding document structure.
 
 ### The Check
-`tests/session.test.ts` covers the save decision, the missing path, the newer-disk conflict, and Save As onto an open path.
+`tests/session.test.ts` covers the save decision, macro suggestions, lossy warnings, active sheet resolution, the missing path, the newer-disk conflict, and Save As onto an open path.
 
 ---
 
@@ -104,6 +111,7 @@ A document is one flowing paper, not a set of numbered pages. Sheets, slides, an
 
 ### The Rule
 - `Ctrl+S` / `Cmd+S`: Save the active tab.
+- `F12` / `Ctrl+Shift+S` / `Cmd+Shift+S`: Save As on the active tab (ignored when a prompt is open or no tab is active).
 - `Ctrl+W` / `Cmd+W`: Close the active tab, with the same prompt as the tab X.
 - `Ctrl+N` / `Cmd+N`: New file of the active tab's kind, or a document from the start screen.
 - `Ctrl+O` / `Cmd+O`: Open files into tabs.

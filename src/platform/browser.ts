@@ -1,4 +1,4 @@
-import { PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
+import { FormatFilter, PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
 
 export const FORMAT_MIME_TYPES: Record<string, { description: string; mime: string; extensions: string[] }> = {
   docx: {
@@ -60,6 +60,10 @@ export const FORMAT_MIME_TYPES: Record<string, { description: string; mime: stri
 
 export function hasFileSystemAccess(): boolean {
   return typeof window !== 'undefined' && 'showOpenFilePicker' in window;
+}
+
+export function hasSaveFilePicker(): boolean {
+  return typeof window !== 'undefined' && typeof (window as any).showSaveFilePicker === 'function';
 }
 
 export async function verifyPermission(
@@ -147,15 +151,22 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
     return files[0] ?? null;
   }
 
-  async pickSaveTarget(fileName: string, format: string): Promise<SaveTarget | null> {
-    if (!hasFileSystemAccess()) return null;
+  async pickSaveTarget(fileName: string, filters: FormatFilter[]): Promise<SaveTarget | null> {
+    if (!hasSaveFilePicker()) return null;
     try {
-      const typeConfig = FORMAT_MIME_TYPES[format];
-      const types = typeConfig
-        ? [{ description: typeConfig.description, accept: { [typeConfig.mime]: typeConfig.extensions } }]
-        : undefined;
+      const types = (filters || []).map((f) => {
+        const mime = (f.format && FORMAT_MIME_TYPES[f.format]?.mime) || 'application/octet-stream';
+        const exts = f.extensions.map((ext: string) => (ext.startsWith('.') ? ext : `.${ext}`));
+        return {
+          description: f.label,
+          accept: { [mime]: exts },
+        };
+      });
       // @ts-ignore
-      const handle = await window.showSaveFilePicker({ suggestedName: fileName, types });
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: types.length ? types : undefined,
+      });
       return { handle, name: handle.name };
     } catch (err: any) {
       if (err.name === 'AbortError') return null;

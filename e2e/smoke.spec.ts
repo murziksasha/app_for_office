@@ -130,8 +130,10 @@ test.describe('Folio Smoke Test Suite', () => {
     await page.evaluate(() => {
       delete (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker;
     });
-    const downloadPromise = page.waitForEvent('download');
     await page.keyboard.press('Control+s');
+    await expect(page.getByRole('heading', { name: 'Save As' })).toBeVisible();
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('.animate-fade-in').getByRole('button', { name: 'Save' }).click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('Document1.docx');
   });

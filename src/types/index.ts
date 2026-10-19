@@ -101,6 +101,7 @@ export interface EditorState {
   diskStamp?: { modifiedMs: number; len: number } | null;
   lastSavedAt?: Date;
   importReport?: ImportReport | null;
+  historyEpoch?: number;
   // Payload for document, spreadsheet, presentation, or pdf
   documentContent?: JSONContent; // Tiptap JSON
   spreadsheetData?: any[]; // FortuneSheet sheets

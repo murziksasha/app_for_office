@@ -25,7 +25,7 @@ Explorer double-click and a second launch must land in the window the user alrea
 Desktop file I/O goes through the Rust commands. The page does not show a browser download for a desktop save.
 
 - `folio_pick_open` returns every chosen file. Filter labels say Document, Spreadsheet, Presentation, and PDF. They do not use Microsoft product names.
-- `folio_pick_save` is the save dialog for a file with no path, for Save As, and for a path that no longer exists.
+- `folio_pick_save` is the save dialog for a file with no path, for Save As, for macro paths (`.docm`, `.xlsm`, `.pptm`), and for a path that no longer exists. It presents one filter per supported format for that document kind with the current type first, uses neutral labels (Document, Spreadsheet, Presentation), and allow-lists the picked path.
 - `folio_write` overwrites the tab's path on Ctrl+S once that path exists and is not newer.
 - `folio_path_status` reports exists, parent exists, modified time in milliseconds, and length. The path must already be on the in-memory allow-list. `folio_allow_path` adds a path the user picked from Recent.
 - `folio_choose` shows 1 to 3 buttons with the words the shell decided (Save, Don't save, Cancel, and the other prompts). Closing the dialog with the title-bar X is Cancel.

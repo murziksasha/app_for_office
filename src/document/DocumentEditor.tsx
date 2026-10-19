@@ -60,7 +60,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         e.preventDefault();
         setShowFind(true);
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         onSaveShortcut?.();
       }

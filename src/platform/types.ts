@@ -1,3 +1,6 @@
+import type { FormatFilter } from '../files/session';
+export type { FormatFilter };
+
 export interface PlatformFileResult {
   file: File;
   name: string;
@@ -29,7 +32,7 @@ export interface PlatformAdapter {
   readonly isDesktop: boolean;
   pickFile(): Promise<PlatformFileResult | null>;
   pickFiles(): Promise<PlatformFileResult[]>;
-  pickSaveTarget(fileName: string, format: string): Promise<SaveTarget | null>;
+  pickSaveTarget(fileName: string, filters: FormatFilter[]): Promise<SaveTarget | null>;
   saveFile(
     data: Blob | ArrayBuffer | Uint8Array | string,
     fileName: string,

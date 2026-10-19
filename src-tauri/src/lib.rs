@@ -51,7 +51,7 @@ pub struct FilePayload {
 }
 
 #[tauri::command]
-pub fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, String> {
+fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, String> {
     let files = rfd::FileDialog::new()
         .add_filter(
             "Supported Office Files",
@@ -95,7 +95,7 @@ pub fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>
 }
 
 #[tauri::command]
-pub fn folio_path_status(path: String, state: tauri::State<AppState>) -> Result<PathStatus, String> {
+fn folio_path_status(path: String, state: tauri::State<AppState>) -> Result<PathStatus, String> {
     let p = PathBuf::from(&path);
     if !state.is_allowed(&p) {
         return Err(format!(
@@ -129,13 +129,13 @@ pub fn folio_path_status(path: String, state: tauri::State<AppState>) -> Result<
 }
 
 #[tauri::command]
-pub fn folio_take_launch_paths(state: tauri::State<AppState>) -> Vec<String> {
+fn folio_take_launch_paths(state: tauri::State<AppState>) -> Vec<String> {
     let mut paths = state.launch_paths.lock().unwrap();
     std::mem::take(&mut *paths)
 }
 
 #[tauri::command]
-pub fn folio_choose(
+fn folio_choose(
     window: tauri::WebviewWindow,
     title: String,
     message: String,
@@ -166,17 +166,29 @@ pub fn folio_choose(
     })
 }
 
+#[derive(serde::Deserialize)]
+pub struct SaveFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
 #[tauri::command]
-pub fn folio_pick_save(
+fn folio_pick_save(
     default_name: Option<String>,
     format: Option<String>,
+    filters: Option<Vec<SaveFilter>>,
     state: tauri::State<AppState>,
 ) -> Result<Option<String>, String> {
     let mut dialog = rfd::FileDialog::new();
     if let Some(ref name) = default_name {
         dialog = dialog.set_file_name(name);
     }
-    if let Some(ref fmt) = format {
+    if let Some(ref filter_list) = filters {
+        for f in filter_list {
+            let ext_slices: Vec<&str> = f.extensions.iter().map(|s| s.trim_start_matches('.')).collect();
+            dialog = dialog.add_filter(&f.name, &ext_slices);
+        }
+    } else if let Some(ref fmt) = format {
         dialog = dialog.add_filter(fmt, &[fmt.as_str()]);
     }
     let file = dialog.save_file();
@@ -190,7 +202,7 @@ pub fn folio_pick_save(
 }
 
 #[tauri::command]
-pub fn folio_read(path: String, state: tauri::State<AppState>) -> Result<FilePayload, String> {
+fn folio_read(path: String, state: tauri::State<AppState>) -> Result<FilePayload, String> {
     let p = PathBuf::from(&path);
     if !state.is_allowed(&p) {
         return Err(format!(
@@ -208,7 +220,7 @@ pub fn folio_read(path: String, state: tauri::State<AppState>) -> Result<FilePay
 }
 
 #[tauri::command]
-pub fn folio_write(path: String, bytes: Vec<u8>, state: tauri::State<AppState>) -> Result<(), String> {
+fn folio_write(path: String, bytes: Vec<u8>, state: tauri::State<AppState>) -> Result<(), String> {
     let p = PathBuf::from(&path);
     if !state.is_allowed(&p) {
         return Err(format!(
@@ -222,7 +234,7 @@ pub fn folio_write(path: String, bytes: Vec<u8>, state: tauri::State<AppState>) 
 }
 
 #[tauri::command]
-pub fn folio_allow_path(path: String, state: tauri::State<AppState>) -> Result<(), String> {
+fn folio_allow_path(path: String, state: tauri::State<AppState>) -> Result<(), String> {
     state.allow_path(PathBuf::from(path));
     Ok(())
 }

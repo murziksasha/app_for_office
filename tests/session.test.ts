@@ -5,8 +5,13 @@ import {
   decideSave,
   defaultPrintChoice,
   findTabByHandle,
+  getActiveSheet,
   isDiskNewer,
   isDirtyHash,
+  isLossySave,
+  isMacroPath,
+  isSafeSavePath,
+  lossyWarningMessage,
   nextDirtyIndex,
   nextFileName,
   normalizePath,
@@ -14,7 +19,10 @@ import {
   planOpenBatch,
   printScopeFromChoice,
   printScopeNeeded,
+  resolvePickedName,
+  saveFiltersForKind,
   shouldRemoveRecent,
+  suggestedSaveName,
   type TabRef,
 } from '../src/files/session';
 
@@ -68,6 +76,14 @@ describe('save target', () => {
         openTabs: tabs,
       })
     ).toEqual({ kind: 'save-as', reason: 'missing' });
+    expect(
+      decideSave({
+        selfId: 'a',
+        targetPath: 'C:\\Docs\\report.docm',
+        status: { exists: true, parentExists: true, modifiedMs: 1, len: 1 },
+        openTabs: tabs,
+      })
+    ).toEqual({ kind: 'save-as', reason: 'macro' });
   });
 
   it('refuses a path owned by another tab and overwrites its own', () => {
@@ -211,3 +227,155 @@ describe('browser handles', () => {
     expect(await findTabByHandle(open, undefined)).toBeNull();
   });
 });
+
+describe('macro paths and safe paths', () => {
+  it('detects macro-enabled files and checks safe save paths', () => {
+    expect(isMacroPath('report.docm')).toBe(true);
+    expect(isMacroPath('C:\\Files\\SHEET.XLSM')).toBe(true);
+    expect(isMacroPath('/home/user/slides.pptm')).toBe(true);
+    expect(isMacroPath('report.docx')).toBe(false);
+    expect(isMacroPath('table.csv')).toBe(false);
+    expect(isMacroPath(null)).toBe(false);
+    expect(isMacroPath('')).toBe(false);
+
+    expect(isSafeSavePath('report.docm')).toBe(false);
+    expect(isSafeSavePath('C:\\Files\\SHEET.XLSM')).toBe(false);
+    expect(isSafeSavePath('report.docx')).toBe(true);
+    expect(isSafeSavePath(null)).toBe(false);
+    expect(isSafeSavePath('')).toBe(false);
+  });
+});
+
+describe('suggested save name', () => {
+  it('rewrites macro extensions to writable equivalents', () => {
+    expect(suggestedSaveName('report.docm', 'docx')).toBe('report.docx');
+    expect(suggestedSaveName('C:\\Docs\\budget.xlsm', 'xlsx')).toBe('budget.xlsx');
+    expect(suggestedSaveName('/path/deck.pptm', 'pptx')).toBe('deck.pptx');
+  });
+
+  it('preserves existing writable names and appends format to bare names', () => {
+    expect(suggestedSaveName('notes.docx', 'docx')).toBe('notes.docx');
+    expect(suggestedSaveName('C:\\path\\data.csv', 'csv')).toBe('data.csv');
+    expect(suggestedSaveName('Untitled', 'docx')).toBe('Untitled.docx');
+    expect(suggestedSaveName('MyWorkbook', 'xlsx')).toBe('MyWorkbook.xlsx');
+  });
+});
+
+describe('save filters for kind', () => {
+  it('uses neutral labels without proprietary suite brand names', () => {
+    const kinds = ['document', 'spreadsheet', 'presentation', 'pdf'] as const;
+    for (const kind of kinds) {
+      const filters = saveFiltersForKind(kind);
+      expect(filters.length).toBeGreaterThan(0);
+      for (const filter of filters) {
+        expect(filter.label).not.toMatch(/Word|Excel|PowerPoint|Microsoft/i);
+      }
+    }
+  });
+
+  it('puts the current format first in the filter list', () => {
+    const docFilters = saveFiltersForKind('document', 'rtf');
+    expect(docFilters[0].format).toBe('rtf');
+
+    const sheetFilters = saveFiltersForKind('spreadsheet', 'tsv');
+    expect(sheetFilters[0].format).toBe('tsv');
+
+    const defaultDoc = saveFiltersForKind('document');
+    expect(defaultDoc[0].format).toBe('docx');
+  });
+});
+
+describe('resolve picked name', () => {
+  it('lets the picked extension win when supported', () => {
+    const resDoc = resolvePickedName('Report.odt', 'document', 'Report.docx', 'docx');
+    expect(resDoc).toEqual({ ok: true, fileName: 'Report.odt', format: 'odt' });
+
+    const resSheet = resolvePickedName('data.tsv', 'spreadsheet', 'data.xlsx', 'xlsx');
+    expect(resSheet).toEqual({ ok: true, fileName: 'data.tsv', format: 'tsv' });
+  });
+
+  it('resolves .htm to html format for documents, but refuses it for other kinds', () => {
+    const htmDoc = resolvePickedName('index.htm', 'document', 'doc.docx', 'docx');
+    expect(htmDoc).toEqual({ ok: true, fileName: 'index.htm', format: 'html' });
+
+    const htmSheet = resolvePickedName('index.htm', 'spreadsheet', 'sheet.xlsx', 'xlsx');
+    expect(htmSheet.ok).toBe(false);
+  });
+
+  it('inherits the open file extension for bare names, rewriting macro extensions', () => {
+    const bareDoc = resolvePickedName('my-doc', 'document', 'old-file.rtf', 'rtf');
+    expect(bareDoc).toEqual({ ok: true, fileName: 'my-doc.rtf', format: 'rtf' });
+
+    const bareMacro = resolvePickedName('my-report', 'document', 'old-report.docm', 'docx');
+    expect(bareMacro).toEqual({ ok: true, fileName: 'my-report.docx', format: 'docx' });
+
+    const bareMacroXls = resolvePickedName('budget', 'spreadsheet', 'C:\\Docs\\old.xlsm', 'xlsx');
+    expect(bareMacroXls).toEqual({ ok: true, fileName: 'budget.xlsx', format: 'xlsx' });
+  });
+
+  it('refuses unsupported or macro extensions', () => {
+    const unknown = resolvePickedName('notes.xyz', 'document', 'notes.docx', 'docx');
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) {
+      expect(unknown.message).toContain('.xyz');
+    }
+
+    const macro = resolvePickedName('notes.docm', 'document', 'notes.docx', 'docx');
+    expect(macro.ok).toBe(false);
+    if (!macro.ok) {
+      expect(macro.message).toContain('.docm');
+    }
+  });
+});
+
+describe('lossy save checks', () => {
+  it('recognizes same-type and rich-to-rich saves as non-lossy', () => {
+    expect(isLossySave('docx', 'docx')).toBe(false);
+    expect(isLossySave('csv', 'csv')).toBe(false);
+    expect(isLossySave('docx', 'odt')).toBe(false);
+    expect(isLossySave('docx', 'rtf')).toBe(false);
+    expect(isLossySave('docx', 'html')).toBe(false);
+  });
+
+  it('flags switch to text and tabular formats as lossy', () => {
+    expect(isLossySave('docx', 'txt')).toBe(true);
+    expect(isLossySave('docx', 'md')).toBe(true);
+    expect(isLossySave('xlsx', 'csv')).toBe(true);
+    expect(isLossySave('xlsx', 'tsv')).toBe(true);
+    expect(isLossySave('csv', 'tsv')).toBe(true);
+  });
+});
+
+describe('active sheet and lossy warnings', () => {
+  it('selects the active sheet by status === 1 or falls back to the first sheet', () => {
+    const sheets = [
+      { name: 'Summary', status: 0 },
+      { name: 'Details', status: 1 },
+      { name: 'Data', status: 0 },
+    ];
+    expect(getActiveSheet(sheets)).toEqual({ name: 'Details', status: 1 });
+
+    const noActive = [
+      { name: 'First', status: 0 },
+      { name: 'Second', status: 0 },
+    ];
+    expect(getActiveSheet(noActive)).toEqual({ name: 'First', status: 0 });
+
+    expect(getActiveSheet([])).toBeUndefined();
+    expect(getActiveSheet(null)).toBeUndefined();
+  });
+
+  it('generates lossy warning messages naming the active sheet for csv and tsv', () => {
+    const csvWarn = lossyWarningMessage('csv', 'Q1 Revenue');
+    expect(csvWarn).toContain('Q1 Revenue');
+    expect(csvWarn).toContain('CSV');
+
+    const tsvWarn = lossyWarningMessage('tsv');
+    expect(tsvWarn).toContain('Sheet1');
+    expect(tsvWarn).toContain('TSV');
+
+    expect(lossyWarningMessage('txt')).toContain('plain text');
+    expect(lossyWarningMessage('md')).toContain('Markdown');
+  });
+});
+

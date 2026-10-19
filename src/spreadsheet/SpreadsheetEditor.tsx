@@ -34,7 +34,7 @@ export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         backgroundColor: '#ffffff',
       }}
       onKeyDown={(e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
           e.preventDefault();
           onSaveShortcut?.();
         }

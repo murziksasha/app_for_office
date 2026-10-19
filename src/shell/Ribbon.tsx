@@ -212,14 +212,19 @@ export const Ribbon: React.FC<RibbonProps> = ({
           </button>
           <button
             onClick={onSaveAs}
-            title="Save As..."
+            title="Save As (F12 or Ctrl+Shift+S)"
             style={{
-              padding: '4px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
               borderRadius: '4px',
-              color: 'var(--folio-ink-muted)',
+              backgroundColor: 'var(--folio-bg)',
+              color: 'var(--folio-ink)',
+              fontWeight: 500,
             }}
           >
-            <SaveAll size={14} />
+            <SaveAll size={14} /> Save As
           </button>
           <button
             onClick={onPrint}

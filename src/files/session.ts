@@ -1,7 +1,4 @@
-/**
- * Pure file-lifecycle decisions for the tabbed shell.
- * React and Rust perform the results. They do not re-decide them.
- */
+import { DocumentKind, SupportedFormat } from '../types';
 
 export interface DiskStamp {
   modifiedMs: number;
@@ -52,7 +49,7 @@ export interface OpenPlan {
 }
 
 export type SaveDecision =
-  | { kind: 'save-as'; reason: 'no-path' | 'missing' }
+  | { kind: 'save-as'; reason: 'no-path' | 'missing' | 'macro' }
   | { kind: 'conflict' }
   | { kind: 'overwrite' }
   | { kind: 'already-open'; ownerId: string };
@@ -144,6 +141,7 @@ export function decideSave(args: {
 }): SaveDecision {
   const target = args.targetPath?.trim();
   if (!target) return { kind: 'save-as', reason: 'no-path' };
+  if (isMacroPath(target)) return { kind: 'save-as', reason: 'macro' };
 
   const owner = args.openTabs.find((tab) => tab.id !== args.selfId && pathsMatch(tab.path, target));
   if (owner) return { kind: 'already-open', ownerId: owner.id };
@@ -256,4 +254,173 @@ export async function findTabByHandle(
     }
   }
   return null;
+}
+
+export const MACRO_EXTENSIONS = new Set(['docm', 'xlsm', 'pptm']);
+
+export function isMacroPath(path?: string | null): boolean {
+  if (!path) return false;
+  const parts = path.split(/[\\/]/);
+  const name = parts.pop() || path;
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return false;
+  const ext = name.slice(dot + 1).toLowerCase();
+  return MACRO_EXTENSIONS.has(ext);
+}
+
+export function isSafeSavePath(path?: string | null): boolean {
+  return Boolean(path && !isMacroPath(path));
+}
+
+export function suggestedSaveName(fileName: string, currentFormat: SupportedFormat): string {
+  const parts = fileName.split(/[\\/]/);
+  const name = parts.pop() || fileName;
+  const lastDot = name.lastIndexOf('.');
+  if (lastDot <= 0) {
+    const ext = currentFormat;
+    return `${name}.${ext}`;
+  }
+  const base = name.slice(0, lastDot);
+  const ext = name.slice(lastDot + 1).toLowerCase();
+  if (ext === 'docm') return `${base}.docx`;
+  if (ext === 'xlsm') return `${base}.xlsx`;
+  if (ext === 'pptm') return `${base}.pptx`;
+  return name;
+}
+
+export interface FormatFilter {
+  format: SupportedFormat;
+  label: string;
+  extensions: string[];
+}
+
+const DOCUMENT_FILTERS: FormatFilter[] = [
+  { format: 'docx', label: 'Document', extensions: ['docx'] },
+  { format: 'odt', label: 'OpenDocument Text', extensions: ['odt'] },
+  { format: 'rtf', label: 'Rich Text Format', extensions: ['rtf'] },
+  { format: 'txt', label: 'Plain Text', extensions: ['txt'] },
+  { format: 'md', label: 'Markdown Document', extensions: ['md'] },
+  { format: 'html', label: 'HTML Document', extensions: ['html', 'htm'] },
+];
+
+const SPREADSHEET_FILTERS: FormatFilter[] = [
+  { format: 'xlsx', label: 'Spreadsheet', extensions: ['xlsx'] },
+  { format: 'csv', label: 'Comma Separated Values', extensions: ['csv'] },
+  { format: 'tsv', label: 'Tab Separated Values', extensions: ['tsv'] },
+];
+
+const PRESENTATION_FILTERS: FormatFilter[] = [
+  { format: 'pptx', label: 'Presentation', extensions: ['pptx'] },
+];
+
+const PDF_FILTERS: FormatFilter[] = [
+  { format: 'pdf', label: 'PDF Document', extensions: ['pdf'] },
+];
+
+export function saveFiltersForKind(kind: DocumentKind, currentFormat?: SupportedFormat): FormatFilter[] {
+  let base: FormatFilter[];
+  switch (kind) {
+    case 'spreadsheet':
+      base = SPREADSHEET_FILTERS;
+      break;
+    case 'presentation':
+      base = PRESENTATION_FILTERS;
+      break;
+    case 'pdf':
+      base = PDF_FILTERS;
+      break;
+    case 'document':
+    default:
+      base = DOCUMENT_FILTERS;
+      break;
+  }
+
+  const list = base.map((f) => ({ ...f, extensions: [...f.extensions] }));
+  if (currentFormat) {
+    const idx = list.findIndex((f) => f.format === currentFormat);
+    if (idx > 0) {
+      const [item] = list.splice(idx, 1);
+      list.unshift(item);
+    }
+  }
+  return list;
+}
+
+export function resolvePickedName(
+  pickedName: string,
+  kind: DocumentKind,
+  currentFileName: string,
+  currentFormat: SupportedFormat
+): { ok: true; fileName: string; format: SupportedFormat } | { ok: false; message: string } {
+  const parts = pickedName.split(/[\\/]/);
+  const name = parts.pop() || pickedName;
+  const lastDot = name.lastIndexOf('.');
+
+  // Bare name: no dot or dot is first char (hidden file) or dot at the end
+  if (lastDot <= 0 || lastDot === name.length - 1) {
+    const cleanBase = lastDot === name.length - 1 ? name.slice(0, lastDot) : name;
+    // Current file's extension:
+    const currentParts = currentFileName.split(/[\\/]/);
+    const currName = currentParts.pop() || currentFileName;
+    const currDot = currName.lastIndexOf('.');
+    let currExt = currDot > 0 ? currName.slice(currDot + 1).toLowerCase() : currentFormat;
+    // If macro, rewrite to writable
+    if (currExt === 'docm') currExt = 'docx';
+    else if (currExt === 'xlsm') currExt = 'xlsx';
+    else if (currExt === 'pptm') currExt = 'pptx';
+
+    const fmt = currExt === 'htm' ? 'html' : (currExt as SupportedFormat);
+    return {
+      ok: true,
+      fileName: `${cleanBase}.${currExt}`,
+      format: fmt,
+    };
+  }
+
+  const ext = name.slice(lastDot + 1).toLowerCase();
+  if (ext === 'htm') {
+    if (kind === 'document') {
+      return { ok: true, fileName: name, format: 'html' };
+    }
+    return { ok: false, message: `Folio cannot save "${name}". The extension ".htm" is not supported for ${kind}s.` };
+  }
+
+  const allowedFilters = saveFiltersForKind(kind);
+  const matched = allowedFilters.find((f) => f.format === ext || f.extensions.includes(ext));
+  if (matched) {
+    return { ok: true, fileName: name, format: matched.format };
+  }
+
+  return {
+    ok: false,
+    message: `Folio cannot save "${name}". The extension ".${ext}" is not supported for ${kind}s.`,
+  };
+}
+
+const LOSSY_FORMATS = new Set<SupportedFormat>(['txt', 'md', 'csv', 'tsv']);
+
+export function isLossySave(currentFormat: SupportedFormat, targetFormat: SupportedFormat): boolean {
+  if (currentFormat === targetFormat) return false;
+  return LOSSY_FORMATS.has(targetFormat);
+}
+
+export function getActiveSheet<T extends { status?: number; name?: string }>(
+  sheets?: T[] | null
+): T | undefined {
+  if (!sheets || sheets.length === 0) return undefined;
+  return sheets.find((s) => s.status === 1) || sheets[0];
+}
+
+export function lossyWarningMessage(targetFormat: SupportedFormat, sheetName?: string): string {
+  if (targetFormat === 'csv' || targetFormat === 'tsv') {
+    const sheet = sheetName || 'Sheet1';
+    return `Saving as ${targetFormat.toUpperCase()} only saves the active sheet "${sheet}". Formulas, formatting, and other sheets will not be saved.`;
+  }
+  if (targetFormat === 'txt') {
+    return 'Saving as plain text will remove all formatting, images, and layout.';
+  }
+  if (targetFormat === 'md') {
+    return 'Saving as Markdown may remove rich text formatting, styles, and layout.';
+  }
+  return 'Some formatting or content may be lost in this format.';
 }

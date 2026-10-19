@@ -1,4 +1,4 @@
-import { PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
+import { FormatFilter, PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
 import { FORMAT_MIME_TYPES } from './browser';
 
 interface RustFilePayload {
@@ -35,10 +35,14 @@ export class DesktopPlatformAdapter implements PlatformAdapter {
     return files[0] ?? null;
   }
 
-  async pickSaveTarget(fileName: string, format: string): Promise<SaveTarget | null> {
+  async pickSaveTarget(fileName: string, filters: FormatFilter[]): Promise<SaveTarget | null> {
+    const rustFilters = (filters || []).map((f) => ({
+      name: f.label,
+      extensions: f.extensions,
+    }));
     const pickedPath = await tauriInvoke<string | null>('folio_pick_save', {
       defaultName: fileName,
-      format,
+      filters: rustFilters,
     });
     if (!pickedPath) return null;
     return { path: pickedPath, name: pickedPath.split(/[\\/]/).pop() || fileName };

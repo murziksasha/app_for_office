@@ -1,9 +1,9 @@
 import { PlatformAdapter, PlatformFileResult, PlatformSaveResult } from './types';
-import { browserAdapter, FORMAT_MIME_TYPES, hasFileSystemAccess, verifyPermission, downloadBlob } from './browser';
+import { browserAdapter, FORMAT_MIME_TYPES, hasFileSystemAccess, hasSaveFilePicker, verifyPermission, downloadBlob } from './browser';
 import { desktopAdapter } from './desktop';
 
 export * from './types';
-export { FORMAT_MIME_TYPES, hasFileSystemAccess, verifyPermission, downloadBlob };
+export { FORMAT_MIME_TYPES, hasFileSystemAccess, hasSaveFilePicker, verifyPermission, downloadBlob };
 
 /**
  * Detects whether the app is executing inside the native Tauri desktop window.
