@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, memo } from 'react';
 import { Workbook, WorkbookInstance } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import { FortuneSheetData } from './adapters';
@@ -9,19 +9,23 @@ interface SpreadsheetEditorProps {
   onSaveShortcut?: () => void;
 }
 
-export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
+export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = memo(({
   sheets,
   onChange,
   onSaveShortcut,
 }) => {
   const workbookRef = useRef<WorkbookInstance>(null);
+  const isInitialMount = useRef(true);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  const handleChange = useCallback(
-    (data: any[]) => {
-      onChange(data as FortuneSheetData[]);
-    },
-    [onChange]
-  );
+  const handleChange = useCallback((data: any[]) => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    onChangeRef.current(data as FortuneSheetData[]);
+  }, []);
 
   return (
     <div
@@ -50,5 +54,5 @@ export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       />
     </div>
   );
-};
+});
 

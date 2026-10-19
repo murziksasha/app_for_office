@@ -3,13 +3,19 @@
 ## 1. One Window, Many Tabs
 
 ### The Rule
-Folio has one top-level window. Each open file is a tab. The start screen is shown only when there are zero tabs. It is not a Home tab, and the Folio mark does not close the active file.
+Folio has one top-level window. Each open file is a tab. With no files open, the window shows the full start screen and the tab strip is hidden. While at least one file is open, the file-chip row keeps a **+** pinned to its right edge.
 
+- Clicking **+** opens one Home chip and shows the start screen under that row: New Document, New Spreadsheet, New Presentation, Open, recents, drafts, and drop. Home sits after the file chips, and **+** does not scroll away with the chips.
+- A second click on **+** focuses that same Home chip without adding a second Home tab.
+- Home is not a file. It is never dirty, has no draft, and is skipped by Save, Print, and the window-close pass. The window title is `Folio` while Home is active.
+- Opening or creating a file from Home adds a file tab and switches to it. Home stays in the strip. Because no file tab is active on Home, the first file opened becomes the active tab.
+- Closing Home (its X, or Ctrl+W) asks nothing and returns to the last file tab.
+- Closing the last file tab returns to the full start screen, clears Home, and hides the chip row. Closing the window quits only after every dirty tab is saved or discarded.
+- The ribbon and status bar stay hidden on Home. The Folio mark does not close a file.
 - New and Open add a tab. They do not ask about the current tab.
 - The same full path is never two tabs. On Windows, identity is the full path, compared case-insensitively with slashes normalized. In the browser, identity is `FileSystemHandle.isSameEntry`. A failed or denied comparison opens a new tab. The file name is not identity.
 - A multi-file open or drop opens each file that is not already open. An already-open path is focused only when it is the only item, or the first item when every item is already open. Other already-open paths are skipped and are not reloaded. The current tab stays active unless there was no tab, in which case the first file that opens becomes active.
 - Folders are ignored. A file that fails to open does not get a tab. After the batch, one dialog lists every failure. If every file fails, no tab is added.
-- Closing the last tab returns to the start screen and does not quit. Closing the window quits only after every dirty tab is saved or discarded.
 
 ### The Reason
 Office-style work is several files in one window. A second window, or a start screen that hides open files, breaks that model.
@@ -33,7 +39,7 @@ Closing a dirty tab, or quitting with dirty tabs, asks once per dirty tab, in or
 
 The desktop close handler always cancels the native close, then destroys the window only after the pass finishes. The browser uses the same three buttons for in-page tab close. Leaving or reloading the browser page may show the generic leave prompt and must keep drafts.
 
-The window title is `Folio — {file name}` plus ` *` when the active tab is dirty, or `Folio` when no tab is open.
+The window title is `Folio — {file name}` plus ` *` when the active tab is dirty, or `Folio` when no tab is open or the Home tab is active.
 
 ### The Reason
 A sticky dirty flag survives undo and punishes people for looking at the ribbon. A single Yes/No close dialog cannot save one tab and discard another.
@@ -113,13 +119,13 @@ A document is one flowing paper, not a set of numbered pages. Sheets, slides, an
 ## 6. Keyboard Shortcuts
 
 ### The Rule
-- `Ctrl+S` / `Cmd+S`: Save the active tab.
-- `F12` / `Ctrl+Shift+S` / `Cmd+Shift+S`: Save As on the active tab (ignored when a prompt is open or no tab is active).
-- `Ctrl+W` / `Cmd+W`: Close the active tab, with the same prompt as the tab X.
-- `Ctrl+N` / `Cmd+N`: New file of the active tab's kind, or a document from the start screen.
+- `Ctrl+S` / `Cmd+S`: Save the active tab (ignored on Home).
+- `F12` / `Ctrl+Shift+S` / `Cmd+Shift+S`: Save As on the active tab (ignored when a prompt is open or no file tab is active).
+- `Ctrl+W` / `Cmd+W`: Close the active tab, with the same prompt as the tab X. Closing the Home tab asks nothing and returns to the last file tab.
+- `Ctrl+N` / `Cmd+N`: New file of the active tab's kind, or a document from the start screen or Home tab.
 - `Ctrl+O` / `Cmd+O`: Open files into tabs.
-- `Ctrl+P` / `Cmd+P`: Print the active tab.
-- `Ctrl+Tab` / `Ctrl+Shift+Tab`: Cycle tabs.
+- `Ctrl+P` / `Cmd+P`: Print the active tab (ignored on Home).
+- `Ctrl+Tab` / `Ctrl+Shift+Tab`: Cycle tabs (including the Home tab when open, after the file chips).
 - `Ctrl+Z` / `Cmd+Z`, `Ctrl+Y` / `Cmd+Y`: Undo and redo inside the editor.
 - `Ctrl+B` / `Cmd+B`, `Ctrl+I` / `Cmd+I`, `Ctrl+U` / `Cmd+U`: Bold, italic, underline.
 - `Ctrl+F` / `Cmd+F`: Find and replace in a document.

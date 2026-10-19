@@ -85,6 +85,7 @@ type SaveOutcome = 'ok' | 'cancelled' | 'failed';
 export const App: React.FC = () => {
   const [tabs, setTabs] = useState<EditorState[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [homeOpen, setHomeOpen] = useState(false);
   const [documentEditorInstance, setDocumentEditorInstance] = useState<any>(null);
   const [pageSize, setPageSize] = useState<'letter' | 'a4'>('letter');
   const [zoom, setZoom] = useState<number>(100);
@@ -101,6 +102,8 @@ export const App: React.FC = () => {
 
   const tabsRef = useRef<EditorState[]>([]);
   const activeRef = useRef<string | null>(null);
+  const homeOpenRef = useRef(false);
+  const lastFileIdRef = useRef<string | null>(null);
   const choiceRef = useRef<((value: string | null) => void) | null>(null);
   const busyRef = useRef(false);
   const actionsRef = useRef({
@@ -117,12 +120,49 @@ export const App: React.FC = () => {
     cycle: (_backward: boolean) => {},
   });
 
+  const setHomeOpenState = (open: boolean) => {
+    homeOpenRef.current = open;
+    setHomeOpen(open);
+  };
+
+  useEffect(() => {
+    homeOpenRef.current = homeOpen;
+  }, [homeOpen]);
+
   const commit = (next: EditorState[], active?: string | null) => {
     tabsRef.current = next;
     setTabs(next);
+    if (next.length === 0) {
+      setHomeOpenState(false);
+      lastFileIdRef.current = null;
+      activeRef.current = null;
+      setActiveId(null);
+      return;
+    }
     if (active !== undefined) {
       activeRef.current = active;
       setActiveId(active);
+      if (active !== null) {
+        lastFileIdRef.current = active;
+      }
+    }
+  };
+
+  const openOrFocusHome = () => {
+    if (!homeOpenRef.current) {
+      setHomeOpenState(true);
+    }
+    commit(tabsRef.current, null);
+  };
+
+  const closeHome = () => {
+    setHomeOpenState(false);
+    if (activeRef.current === null) {
+      const targetId =
+        lastFileIdRef.current && tabsRef.current.some((t) => t.id === lastFileIdRef.current)
+          ? lastFileIdRef.current
+          : tabsRef.current[tabsRef.current.length - 1]?.id || null;
+      commit(tabsRef.current, targetId);
     }
   };
 
@@ -693,8 +733,20 @@ export const App: React.FC = () => {
       }
       if (!quitting) {
         const remaining = tabsRef.current.filter((item) => item.id !== id);
-        const nextActive = activeRef.current === id ? remaining[remaining.length - 1]?.id || null : activeRef.current;
-        commit(remaining, nextActive);
+        if (remaining.length === 0) {
+          setHomeOpenState(false);
+          lastFileIdRef.current = null;
+          commit([], null);
+        } else {
+          let nextActive = activeRef.current;
+          if (activeRef.current === id) {
+            nextActive = remaining[remaining.length - 1]?.id || null;
+          }
+          if (lastFileIdRef.current === id) {
+            lastFileIdRef.current = nextActive && nextActive !== id ? nextActive : remaining[remaining.length - 1]?.id || null;
+          }
+          commit(remaining, nextActive);
+        }
       }
       await refreshLists();
       return true;
@@ -985,6 +1037,10 @@ export const App: React.FC = () => {
     savePdfActive,
     editAsDocumentActive,
     closeActive: async () => {
+      if (homeOpenRef.current && activeRef.current === null) {
+        closeHome();
+        return;
+      }
       if (activeRef.current) await closeTab(activeRef.current);
     },
     printActive,
@@ -995,11 +1051,26 @@ export const App: React.FC = () => {
     },
     cycle: (backward: boolean) => {
       if (busyRef.current) return;
-      const list = tabsRef.current;
-      if (list.length < 2) return;
-      const index = Math.max(0, list.findIndex((item) => item.id === activeRef.current));
-      const next = backward ? (index - 1 + list.length) % list.length : (index + 1) % list.length;
-      commit(list, list[next].id || null);
+      const fileTabs = tabsRef.current;
+      const cycleIds: (string | null)[] = fileTabs.map((t) => t.id!);
+      if (homeOpenRef.current) {
+        cycleIds.push(null);
+      }
+      if (cycleIds.length < 2) return;
+
+      let index: number;
+      if (activeRef.current === null) {
+        index = homeOpenRef.current ? cycleIds.length - 1 : 0;
+      } else {
+        const found = cycleIds.indexOf(activeRef.current);
+        index = found >= 0 ? found : 0;
+      }
+
+      const nextIndex = backward
+        ? (index - 1 + cycleIds.length) % cycleIds.length
+        : (index + 1) % cycleIds.length;
+      const nextId = cycleIds[nextIndex];
+      commit(fileTabs, nextId);
     },
   };
 
@@ -1024,8 +1095,12 @@ export const App: React.FC = () => {
         <TabStrip
           tabs={tabs}
           activeId={activeId || undefined}
+          homeOpen={homeOpen}
           onSelect={(id) => commit(tabsRef.current, id)}
           onClose={(id) => void closeTab(id)}
+          onSelectHome={() => commit(tabsRef.current, null)}
+          onCloseHome={closeHome}
+          onNewTab={openOrFocusHome}
         />
       )}
       {tabs.length === 0 || !activeTab ? (
