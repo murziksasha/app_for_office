@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import { documentExtensions, defaultDocumentModel } from './model';
 import { Search, ChevronDown, ChevronUp, X, Replace } from 'lucide-react';
+import { t } from '../i18n/instance';
 
 interface DocumentEditorProps {
   content: JSONContent;
@@ -11,6 +12,7 @@ interface DocumentEditorProps {
   zoom?: number;
   onEditorReady?: (editor: any) => void;
   onSaveShortcut?: () => void;
+  findSignal?: number;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -20,6 +22,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   zoom = 100,
   onEditorReady,
   onSaveShortcut,
+  findSignal = 0,
 }) => {
   const [showFind, setShowFind] = useState(false);
   const [findText, setFindText] = useState('');
@@ -52,6 +55,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       prevContentRef.current = content;
     }
   }, [content, editor]);
+
+  const seenFindSignal = useRef(findSignal);
+  useEffect(() => {
+    if (findSignal !== seenFindSignal.current) {
+      seenFindSignal.current = findSignal;
+      setShowFind(true);
+    }
+  }, [findSignal]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -110,6 +121,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         alignItems: 'center',
         padding: '36px 16px',
         position: 'relative',
+        ['--folio-page-break-label' as string]: `"${t('find.pageBreak')}"`,
       }}
     >
       {/* Find & Replace Floating Panel */}
@@ -118,7 +130,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           className="folio-find-panel animate-fade-in"
           style={{
             position: 'fixed',
-            top: '110px',
+            top: '230px',
             right: '24px',
             zIndex: 100,
             background: 'var(--folio-panel)',
@@ -133,7 +145,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--folio-ink)' }}>Find & Replace</span>
+            <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--folio-ink)' }}>{t('find.title')}</span>
             <button onClick={() => setShowFind(false)} style={{ padding: '2px', color: 'var(--folio-ink-muted)' }}>
               <X size={14} />
             </button>
@@ -141,7 +153,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           <div style={{ display: 'flex', gap: '6px' }}>
             <input
               type="text"
-              placeholder="Find text..."
+              placeholder={t('find.placeholder')}
               value={findText}
               onChange={(e) => {
                 setFindText(e.target.value);
@@ -165,16 +177,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 fontWeight: 500,
               }}
             >
-              Find
+              {t('find.action')}
             </button>
           </div>
           {matchCount > 0 && (
-            <div style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>Found {matchCount} matches</div>
+            <div style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>{t('find.found', { count: matchCount })}</div>
           )}
           <div style={{ display: 'flex', gap: '6px' }}>
             <input
               type="text"
-              placeholder="Replace with..."
+              placeholder={t('find.replacePlaceholder')}
               value={replaceText}
               onChange={(e) => setReplaceText(e.target.value)}
               style={{
@@ -195,7 +207,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 fontWeight: 500,
               }}
             >
-              Replace
+              {t('find.replace')}
             </button>
           </div>
         </div>
@@ -313,7 +325,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           position: relative;
         }
         .folio-page-break::after {
-          content: 'Page Break';
+          content: var(--folio-page-break-label, 'Page Break');
           position: absolute;
           top: -9px;
           right: 12px;

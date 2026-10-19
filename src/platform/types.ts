@@ -48,5 +48,6 @@ export interface PlatformAdapter {
   setupCloseGuard(isDirty: () => boolean, confirmClose?: () => Promise<boolean>): () => void;
   setupFileDropHandler(onFiles: (files: PlatformFileResult[]) => void): () => void;
   setupOpenRequestHandler(onOpen: (paths: string[]) => void): () => void;
+  userRegion(): Promise<string | null>;
 }
 

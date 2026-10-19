@@ -57,9 +57,12 @@ fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, St
             "Supported Office Files",
             &[
                 "docx", "odt", "rtf", "txt", "md", "html", "htm", "xlsx", "csv", "tsv", "pptx",
-                "pdf",
+                "pdf", "tmdx", "pmdx", "prdx", "tmd", "pmd", "prd",
             ],
         )
+        .add_filter("Document (*.tmdx)", &["tmdx"])
+        .add_filter("Spreadsheet (*.pmdx)", &["pmdx"])
+        .add_filter("Presentation (*.prdx)", &["prdx"])
         .add_filter("Documents (*.docx)", &["docx"])
         .add_filter("OpenDocument Text (*.odt)", &["odt"])
         .add_filter("Rich Text Format (*.rtf)", &["rtf"])
@@ -282,6 +285,30 @@ fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::rename(from, to)
 }
 
+#[cfg(windows)]
+fn read_user_region() -> String {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetUserDefaultGeoName(geo_name: *mut u16, geo_name_count: i32) -> i32;
+    }
+    let mut buf = [0u16; 16];
+    let written = unsafe { GetUserDefaultGeoName(buf.as_mut_ptr(), buf.len() as i32) };
+    if written <= 1 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buf[..(written as usize) - 1])
+}
+
+#[cfg(not(windows))]
+fn read_user_region() -> String {
+    String::new()
+}
+
+#[tauri::command]
+fn folio_user_region() -> String {
+    read_user_region()
+}
+
 #[tauri::command]
 fn folio_allow_path(path: String, state: tauri::State<AppState>) -> Result<(), String> {
     state.allow_path(PathBuf::from(path));
@@ -338,7 +365,8 @@ pub fn run() {
             folio_allow_path,
             folio_path_status,
             folio_take_launch_paths,
-            folio_choose
+            folio_choose,
+            folio_user_region
         ])
         .run(tauri::generate_context!())
         .expect("error while running folio tauri application");

@@ -34,7 +34,7 @@ export async function saveEditorContent(
       case 'document': {
         // DocumentToHtml runs only inside save and export boundaries
         const html = state.documentContent ? documentToHtml(state.documentContent) : '<p></p>';
-        if (format === 'docx') {
+        if (format === 'docx' || format === 'tmdx') {
           blob = await exportDocx(html);
         } else if (format === 'odt') {
           blob = await exportOdt(html);
@@ -62,7 +62,7 @@ export async function saveEditorContent(
           column: 0,
           data: [],
         };
-        if (format === 'xlsx') {
+        if (format === 'xlsx' || format === 'pmdx') {
           blob = await exportXlsx(sheets);
         } else if (format === 'tsv') {
           blob = new Blob([exportCsvTsv(activeSheet, true)], {

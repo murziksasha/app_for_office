@@ -1,6 +1,7 @@
 import React from 'react';
 import { EditorState } from '../types';
 import { ZoomIn, ZoomOut, Check, HardDrive, AlertCircle } from 'lucide-react';
+import { t } from '../i18n/instance';
 
 interface StatusBarProps {
   editorState: EditorState;
@@ -41,24 +42,24 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <HardDrive size={13} color="var(--folio-teal)" />
-          <span>Local storage</span>
+          <span>{t('status.local')}</span>
         </div>
 
         {isDoc && (
           <>
             <span>
-              {wordCount} {wordCount === 1 ? 'word' : 'words'} · {charCount} characters
+              {t(wordCount === 1 ? 'status.wordOne' : 'status.wordMany', { count: wordCount, chars: charCount })}
             </span>
-            <span>Page: {pageSize.toUpperCase()}</span>
+            <span>{t('status.page', { size: pageSize.toUpperCase() })}</span>
           </>
         )}
 
         {editorState.kind === 'spreadsheet' && (
-          <span>Spreadsheet · {editorState.spreadsheetData?.length || 1} sheet(s)</span>
+          <span>{t('status.spreadsheet', { count: editorState.spreadsheetData?.length || 1 })}</span>
         )}
 
         {editorState.kind === 'presentation' && (
-          <span>Presentation · {editorState.presentationData?.slides?.length || 1} slide(s)</span>
+          <span>{t('status.presentation', { count: editorState.presentationData?.slides?.length || 1 })}</span>
         )}
       </div>
 
@@ -69,12 +70,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           {editorState.isDirty ? (
             <>
               <AlertCircle size={13} color="var(--folio-amber)" />
-              <span style={{ color: 'var(--folio-amber)' }}>Unsaved changes</span>
+              <span style={{ color: 'var(--folio-amber)' }}>{t('status.unsaved')}</span>
             </>
           ) : (
             <>
               <Check size={13} color="var(--folio-teal)" />
-              <span style={{ color: 'var(--folio-teal)' }}>Saved</span>
+              <span style={{ color: 'var(--folio-teal)' }}>{t('status.saved')}</span>
             </>
           )}
         </div>
@@ -85,7 +86,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <button
               onClick={() => onZoomChange(Math.max(50, zoom - 10))}
               style={{ padding: '2px', color: 'inherit' }}
-              title="Zoom out"
+              title={t('status.zoomOut')}
             >
               <ZoomOut size={12} />
             </button>
@@ -105,7 +106,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <button
               onClick={() => onZoomChange(Math.min(200, zoom + 10))}
               style={{ padding: '2px', color: 'inherit' }}
-              title="Zoom in"
+              title={t('status.zoomIn')}
             >
               <ZoomIn size={12} />
             </button>
