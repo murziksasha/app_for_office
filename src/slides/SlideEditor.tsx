@@ -4,6 +4,7 @@ import { createEmptySlide } from './pptxAdapter';
 import { Box, ResizeDir, minPercents, moveBox, resizeBox } from './geometry';
 import { VIDEO_MSG, bytesToBase64, probeVideoPlayable, sniffMp4 } from './videoFile';
 import { Plus, Trash2, Copy, ChevronUp, ChevronDown, Play, Pause } from 'lucide-react';
+import { t } from '../i18n/instance';
 
 export interface SlideEditorHandle {
   addSlide: () => void;
@@ -597,7 +598,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           }}
         >
           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--folio-ink-muted)' }}>
-            SLIDES ({slides.length})
+            {t('slides.count', { count: slides.length })}
           </span>
           <button
             type="button"
@@ -647,7 +648,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                 }}
               >
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--folio-ink-muted)' }}>
-                  Slide {idx + 1}
+                  {t('slides.slide', { n: idx + 1 })}
                 </span>
                 <div style={{ display: 'flex', gap: '2px' }} onClick={(e) => e.stopPropagation()}>
                   <button
@@ -666,14 +667,14 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                   >
                     <ChevronDown size={12} />
                   </button>
-                  <button type="button" onClick={() => handleDuplicateSlide(idx)} title="Duplicate" style={{ padding: '2px' }}>
+                  <button type="button" onClick={() => handleDuplicateSlide(idx)} title={t('slides.duplicate')} style={{ padding: '2px' }}>
                     <Copy size={12} />
                   </button>
                   {slides.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleDeleteSlide(idx)}
-                      title="Delete"
+                      title={t('slides.delete')}
                       style={{ padding: '2px', color: '#dc2626' }}
                     >
                       <Trash2 size={12} />
@@ -695,7 +696,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                 }}
               >
                 {s.elements.find((e) => e.type === 'text')?.text?.slice(0, 50) ||
-                  (s.elements.some((e) => e.type === 'video') ? 'Video' : 'Blank Slide')}
+                  (s.elements.some((e) => e.type === 'video') ? t('slides.video') : t('slides.blank'))}
               </div>
             </div>
           ))}
@@ -953,7 +954,7 @@ function VideoBlock({
         <button
           type="button"
           onClick={toggle}
-          aria-label={paused ? 'Play' : 'Pause'}
+          aria-label={paused ? t('pdf.play') : t('pdf.pause')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -970,7 +971,7 @@ function VideoBlock({
           max={duration || 0}
           step={0.1}
           value={Math.min(time, duration || 0)}
-          aria-label="Seek"
+          aria-label={t('pdf.seek')}
           onChange={(e) => {
             const node = ref.current;
             const next = Number(e.target.value);

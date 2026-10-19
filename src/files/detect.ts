@@ -9,6 +9,24 @@ export interface FileDetectionResult {
   errorMessage?: string;
 }
 
+const SOFTMAKER_PACKAGES: Record<string, { kind: DocumentKind; format: SupportedFormat; part: string }> = {
+  tmd: { kind: 'document', format: 'tmdx', part: 'word/document.xml' },
+  tmdx: { kind: 'document', format: 'tmdx', part: 'word/document.xml' },
+  pmd: { kind: 'spreadsheet', format: 'pmdx', part: 'xl/workbook.xml' },
+  pmdx: { kind: 'spreadsheet', format: 'pmdx', part: 'xl/workbook.xml' },
+  prd: { kind: 'presentation', format: 'prdx', part: 'ppt/presentation.xml' },
+  prdx: { kind: 'presentation', format: 'prdx', part: 'ppt/presentation.xml' },
+};
+
+function softMakerFailure(ext: string): FileDetectionResult {
+  const meta = SOFTMAKER_PACKAGES[ext];
+  return {
+    kind: meta.kind,
+    format: meta.format,
+    errorMessage: `Folio cannot open this .${ext} file. It is not a package Folio can read.`,
+  };
+}
+
 const EXTENSION_MAP: Record<string, { kind: DocumentKind; format: SupportedFormat }> = {
   // Document
   docx: { kind: 'document', format: 'docx' },
@@ -90,7 +108,28 @@ export async function detectFileType(
     };
   }
 
-  // 3. Inspect binary if provided
+  // 3. SoftMaker packages share Open XML parts. The extension stays the format.
+  // Older .tmd/.pmd/.prd open only when that part is present. Anything else is a Folio error.
+  if (SOFTMAKER_PACKAGES[ext]) {
+    const meta = SOFTMAKER_PACKAGES[ext];
+    if (!buffer) {
+      return { kind: meta.kind, format: meta.format };
+    }
+    if (!isZipBinary(buffer)) {
+      return softMakerFailure(ext);
+    }
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      if (zip.file(meta.part)) {
+        return { kind: meta.kind, format: meta.format };
+      }
+    } catch {
+      return softMakerFailure(ext);
+    }
+    return softMakerFailure(ext);
+  }
+
+  // 4. Inspect binary if provided
   if (buffer) {
     if (isOleBinary(buffer)) {
       return {
@@ -130,7 +169,7 @@ export async function detectFileType(
     }
   }
 
-  // 4. Fallback to extension mapping
+  // 5. Fallback to extension mapping
   if (EXTENSION_MAP[ext]) {
     return EXTENSION_MAP[ext];
   }

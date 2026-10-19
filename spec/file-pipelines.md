@@ -105,4 +105,14 @@ This document details the import, export, fallback behavior, and fixture require
 - **Presentation Export**: US Letter landscape (one slide per page, scaled uniformly). Slide text runs, images, and rectangles are placed from percentages with background, fill, and font colors preserved. Videos are omitted and recorded.
 - **Omissions & Fallback**: Characters not covered by the font are dropped and recorded as omissions. Non-JPEG/PNG images that cannot be embedded are omitted and recorded. Folio displays a notice summarizing any omissions after writing. Export or write failures leave no file on disk.
 
+---
+
+## 12. SoftMaker packages (`.tmdx`, `.pmdx`, `.prdx`, and older `.tmd`, `.pmd`, `.prd`)
+
+- **Read Pipeline**: `.tmdx` and a ZIP `.tmd` that contains `word/document.xml` use the Document importer. `.pmdx` and a ZIP `.pmd` that contains `xl/workbook.xml` use the Spreadsheet importer. `.prdx` and a ZIP `.prd` that contains `ppt/presentation.xml` use the Presentation importer. The format stays `tmdx`, `pmdx`, or `prdx`. A saved package may be plainer than the original. Skipped pieces stay on the import report.
+- **Older Packages**: Opening `.tmd`, `.pmd`, or `.prd` clears the save path, renames the tab to `.tmdx`, `.pmdx`, or `.prdx`, and leaves the tab dirty. The first Save asks for a path. The original file is never overwritten. A recent entry may still point at the original path.
+- **Failure Behavior**: A binary file, or a ZIP without the matching part, shows `Folio cannot open this .ext file. It is not a package Folio can read.` and does not open. That message is separate from the Office 97–2003 message. There is no binary parser.
+- **Write Pipeline**: Save and Save As call the existing Document, Spreadsheet, and Presentation exporters. The extension on the name stays `.tmdx`, `.pmdx`, or `.prdx`. Save As offers those three formats. Windows file associations are unchanged, so a double-click stays with the program that already owns the extension.
+- **Fixtures**: `fixtures/hello.tmdx`, `fixtures/New Документ PlanMaker.pmdx`, `fixtures/New Документ Presentations.prdx`, and `fixtures/sample_binary.tmd`.
+
 

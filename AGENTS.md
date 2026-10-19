@@ -24,11 +24,11 @@ Local-first office app. Windows desktop is Tauri 2 (`src-tauri`). The browser bu
 
 ## Desktop (already built)
 
-Window is `1280×800`, minimum `960×640`. The installer is NSIS. WebView2 uses `downloadBootstrapper`. App id is `app.folio.local`. A second launch focuses `main` and emits `folio://open-file` with the path. Startup CLI file args are allow-listed. Drops are allow-listed in Rust, then read by `DesktopPlatformAdapter`. Save writes the existing path with `folio_write` and calls `folio_pick_save` only when there is no path. The title is `Folio - {name}`, with ` *` when dirty. Closing with unsaved edits asks, then destroys the window.
+Window is `1280×800`, minimum `960×640`. The installer is NSIS. WebView2 uses `downloadBootstrapper`. App id is `app.folio.local`. A second launch focuses `main` and emits `folio://open-file` with the path. Startup CLI file args are allow-listed. A window drop is allow-listed in Rust. `DesktopPlatformAdapter` reads and opens it only when the drop lands on the Home box. Save writes the existing path with `folio_write` and calls `folio_pick_save` only when there is no path. The title is `Folio - {name}`, with ` *` when dirty. Closing with unsaved edits asks, then destroys the window.
 
 Shell associations, and no others: `docx odt rtf txt md html htm xlsx csv tsv pptx pdf`.
 
-IPC: `folio_pick_open`, `folio_pick_save`, `folio_read`, `folio_write`, `folio_allow_path`.
+IPC: `folio_pick_open`, `folio_pick_save`, `folio_read`, `folio_write`, `folio_allow_path`, `folio_user_region`.
 
 ### Adding a desktop feature
 
@@ -48,6 +48,9 @@ IPC: `folio_pick_open`, `folio_pick_save`, `folio_read`, `folio_write`, `folio_a
 | txt, md, html | yes | yes | text; markdown-it + DOMPurify in, turndown out |
 | xlsx, csv, tsv | yes | yes | ExcelJS ↔ FortuneSheet; RFC 4180 for csv/tsv |
 | pptx | yes | yes | slide XML in; pptxgenjs out |
+| tmdx, tmd | yes | yes (as tmdx) | same pipeline as docx; `.tmd` opens as a dirty `.tmdx` with no save path |
+| pmdx, pmd | yes | yes (as pmdx) | same pipeline as xlsx; `.pmd` opens as a dirty `.pmdx` with no save path |
+| prdx, prd | yes | yes (as prdx) | same pipeline as pptx; `.prd` opens as a dirty `.prdx` with no save path |
 | pdf | yes | no | pdfjs-dist (viewer in, original bytes out; Edit as Document extracts to new docx; Save as PDF writes from editors) |
 
 To add a format: sniff it in `detect.ts`, import into the in-app model, export from that model, add a fixture under `fixtures/`, and add a Vitest file under `tests/`. Open and save go through `src/files/open.ts` and `save.ts` only.

@@ -86,7 +86,7 @@ export async function importXlsx(
     const columnlen: Record<string, number> = {};
 
     // Capture column widths
-    worksheet.columns.forEach((col, idx) => {
+    (worksheet.columns || []).forEach((col, idx) => {
       if (col.width) {
         columnlen[String(idx)] = Math.round(col.width * 8);
       }

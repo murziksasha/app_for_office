@@ -13,6 +13,8 @@ import {
 } from '../spreadsheet/sheetCommands';
 import { RibbonGroup } from './ribbon/RibbonGroup';
 import { RibbonButton, ribbonFieldStyle } from './ribbon/RibbonButton';
+import { LanguageButton } from './LanguageButton';
+import { t } from '../i18n/instance';
 import {
   Save,
   Printer,
@@ -96,15 +98,45 @@ function tabsFor(kind: EditorState['kind']): RibbonTab[] {
   return ['file', 'home', 'insert'];
 }
 
+const RIBBON_COLLAPSED_KEY = 'folio_ribbon_collapsed';
+
 export const Ribbon: React.FC<RibbonProps> = (props) => {
   const { editorState } = props;
   const [activeTab, setActiveTab] = useState<RibbonTab>(editorState.kind === 'pdf' ? 'file' : 'home');
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(RIBBON_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     setActiveTab(editorState.kind === 'pdf' ? 'file' : 'home');
   }, [editorState.kind, editorState.id]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(RIBBON_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      // The ribbon still collapses for this visit when storage is blocked.
+    }
+  }, [collapsed]);
+
   const tabs = tabsFor(editorState.kind);
+
+  const selectTab = (tab: RibbonTab) => {
+    if (collapsed) {
+      setActiveTab(tab);
+      setCollapsed(false);
+      return;
+    }
+    if (tab === activeTab) {
+      setCollapsed(true);
+      return;
+    }
+    setActiveTab(tab);
+  };
 
   return (
     <div
@@ -127,9 +159,24 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
         }}
       >
         {tabs.map((tab) => (
-          <TabButton key={tab} tab={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} />
+          <TabButton key={tab} tab={tab} active={activeTab === tab} onClick={() => selectTab(tab)} />
         ))}
+        <button
+          type="button"
+          aria-label={collapsed ? t('ribbon.expand') : t('ribbon.collapse')}
+          onClick={() => setCollapsed((value) => !value)}
+          style={{
+            marginLeft: 'auto',
+            marginBottom: 2,
+            padding: '4px 8px',
+            color: 'var(--folio-ink-muted)',
+            borderRadius: 4,
+          }}
+        >
+          {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+        </button>
       </div>
+      {!collapsed && (
       <div
         style={{
           minHeight: activeTab === 'file' ? undefined : 104,
@@ -159,12 +206,13 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
         )}
         {activeTab === 'insert' && editorState.kind === 'presentation' && <SlideInsert commands={props.slideCommands} />}
       </div>
+      )}
     </div>
   );
 };
 
 function TabButton({ tab, active, onClick }: { tab: RibbonTab; active: boolean; onClick: () => void }) {
-  const label = tab === 'file' ? 'File' : tab === 'home' ? 'Home' : tab === 'insert' ? 'Insert' : 'Layout';
+  const label = tab === 'file' ? t('ribbon.file') : tab === 'home' ? t('ribbon.home') : tab === 'insert' ? t('ribbon.insert') : t('ribbon.layout');
   const file = tab === 'file';
   return (
     <button
@@ -231,7 +279,7 @@ function TitleBar(props: RibbonProps) {
                 color: 'var(--folio-amber)',
               }}
             >
-              Unsaved changes
+              {t('ribbon.unsaved')}
             </span>
           )}
           {editorState.importReport && (
@@ -240,16 +288,17 @@ function TitleBar(props: RibbonProps) {
               onClick={onOpenReport}
               style={{ fontSize: 11, color: 'var(--folio-teal)', textDecoration: 'underline', padding: '0 4px' }}
             >
-              Import notices
+              {t('ribbon.importNotices')}
             </button>
           )}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <LanguageButton />
         <button
           type="button"
           onClick={onSave}
-          title="Save (Ctrl+S)"
+          title={t('ribbon.saveHint')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -261,12 +310,12 @@ function TitleBar(props: RibbonProps) {
             fontWeight: 500,
           }}
         >
-          <Save size={14} /> Save
+          <Save size={14} /> {t('ribbon.save')}
         </button>
         <button
           type="button"
           onClick={onSaveAs}
-          title="Save As (F12 or Ctrl+Shift+S)"
+          title={t('ribbon.saveAsHint')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -278,12 +327,12 @@ function TitleBar(props: RibbonProps) {
             fontWeight: 500,
           }}
         >
-          <SaveAll size={14} /> Save As
+          <SaveAll size={14} /> {t('ribbon.saveAs')}
         </button>
-        <button type="button" onClick={onPrint} title="Print Document" style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
+        <button type="button" onClick={onPrint} title={t('ribbon.printDocument')} style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
           <Printer size={14} />
         </button>
-        <button type="button" onClick={onCloseFile} title="Close File" style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
+        <button type="button" onClick={onCloseFile} title={t('ribbon.closeFile')} style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
           <X size={15} />
         </button>
       </div>
@@ -303,25 +352,25 @@ function FilePane(props: RibbonProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 6 }}>
       {commandRow(
         <>
-          <RibbonGroup label="New">
-            <RibbonButton title="New Document" label="Document" icon={<FilePlus size={16} />} onClick={() => onNew('document')} />
-            <RibbonButton title="New Spreadsheet" label="Spreadsheet" icon={<TableIcon size={16} />} onClick={() => onNew('spreadsheet')} />
-            <RibbonButton title="New Presentation" label="Presentation" icon={<Presentation size={16} />} onClick={() => onNew('presentation')} />
+          <RibbonGroup label={t('ribbon.new')}>
+            <RibbonButton title={t('ribbon.newDocument')} label={t('ribbon.document')} icon={<FilePlus size={16} />} onClick={() => onNew('document')} />
+            <RibbonButton title={t('ribbon.newSpreadsheet')} label={t('ribbon.spreadsheet')} icon={<TableIcon size={16} />} onClick={() => onNew('spreadsheet')} />
+            <RibbonButton title={t('ribbon.newPresentation')} label={t('ribbon.presentation')} icon={<Presentation size={16} />} onClick={() => onNew('presentation')} />
           </RibbonGroup>
-          <RibbonGroup label="Open">
-            <RibbonButton title="Open File..." label="Open" icon={<FolderOpen size={16} />} onClick={onOpen} />
+          <RibbonGroup label={t('ribbon.open')}>
+            <RibbonButton title={t('ribbon.openFile')} label={t('ribbon.open')} icon={<FolderOpen size={16} />} onClick={onOpen} />
           </RibbonGroup>
-          <RibbonGroup label="Save">
-            <RibbonButton title="Save" label="Save" icon={<Save size={16} />} onClick={onSave} />
-            <RibbonButton title="Save As..." label="Save As" icon={<SaveAll size={16} />} onClick={onSaveAs} />
+          <RibbonGroup label={t('ribbon.save')}>
+            <RibbonButton title={t('ribbon.save')} label={t('ribbon.save')} icon={<Save size={16} />} onClick={onSave} />
+            <RibbonButton title={t('ribbon.saveAsEllipsis')} label={t('ribbon.saveAs')} icon={<SaveAll size={16} />} onClick={onSaveAs} />
             {editorState.kind !== 'pdf' ? (
-              <RibbonButton title="Save as PDF" label="Save as PDF" icon={<FileText size={16} />} onClick={onSavePdf} />
+              <RibbonButton title={t('ribbon.savePdf')} label={t('ribbon.savePdf')} icon={<FileText size={16} />} onClick={onSavePdf} />
             ) : (
-              <RibbonButton title="Edit as Document" label="Edit as Document" icon={<FileText size={16} />} onClick={onEditAsDocument} />
+              <RibbonButton title={t('ribbon.editAsDocument')} label={t('ribbon.editAsDocument')} icon={<FileText size={16} />} onClick={onEditAsDocument} />
             )}
           </RibbonGroup>
-          <RibbonGroup label="Print">
-            <RibbonButton title="Print" label="Print" icon={<Printer size={16} />} onClick={onPrint} />
+          <RibbonGroup label={t('ribbon.print')}>
+            <RibbonButton title={t('ribbon.print')} label={t('ribbon.print')} icon={<Printer size={16} />} onClick={onPrint} />
           </RibbonGroup>
         </>,
       )}
@@ -329,13 +378,13 @@ function FilePane(props: RibbonProps) {
         <div style={{ display: 'flex', gap: 16, overflowX: 'auto', fontSize: 12, padding: '0 14px 6px' }}>
           {drafts.length > 0 && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>Recovered drafts</span>
+              <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>{t('ribbon.recoveredDrafts')}</span>
               {drafts.map((draft) => (
                 <span key={draft.id} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
                   <button type="button" onClick={() => props.onRestoreDraft?.(draft)} style={{ textDecoration: 'underline', color: 'var(--folio-teal)' }}>
                     {draft.name}
                   </button>
-                  <button type="button" aria-label={`Dismiss ${draft.name}`} onClick={() => props.onDismissDraft?.(draft)} style={{ color: 'var(--folio-ink-muted)' }}>
+                  <button type="button" aria-label={t('ribbon.dismiss', { name: draft.name })} onClick={() => props.onDismissDraft?.(draft)} style={{ color: 'var(--folio-ink-muted)' }}>
                     ×
                   </button>
                 </span>
@@ -344,7 +393,7 @@ function FilePane(props: RibbonProps) {
           )}
           {recentFiles.length > 0 && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>Recent</span>
+              <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>{t('ribbon.recent')}</span>
               {recentFiles.slice(0, 8).map((item) => (
                 <button key={item.id} type="button" onClick={() => props.onOpenRecent?.(item)} style={{ textDecoration: 'underline', color: 'var(--folio-ink)' }}>
                   {item.name}
@@ -402,18 +451,18 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
 
   return commandRow(
     <>
-      <RibbonGroup label="Clipboard">
-        <RibbonButton large title="Paste" label="Paste" icon={<ClipboardPaste size={22} />} disabled={!editor} onClick={() => clip(editor, 'paste')} />
+      <RibbonGroup label={t('ribbon.clipboard')}>
+        <RibbonButton large title={t('ribbon.paste')} label={t('ribbon.paste')} icon={<ClipboardPaste size={22} />} disabled={!editor} onClick={() => clip(editor, 'paste')} />
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <RibbonButton title="Cut" label="Cut" icon={<Scissors size={14} />} disabled={!editor} onClick={() => clip(editor, 'cut')} />
-          <RibbonButton title="Copy" label="Copy" icon={<Copy size={14} />} disabled={!editor} onClick={() => clip(editor, 'copy')} />
+          <RibbonButton title={t('ribbon.cut')} label={t('ribbon.cut')} icon={<Scissors size={14} />} disabled={!editor} onClick={() => clip(editor, 'cut')} />
+          <RibbonButton title={t('ribbon.copy')} label={t('ribbon.copy')} icon={<Copy size={14} />} disabled={!editor} onClick={() => clip(editor, 'copy')} />
         </div>
-        <RibbonButton title="Undo (Ctrl+Z)" icon={<Undo2 size={16} />} disabled={!editor?.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
-        <RibbonButton title="Redo (Ctrl+Y)" icon={<Redo2 size={16} />} disabled={!editor?.can().redo()} onClick={() => editor.chain().focus().redo().run()} />
+        <RibbonButton title={t('ribbon.undo')} icon={<Undo2 size={16} />} disabled={!editor?.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
+        <RibbonButton title={t('ribbon.redo')} icon={<Redo2 size={16} />} disabled={!editor?.can().redo()} onClick={() => editor.chain().focus().redo().run()} />
       </RibbonGroup>
-      <RibbonGroup label="Font">
+      <RibbonGroup label={t('ribbon.font')}>
         <select
-          aria-label="Font"
+          aria-label={t('ribbon.font')}
           value={fontFamily}
           disabled={!editor}
           onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
@@ -426,8 +475,8 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
           ))}
         </select>
         <select
-          aria-label="Font size"
-          title="Font Size"
+          aria-label={t('ribbon.fontSize')}
+          title={t('ribbon.fontSize')}
           value={DOC_FONT_SIZES.includes(fontSize) ? fontSize : '11pt'}
           disabled={!editor}
           onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
@@ -439,38 +488,38 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
             </option>
           ))}
         </select>
-        <RibbonButton title="Bold (Ctrl+B)" icon={<Bold size={16} />} pressed={markOn('bold')} disabled={!editor} onClick={() => editor.chain().focus().toggleBold().run()} />
-        <RibbonButton title="Italic (Ctrl+I)" icon={<Italic size={16} />} pressed={markOn('italic')} disabled={!editor} onClick={() => editor.chain().focus().toggleItalic().run()} />
-        <RibbonButton title="Underline (Ctrl+U)" icon={<Underline size={16} />} pressed={markOn('underline')} disabled={!editor} onClick={() => editor.chain().focus().toggleUnderline().run()} />
-        <RibbonButton title="Strikethrough" icon={<Strikethrough size={16} />} pressed={markOn('strike')} disabled={!editor} onClick={() => editor.chain().focus().toggleStrike().run()} />
+        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={markOn('bold')} disabled={!editor} onClick={() => editor.chain().focus().toggleBold().run()} />
+        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={markOn('italic')} disabled={!editor} onClick={() => editor.chain().focus().toggleItalic().run()} />
+        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={markOn('underline')} disabled={!editor} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+        <RibbonButton title={t('ribbon.strike')} icon={<Strikethrough size={16} />} pressed={markOn('strike')} disabled={!editor} onClick={() => editor.chain().focus().toggleStrike().run()} />
         <input
           type="color"
-          title="Text Color"
-          aria-label="Text Color"
+          title={t('ribbon.textColor')}
+          aria-label={t('ribbon.textColor')}
           disabled={!editor}
           onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
           style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
-        <RibbonButton title="Highlight Yellow" icon={<Highlighter size={16} />} pressed={markOn('highlight')} disabled={!editor} onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()} />
+        <RibbonButton title={t('ribbon.highlight')} icon={<Highlighter size={16} />} pressed={markOn('highlight')} disabled={!editor} onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()} />
       </RibbonGroup>
-      <RibbonGroup label="Paragraph">
-        <RibbonButton title="Align Left" icon={<AlignLeft size={16} />} pressed={alignOn('left')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('left').run()} />
-        <RibbonButton title="Align Center" icon={<AlignCenter size={16} />} pressed={alignOn('center')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('center').run()} />
-        <RibbonButton title="Align Right" icon={<AlignRight size={16} />} pressed={alignOn('right')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('right').run()} />
-        <RibbonButton title="Align Justify" icon={<AlignJustify size={16} />} pressed={alignOn('justify')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
-        <RibbonButton title="Bullet List" icon={<List size={16} />} pressed={markOn('bulletList')} disabled={!editor} onClick={() => editor.chain().focus().toggleBulletList().run()} />
-        <RibbonButton title="Numbered List" icon={<ListOrdered size={16} />} pressed={markOn('orderedList')} disabled={!editor} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
-        <RibbonButton title="Decrease Indent" icon={<OutdentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().outdent().run()} />
-        <RibbonButton title="Increase Indent" icon={<IndentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().indent().run()} />
+      <RibbonGroup label={t('ribbon.paragraph')}>
+        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={alignOn('left')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('left').run()} />
+        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={alignOn('center')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('center').run()} />
+        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={alignOn('right')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('right').run()} />
+        <RibbonButton title={t('ribbon.alignJustify')} icon={<AlignJustify size={16} />} pressed={alignOn('justify')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
+        <RibbonButton title={t('ribbon.bullets')} icon={<List size={16} />} pressed={markOn('bulletList')} disabled={!editor} onClick={() => editor.chain().focus().toggleBulletList().run()} />
+        <RibbonButton title={t('ribbon.numbered')} icon={<ListOrdered size={16} />} pressed={markOn('orderedList')} disabled={!editor} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+        <RibbonButton title={t('ribbon.outdent')} icon={<OutdentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().outdent().run()} />
+        <RibbonButton title={t('ribbon.indent')} icon={<IndentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().indent().run()} />
       </RibbonGroup>
-      <RibbonGroup label="Styles">
+      <RibbonGroup label={t('ribbon.styles')}>
         <StyleChip name="Paragraph" active={styleName === 'Paragraph'} onClick={() => editor?.chain().focus().setParagraph().run()} />
         <StyleChip name="Heading 1" active={styleName === 'Heading 1'} onClick={() => editor?.chain().focus().setHeading({ level: 1 }).run()} style={{ fontSize: 15, fontWeight: 700 }} />
         <StyleChip name="Heading 2" active={styleName === 'Heading 2'} onClick={() => editor?.chain().focus().setHeading({ level: 2 }).run()} style={{ fontSize: 13, fontWeight: 700 }} />
         <StyleChip name="Heading 3" active={styleName === 'Heading 3'} onClick={() => editor?.chain().focus().setHeading({ level: 3 }).run()} style={{ fontSize: 12, fontWeight: 650, color: 'var(--folio-teal)' }} />
       </RibbonGroup>
-      <RibbonGroup label="Editing">
-        <RibbonButton large title="Find" label="Find" icon={<Search size={20} />} disabled={!editor} onClick={onFind} />
+      <RibbonGroup label={t('ribbon.editing')}>
+        <RibbonButton large title={t('ribbon.find')} label={t('ribbon.find')} icon={<Search size={20} />} disabled={!editor} onClick={onFind} />
       </RibbonGroup>
     </>,
   );
@@ -487,10 +536,17 @@ function StyleChip({
   onClick: () => void;
   style?: React.CSSProperties;
 }) {
+  const labels: Record<string, string> = {
+    Paragraph: t('ribbon.paragraph'),
+    'Heading 1': t('ribbon.heading1'),
+    'Heading 2': t('ribbon.heading2'),
+    'Heading 3': t('ribbon.heading3'),
+  };
+  const shown = labels[name] || name;
   return (
     <button
       type="button"
-      title={name}
+      title={shown}
       onClick={onClick}
       style={{
         minWidth: 84,
@@ -504,7 +560,7 @@ function StyleChip({
         ...style,
       }}
     >
-      {name}
+      {shown}
     </button>
   );
 }
@@ -533,7 +589,7 @@ function DocumentInsert({ editor }: { editor: any }) {
   const insertLink = () => {
     if (!editor) return;
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter link URL', previousUrl || 'https://');
+    const url = window.prompt(t('ribbon.linkPrompt'), previousUrl || 'https://');
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().unsetLink().run();
@@ -544,32 +600,32 @@ function DocumentInsert({ editor }: { editor: any }) {
 
   return commandRow(
     <>
-      <RibbonGroup label="Tables">
+      <RibbonGroup label={t('ribbon.tables')}>
         <RibbonButton
           large
-          title="Table (3x3)"
-          label="Table"
+          title={t('ribbon.tableHint')}
+          label={t('ribbon.table')}
           icon={<TableIcon size={22} />}
           disabled={!editor}
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         />
         {inTable && (
           <>
-            <RibbonButton title="Add row" label="Row" icon={<Plus size={14} />} onClick={() => editor.chain().focus().addRowAfter().run()} />
-            <RibbonButton title="Add column" label="Column" icon={<Plus size={14} />} onClick={() => editor.chain().focus().addColumnAfter().run()} />
-            <RibbonButton title="Delete table" label="Delete" icon={<Trash2 size={14} />} onClick={() => editor.chain().focus().deleteTable().run()} />
+            <RibbonButton title={t('ribbon.addRow')} label={t('ribbon.row')} icon={<Plus size={14} />} onClick={() => editor.chain().focus().addRowAfter().run()} />
+            <RibbonButton title={t('ribbon.addColumn')} label={t('ribbon.column')} icon={<Plus size={14} />} onClick={() => editor.chain().focus().addColumnAfter().run()} />
+            <RibbonButton title={t('ribbon.deleteTable')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} onClick={() => editor.chain().focus().deleteTable().run()} />
           </>
         )}
       </RibbonGroup>
-      <RibbonGroup label="Illustrations">
-        <RibbonButton large title="Picture" label="Picture" icon={<ImageIcon size={22} />} disabled={!editor} onClick={insertImage} />
+      <RibbonGroup label={t('ribbon.illustrations')}>
+        <RibbonButton large title={t('ribbon.picture')} label={t('ribbon.picture')} icon={<ImageIcon size={22} />} disabled={!editor} onClick={insertImage} />
       </RibbonGroup>
-      <RibbonGroup label="Links">
-        <RibbonButton title="Link" label="Link" icon={<LinkIcon size={16} />} disabled={!editor} onClick={insertLink} />
-        <RibbonButton title="Divider" label="Divider" icon={<Minus size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setHorizontalRule().run()} />
+      <RibbonGroup label={t('ribbon.links')}>
+        <RibbonButton title={t('ribbon.link')} label={t('ribbon.link')} icon={<LinkIcon size={16} />} disabled={!editor} onClick={insertLink} />
+        <RibbonButton title={t('ribbon.divider')} label={t('ribbon.divider')} icon={<Minus size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setHorizontalRule().run()} />
       </RibbonGroup>
-      <RibbonGroup label="Pages">
-        <RibbonButton title="Page Break" label="Page break" icon={<SeparatorHorizontal size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setPageBreak().run()} />
+      <RibbonGroup label={t('ribbon.pages')}>
+        <RibbonButton title={t('ribbon.pageBreak')} label={t('ribbon.pageBreak')} icon={<SeparatorHorizontal size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setPageBreak().run()} />
       </RibbonGroup>
     </>,
   );
@@ -588,10 +644,10 @@ function DocumentLayout({
 }) {
   return commandRow(
     <>
-      <RibbonGroup label="Page">
-        <select aria-label="Page size" value={pageSize} onChange={(e) => onPageSizeChange(e.target.value as 'letter' | 'a4')} style={ribbonFieldStyle}>
-          <option value="letter">Letter (8.5 × 11 in)</option>
-          <option value="a4">A4 (210 × 297 mm)</option>
+      <RibbonGroup label={t('ribbon.page')}>
+        <select aria-label={t('ribbon.pageSize')} value={pageSize} onChange={(e) => onPageSizeChange(e.target.value as 'letter' | 'a4')} style={ribbonFieldStyle}>
+          <option value="letter">{t('ribbon.letter')}</option>
+          <option value="a4">{t('ribbon.a4')}</option>
         </select>
       </RibbonGroup>
       <ZoomGroup zoom={zoom} onZoomChange={onZoomChange} />
@@ -601,7 +657,7 @@ function DocumentLayout({
 
 function ZoomGroup({ zoom, onZoomChange }: { zoom: number; onZoomChange: (zoom: number) => void }) {
   return (
-    <RibbonGroup label="Zoom">
+    <RibbonGroup label={t('ribbon.zoom')}>
       {[75, 100, 125, 150].map((value) => (
         <button
           key={value}
@@ -631,14 +687,14 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
   const book = sheetFrom(api);
   return commandRow(
     <>
-      <RibbonGroup label="Clipboard">
-        <RibbonButton title="Undo" icon={<Undo2 size={16} />} onClick={() => book()?.handleUndo()} />
-        <RibbonButton title="Redo" icon={<Redo2 size={16} />} onClick={() => book()?.handleRedo()} />
+      <RibbonGroup label={t('ribbon.clipboard')}>
+        <RibbonButton title={t('ribbon.undoShort')} icon={<Undo2 size={16} />} onClick={() => book()?.handleUndo()} />
+        <RibbonButton title={t('ribbon.redoShort')} icon={<Redo2 size={16} />} onClick={() => book()?.handleRedo()} />
       </RibbonGroup>
-      <RibbonGroup label="Font">
+      <RibbonGroup label={t('ribbon.font')}>
         <select
-          aria-label="Font size"
-          title="Font Size"
+          aria-label={t('ribbon.fontSize')}
+          title={t('ribbon.fontSize')}
           defaultValue={11}
           onChange={(e) => {
             const sheet = book();
@@ -652,13 +708,13 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
             </option>
           ))}
         </select>
-        <RibbonButton title="Bold (Ctrl+B)" icon={<Bold size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetMark(sheet, 'bl'); }} />
-        <RibbonButton title="Italic (Ctrl+I)" icon={<Italic size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetMark(sheet, 'it'); }} />
-        <RibbonButton title="Underline (Ctrl+U)" icon={<Underline size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetMark(sheet, 'un'); }} />
+        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetMark(sheet, 'bl'); }} />
+        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetMark(sheet, 'it'); }} />
+        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetMark(sheet, 'un'); }} />
         <input
           type="color"
-          title="Text Color"
-          aria-label="Text Color"
+          title={t('ribbon.textColor')}
+          aria-label={t('ribbon.textColor')}
           onChange={(e) => {
             const sheet = book();
             if (sheet) setSheetStyle(sheet, 'fc', e.target.value);
@@ -666,24 +722,24 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
           style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
       </RibbonGroup>
-      <RibbonGroup label="Alignment">
-        <RibbonButton title="Align Left" icon={<AlignLeft size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 1); }} />
-        <RibbonButton title="Align Center" icon={<AlignCenter size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 0); }} />
-        <RibbonButton title="Align Right" icon={<AlignRight size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 2); }} />
-        <RibbonButton title="Wrap text" icon={<WrapText size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetWrap(sheet); }} />
+      <RibbonGroup label={t('ribbon.alignment')}>
+        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 1); }} />
+        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 0); }} />
+        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 2); }} />
+        <RibbonButton title={t('ribbon.wrap')} icon={<WrapText size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetWrap(sheet); }} />
       </RibbonGroup>
-      <RibbonGroup label="Number">
-        <RibbonButton title="General" label="General" onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, 'General', 'g'); }} />
-        <RibbonButton title="Number" label="0.00" onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, '0.00', 'n'); }} />
-        <RibbonButton title="Percent" label="%" onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, '0%', 'n'); }} />
-        <RibbonButton title="Date" label="Date" onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, 'yyyy-MM-dd', 'd'); }} />
+      <RibbonGroup label={t('ribbon.number')}>
+        <RibbonButton title={t('ribbon.general')} label={t('ribbon.general')} onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, 'General', 'g'); }} />
+        <RibbonButton title={t('ribbon.number')} label="0.00" onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, '0.00', 'n'); }} />
+        <RibbonButton title={t('ribbon.percent')} label="%" onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, '0%', 'n'); }} />
+        <RibbonButton title={t('ribbon.date')} label={t('ribbon.date')} onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, 'yyyy-MM-dd', 'd'); }} />
       </RibbonGroup>
-      <RibbonGroup label="Cells">
-        <RibbonButton title="Insert row" label="Insert row" icon={<Plus size={14} />} onClick={() => { const sheet = book(); if (sheet) insertSheetAxis(sheet, 'row'); }} />
-        <RibbonButton title="Insert column" label="Insert column" icon={<Plus size={14} />} onClick={() => { const sheet = book(); if (sheet) insertSheetAxis(sheet, 'column'); }} />
-        <RibbonButton title="Delete row" label="Delete row" icon={<Trash2 size={14} />} onClick={() => { const sheet = book(); if (sheet) deleteSheetAxis(sheet, 'row'); }} />
-        <RibbonButton title="Delete column" label="Delete column" icon={<Trash2 size={14} />} onClick={() => { const sheet = book(); if (sheet) deleteSheetAxis(sheet, 'column'); }} />
-        <RibbonButton title="Clear" label="Clear" icon={<Eraser size={14} />} onClick={() => { const sheet = book(); if (sheet) clearSheetSelection(sheet); }} />
+      <RibbonGroup label={t('ribbon.cells')}>
+        <RibbonButton title={t('ribbon.insertRow')} label={t('ribbon.insertRow')} icon={<Plus size={14} />} onClick={() => { const sheet = book(); if (sheet) insertSheetAxis(sheet, 'row'); }} />
+        <RibbonButton title={t('ribbon.insertColumn')} label={t('ribbon.insertColumn')} icon={<Plus size={14} />} onClick={() => { const sheet = book(); if (sheet) insertSheetAxis(sheet, 'column'); }} />
+        <RibbonButton title={t('ribbon.deleteRow')} label={t('ribbon.deleteRow')} icon={<Trash2 size={14} />} onClick={() => { const sheet = book(); if (sheet) deleteSheetAxis(sheet, 'row'); }} />
+        <RibbonButton title={t('ribbon.deleteColumn')} label={t('ribbon.deleteColumn')} icon={<Trash2 size={14} />} onClick={() => { const sheet = book(); if (sheet) deleteSheetAxis(sheet, 'column'); }} />
+        <RibbonButton title={t('ribbon.clear')} label={t('ribbon.clear')} icon={<Eraser size={14} />} onClick={() => { const sheet = book(); if (sheet) clearSheetSelection(sheet); }} />
       </RibbonGroup>
     </>,
   );
@@ -691,8 +747,8 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
 
 function SheetInsert({ api }: { api?: React.RefObject<WorkbookInstance | null> }) {
   return commandRow(
-    <RibbonGroup label="Sheets">
-      <RibbonButton large title="New sheet" label="New sheet" icon={<Plus size={22} />} onClick={() => api?.current?.addSheet()} />
+    <RibbonGroup label={t('ribbon.sheets')}>
+      <RibbonButton large title={t('ribbon.newSheet')} label={t('ribbon.newSheet')} icon={<Plus size={22} />} onClick={() => api?.current?.addSheet()} />
     </RibbonGroup>,
   );
 }
@@ -717,17 +773,17 @@ function SlideHome({
   };
   return commandRow(
     <>
-      <RibbonGroup label="Slides">
-        <RibbonButton large title="New slide" label="New slide" icon={<Plus size={22} />} disabled={!api} onClick={() => commands?.current?.addSlide()} />
-        <RibbonButton title="Duplicate slide" label="Duplicate" icon={<Copy size={14} />} disabled={!api} onClick={() => commands?.current?.duplicateSlide()} />
-        <RibbonButton title="Delete slide" label="Delete" icon={<Trash2 size={14} />} disabled={!api || count <= 1} onClick={() => commands?.current?.deleteSlide()} />
-        <RibbonButton title="Move earlier" icon={<ChevronUp size={16} />} disabled={!api || index <= 0} onClick={() => commands?.current?.moveSlide('up')} />
-        <RibbonButton title="Move later" icon={<ChevronDown size={16} />} disabled={!api || index >= count - 1} onClick={() => commands?.current?.moveSlide('down')} />
+      <RibbonGroup label={t('ribbon.slides')}>
+        <RibbonButton large title={t('ribbon.newSlide')} label={t('ribbon.newSlide')} icon={<Plus size={22} />} disabled={!api} onClick={() => commands?.current?.addSlide()} />
+        <RibbonButton title={t('ribbon.duplicateSlide')} label={t('ribbon.duplicate')} icon={<Copy size={14} />} disabled={!api} onClick={() => commands?.current?.duplicateSlide()} />
+        <RibbonButton title={t('ribbon.deleteSlide')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!api || count <= 1} onClick={() => commands?.current?.deleteSlide()} />
+        <RibbonButton title={t('ribbon.moveEarlier')} icon={<ChevronUp size={16} />} disabled={!api || index <= 0} onClick={() => commands?.current?.moveSlide('up')} />
+        <RibbonButton title={t('ribbon.moveLater')} icon={<ChevronDown size={16} />} disabled={!api || index >= count - 1} onClick={() => commands?.current?.moveSlide('down')} />
       </RibbonGroup>
-      <RibbonGroup label="Font">
+      <RibbonGroup label={t('ribbon.font')}>
         <select
-          aria-label="Font size"
-          title="Font Size"
+          aria-label={t('ribbon.fontSize')}
+          title={t('ribbon.fontSize')}
           value={text?.fontSize || 18}
           disabled={!text}
           onChange={(e) => patch({ fontSize: parseInt(e.target.value, 10) })}
@@ -739,27 +795,27 @@ function SlideHome({
             </option>
           ))}
         </select>
-        <RibbonButton title="Bold (Ctrl+B)" icon={<Bold size={16} />} pressed={Boolean(text?.bold)} disabled={!text} onClick={() => text && patch({ bold: !text.bold })} />
-        <RibbonButton title="Italic (Ctrl+I)" icon={<Italic size={16} />} pressed={Boolean(text?.italic)} disabled={!text} onClick={() => text && patch({ italic: !text.italic })} />
-        <RibbonButton title="Underline (Ctrl+U)" icon={<Underline size={16} />} pressed={Boolean(text?.underline)} disabled={!text} onClick={() => text && patch({ underline: !text.underline })} />
+        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={Boolean(text?.bold)} disabled={!text} onClick={() => text && patch({ bold: !text.bold })} />
+        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={Boolean(text?.italic)} disabled={!text} onClick={() => text && patch({ italic: !text.italic })} />
+        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={Boolean(text?.underline)} disabled={!text} onClick={() => text && patch({ underline: !text.underline })} />
         <input
           type="color"
-          title="Text Color"
-          aria-label="Text Color"
+          title={t('ribbon.textColor')}
+          aria-label={t('ribbon.textColor')}
           value={text?.color || '#1e2022'}
           disabled={!text}
           onChange={(e) => patch({ color: e.target.value })}
           style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
       </RibbonGroup>
-      <RibbonGroup label="Paragraph">
-        <RibbonButton title="Align Left" icon={<AlignLeft size={16} />} pressed={text?.align === 'left'} disabled={!text} onClick={() => patch({ align: 'left' })} />
-        <RibbonButton title="Align Center" icon={<AlignCenter size={16} />} pressed={text?.align === 'center'} disabled={!text} onClick={() => patch({ align: 'center' })} />
-        <RibbonButton title="Align Right" icon={<AlignRight size={16} />} pressed={text?.align === 'right'} disabled={!text} onClick={() => patch({ align: 'right' })} />
+      <RibbonGroup label={t('ribbon.paragraph')}>
+        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={text?.align === 'left'} disabled={!text} onClick={() => patch({ align: 'left' })} />
+        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={text?.align === 'center'} disabled={!text} onClick={() => patch({ align: 'center' })} />
+        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={text?.align === 'right'} disabled={!text} onClick={() => patch({ align: 'right' })} />
       </RibbonGroup>
-      <RibbonGroup label="Arrange">
-        <RibbonButton title="Undo move or resize" label="Undo" icon={<Undo2 size={14} />} disabled={!state?.canUndo} onClick={() => commands?.current?.undo()} />
-        <RibbonButton title="Delete" label="Delete" icon={<Trash2 size={14} />} disabled={!state?.element} onClick={() => commands?.current?.deleteSelected()} />
+      <RibbonGroup label={t('ribbon.arrange')}>
+        <RibbonButton title={t('ribbon.undoMove')} label={t('ribbon.undoShort')} icon={<Undo2 size={14} />} disabled={!state?.canUndo} onClick={() => commands?.current?.undo()} />
+        <RibbonButton title={t('ribbon.delete')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!state?.element} onClick={() => commands?.current?.deleteSelected()} />
       </RibbonGroup>
     </>,
   );
@@ -769,13 +825,13 @@ function SlideInsert({ commands }: { commands?: React.RefObject<SlideEditorHandl
   const ready = Boolean(commands?.current);
   return commandRow(
     <>
-      <RibbonGroup label="Text">
-        <RibbonButton large title="Text box" label="Text box" icon={<Type size={22} />} disabled={!ready} onClick={() => commands?.current?.addText()} />
+      <RibbonGroup label={t('ribbon.text')}>
+        <RibbonButton large title={t('ribbon.textBox')} label={t('ribbon.textBox')} icon={<Type size={22} />} disabled={!ready} onClick={() => commands?.current?.addText()} />
       </RibbonGroup>
-      <RibbonGroup label="Illustrations">
-        <RibbonButton title="Picture" label="Picture" icon={<ImageIcon size={16} />} disabled={!ready} onClick={() => commands?.current?.addImage()} />
-        <RibbonButton title="Video" label="Video" icon={<Video size={16} />} disabled={!ready} onClick={() => commands?.current?.addVideo()} />
-        <RibbonButton title="Rectangle" label="Rectangle" icon={<Square size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape()} />
+      <RibbonGroup label={t('ribbon.illustrations')}>
+        <RibbonButton title={t('ribbon.picture')} label={t('ribbon.picture')} icon={<ImageIcon size={16} />} disabled={!ready} onClick={() => commands?.current?.addImage()} />
+        <RibbonButton title={t('ribbon.video')} label={t('ribbon.video')} icon={<Video size={16} />} disabled={!ready} onClick={() => commands?.current?.addVideo()} />
+        <RibbonButton title={t('ribbon.rectangle')} label={t('ribbon.rectangle')} icon={<Square size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape()} />
       </RibbonGroup>
     </>,
   );

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DocumentKind, SupportedFormat } from '../types';
 import { X, Save } from 'lucide-react';
 import { saveFiltersForKind } from '../files/session';
+import { t } from '../i18n/instance';
 
 interface SaveAsDialogProps {
   currentKind: DocumentKind;
@@ -27,7 +28,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
   const handleConfirm = () => {
     const chosenOption = availableFormats.find((f) => f.format === selectedFormat);
     const ext = chosenOption ? `.${chosenOption.extensions[0]}` : `.${selectedFormat}`;
-    const cleanName = nameInput.trim() || 'Untitled';
+    const cleanName = nameInput.trim() || t('saveAs.untitled');
     const finalName = cleanName.endsWith(ext) ? cleanName : `${cleanName}${ext}`;
     onSave(selectedFormat, finalName);
   };
@@ -69,7 +70,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
             justifyContent: 'space-between',
           }}
         >
-          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>Save As</h3>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>{t('saveAs.title')}</h3>
           <button onClick={onClose} style={{ padding: '4px', color: 'var(--folio-ink-muted)' }}>
             <X size={16} />
           </button>
@@ -78,7 +79,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--folio-ink)' }}>
-              File Name
+              {t('saveAs.fileName')}
             </label>
             <input
               type="text"
@@ -96,7 +97,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--folio-ink)' }}>
-              Save as Format
+              {t('saveAs.format')}
             </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {availableFormats.map((opt) => (
@@ -146,7 +147,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
               fontSize: '13px',
             }}
           >
-            Cancel
+            {t('saveAs.cancel')}
           </button>
           <button
             onClick={handleConfirm}
@@ -162,7 +163,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
               fontSize: '13px',
             }}
           >
-            <Save size={14} /> Save
+            <Save size={14} /> {t('saveAs.save')}
           </button>
         </div>
       </div>

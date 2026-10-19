@@ -48,6 +48,7 @@
     "dompurify": "^3.4.17",
     "exceljs": "^4.4.0",
     "fast-xml-parser": "^5.11.2",
+    "i18next": "^26.5.3",
     "idb-keyval": "^6.3.0",
     "jszip": "^3.10.2",
     "lucide-react": "^1.59.0",
@@ -58,6 +59,7 @@
     "pptxgenjs": "^4.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.1.0",
     "turndown": "^7.2.4"
   },
   "devDependencies": {

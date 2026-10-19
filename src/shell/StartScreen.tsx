@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { DocumentKind, RecentItem, DraftItem } from '../types';
 import { getRecentFiles, clearRecentFiles } from '../files/recent';
 import { getAllDrafts } from '../files/drafts';
+import { t } from '../i18n/instance';
+import { LanguageButton } from './LanguageButton';
+import { DROP_TARGET_ATTR } from './dropTarget';
 import {
   FileText,
   Table as TableIcon,
@@ -51,12 +54,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({
     setIsDragging(true);
   };
 
-  const handleDragLeave = () => {
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onFileDrop(Array.from(e.dataTransfer.files));
@@ -66,6 +71,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   const getFormatBadgeColor = (format: string) => {
     switch (format) {
       case 'docx':
+      case 'tmdx':
       case 'odt':
       case 'rtf':
       case 'md':
@@ -73,10 +79,12 @@ export const StartScreen: React.FC<StartScreenProps> = ({
       case 'txt':
         return { bg: '#e0f2fe', color: '#0369a1' };
       case 'xlsx':
+      case 'pmdx':
       case 'csv':
       case 'tsv':
         return { bg: '#dcfce7', color: '#15803d' };
       case 'pptx':
+      case 'prdx':
         return { bg: '#ffedd5', color: '#c2410c' };
       case 'pdf':
         return { bg: '#fee2e2', color: '#b91c1c' };
@@ -96,9 +104,6 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         display: 'flex',
         flexDirection: 'column',
       }}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
       {/* Brand Header */}
       <header
@@ -131,13 +136,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--folio-ink)', letterSpacing: '-0.3px' }}>
               Folio
             </h1>
-            <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)' }}>Local-first office suite</p>
+            <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)' }}>{t('start.tagline')}</p>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--folio-ink-muted)', fontSize: '12px' }}>
+          <LanguageButton />
           <Shield size={14} color="var(--folio-teal)" />
-          <span>Files stay private on this PC. No account, no cloud upload.</span>
+          <span>{t('start.private')}</span>
         </div>
       </header>
 
@@ -167,7 +173,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-              <strong style={{ fontSize: '13px', color: '#92400e' }}>Recovered drafts</strong>
+              <strong style={{ fontSize: '13px', color: '#92400e' }}>{t('start.recovered')}</strong>
               {drafts.map((draft) => (
                 <div key={draft.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
                   <span style={{ fontSize: '12px', color: '#92400e' }}>{draft.name}</span>
@@ -182,13 +188,13 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                         fontSize: '12px',
                       }}
                     >
-                      Open
+                      {t('start.open')}
                     </button>
                     <button
                       onClick={() => onDismissDraft(draft)}
                       style={{ padding: '4px 10px', fontSize: '12px', color: '#92400e' }}
                     >
-                      Dismiss
+                      {t('start.dismiss')}
                     </button>
                   </span>
                 </div>
@@ -200,7 +206,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         {/* Start New Section */}
         <div>
           <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)', marginBottom: '16px' }}>
-            Create New
+            {t('start.create')}
           </h2>
           <div
             style={{
@@ -241,9 +247,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                 <FileText size={24} />
               </div>
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>New Document</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>{t('start.newDocument')}</h3>
                 <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)', marginTop: '4px' }}>
-                  Word, ODT, RTF, Markdown, HTML, Plain text
+                  {t('start.newDocumentHint')}
                 </p>
               </div>
             </div>
@@ -280,9 +286,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                 <TableIcon size={24} />
               </div>
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>New Spreadsheet</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>{t('start.newSpreadsheet')}</h3>
                 <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)', marginTop: '4px' }}>
-                  Excel grid, formulas, CSV, TSV
+                  {t('start.newSpreadsheetHint')}
                 </p>
               </div>
             </div>
@@ -319,9 +325,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                 <PresentationIcon size={24} />
               </div>
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>New Presentation</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>{t('start.newPresentation')}</h3>
                 <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)', marginTop: '4px' }}>
-                  PowerPoint slides, text boxes, images
+                  {t('start.newPresentationHint')}
                 </p>
               </div>
             </div>
@@ -358,9 +364,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                 <FolderOpen size={24} />
               </div>
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>Open Existing</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>{t('start.openExisting')}</h3>
                 <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)', marginTop: '4px' }}>
-                  Open from computer or drag file here
+                  {t('start.openExistingHint')}
                 </p>
               </div>
             </div>
@@ -369,6 +375,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
         {/* Drag and Drop Zone */}
         <div
+          {...{ [DROP_TARGET_ATTR]: '' }}
           style={{
             border: isDragging ? '2px dashed var(--folio-teal)' : '2px dashed var(--folio-border)',
             borderRadius: 'var(--folio-radius-lg)',
@@ -383,13 +390,16 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             cursor: 'pointer',
           }}
           onClick={onOpen}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <Upload size={28} color="var(--folio-teal)" />
           <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--folio-ink)' }}>
-            Drag and drop files here to open
+            {t('start.dropTitle')}
           </h4>
           <p style={{ fontSize: '12px', color: 'var(--folio-ink-muted)' }}>
-            Supports .docx, .odt, .rtf, .xlsx, .csv, .tsv, .pptx, .pdf, .md, .html, .txt
+            {t('start.dropHint')}
           </p>
         </div>
 
@@ -405,7 +415,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={16} color="var(--folio-ink-muted)" />
-              <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>Recent Files</h2>
+              <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>{t('start.recent')}</h2>
             </div>
             {recentFiles.length > 0 && (
               <button
@@ -418,7 +428,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                   color: 'var(--folio-ink-muted)',
                 }}
               >
-                <Trash2 size={13} /> Clear History
+                <Trash2 size={13} /> {t('start.clear')}
               </button>
             )}
           </div>
@@ -435,7 +445,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                 fontSize: '13px',
               }}
             >
-              No recent files. Create a new document or open a file to get started.
+              {t('start.emptyRecent')}
             </div>
           ) : (
             <div
@@ -503,7 +513,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                           color: 'var(--folio-teal)',
                         }}
                       >
-                        Open
+                        {t('start.open')}
                       </button>
                     </div>
                   </div>

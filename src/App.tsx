@@ -14,7 +14,8 @@ import {
   verifyPermission,
   type PlatformFileResult,
 } from './platform';
-import { loadFileToEditor } from './files/open';
+import { finishOpenedTab, loadFileToEditor } from './files/open';
+import { i18n, t } from './i18n/instance';
 import { saveEditorContent } from './files/save';
 import { clearDraft, getAllDrafts, saveDraft } from './files/drafts';
 import { addRecentFile, getRecentFiles, removeRecentFile } from './files/recent';
@@ -102,6 +103,7 @@ export const App: React.FC = () => {
   const [printJob, setPrintJob] = useState<{ tab: EditorState; scope: 'current' | 'all' } | null>(null);
   const [findSignal, setFindSignal] = useState(0);
   const [slideState, setSlideState] = useState<SlideCommandState>(emptySlideCommandState);
+  const [uiLanguage, setUiLanguage] = useState(i18n.language);
   const slideCommands = useRef<SlideEditorHandle>(null);
   const sheetApi = useRef<WorkbookInstance | null>(null);
   const handleWorkbookReady = useCallback((api: WorkbookInstance | null) => {
@@ -268,14 +270,15 @@ export const App: React.FC = () => {
         name = read.name;
         handle = read.handle;
       }
-      if (!file) return { error: 'Could not read the file.' };
-      const loaded = await loadFileToEditor(file, name || file.name, handle, item.path);
-      const tab = stampClean(loaded);
+      if (!file) return { error: t('dialog.couldNotRead') };
+      const originalName = name || file.name;
+      const loaded = await loadFileToEditor(file, originalName, handle, item.path);
+      const tab = finishOpenedTab(loaded, originalName);
       tab.diskStamp = await rememberStamp(tab.filePath);
       commit([...tabsRef.current, tab]);
       return { id: tab.id };
     } catch (err: any) {
-      return { error: err?.message || 'Could not open the file.' };
+      return { error: err?.message || t('dialog.couldNotOpen') };
     }
   };
 
@@ -316,7 +319,7 @@ export const App: React.FC = () => {
       await refreshLists();
       return 'ok';
     } catch (err: any) {
-      await ask('Save failed', err?.message || 'The file could not be saved.', ['OK']);
+      await ask(t('dialog.saveFailed'), err?.message || t('dialog.couldNotSave'), ['OK']);
       return 'failed';
     }
   };
@@ -327,14 +330,14 @@ export const App: React.FC = () => {
   ): Promise<SaveOutcome> => {
     const resolved = resolvePickedName(target.rawName, tab.kind, tab.fileName, target.formatHint || tab.format);
     if (!resolved.ok) {
-      await ask('Cannot save file', resolved.message, ['OK']);
+      await ask(t('dialog.cannotSave'), resolved.message, ['OK']);
       return 'failed';
     }
 
     if (target.path) {
       const conflict = tabsRef.current.find((t) => t.id !== tab.id && pathsMatch(t.filePath, target.path));
       if (conflict) {
-        await ask('Already open', `${resolved.fileName} is already open in another tab.`, ['OK']);
+        await ask(t('dialog.alreadyOpen'), t('dialog.alreadyOpenNamed', { name: resolved.fileName }), ['OK']);
         return 'failed';
       }
     }
@@ -344,7 +347,7 @@ export const App: React.FC = () => {
         target.handle
       );
       if (owner) {
-        await ask('Already open', 'That file is already open in another tab.', ['OK']);
+        await ask(t('dialog.alreadyOpen'), t('dialog.alreadyOpenThat'), ['OK']);
         return 'failed';
       }
     }
@@ -353,7 +356,7 @@ export const App: React.FC = () => {
     if (lossy) {
       const activeSheet = getActiveSheet(tab.spreadsheetData);
       const msg = lossyWarningMessage(resolved.format, activeSheet?.name);
-      const choice = await ask('Save As', msg, ['Save', 'Cancel']);
+      const choice = await ask(t('dialog.saveAs'), msg, ['Save', 'Cancel']);
       if (choice !== 'Save') {
         return 'cancelled';
       }
@@ -421,7 +424,7 @@ export const App: React.FC = () => {
       await refreshLists();
       return 'ok';
     } catch (err: any) {
-      await ask('Save failed', err?.message || 'The file could not be saved.', ['OK']);
+      await ask(t('dialog.saveFailed'), err?.message || t('dialog.couldNotSave'), ['OK']);
       return 'failed';
     }
   };
@@ -485,14 +488,14 @@ export const App: React.FC = () => {
           openTabs: snapshotTabs(),
         });
         if (decision.kind === 'already-open') {
-          await ask('Already open', 'That file is already open in another tab.', ['OK']);
+          await ask(t('dialog.alreadyOpen'), t('dialog.alreadyOpenThat'), ['OK']);
           return 'failed';
         }
         if (decision.kind === 'save-as') return pickAndSave(current);
         if (decision.kind === 'conflict') {
           const choice = await ask(
-            'File changed',
-            `${current.fileName} changed on disk. Overwrite it, Save As, or Cancel?`,
+            t('dialog.fileChanged'),
+            t('dialog.changedOverwrite', { name: current.fileName }),
             [...CONFLICT_BUTTONS]
           );
           if (choice === 'Overwrite') return writeTab(current);
@@ -548,19 +551,19 @@ export const App: React.FC = () => {
       if (action.type === 'focus' || action.type === 'focus-dirty') {
         commit(tabsRef.current, action.tabId);
         if (action.type === 'focus-dirty') {
-          await ask('Already open', action.message, ['OK']);
+          await ask(t('dialog.alreadyOpen'), action.message, ['OK']);
         }
         continue;
       }
       if (action.type === 'ask-reload') {
         commit(tabsRef.current, action.tabId);
-        const choice = await ask('File changed', `${item.name} changed on disk. Reload it?`, [...RELOAD_BUTTONS]);
+        const choice = await ask(t('dialog.fileChanged'), t('dialog.changedReload', { name: item.name }), [...RELOAD_BUTTONS]);
         if (choice === 'Reload') {
           const loaded = await openLoaded({ ...item, path: undefined });
           const fresh = loaded.id ? tabsRef.current.find((tab) => tab.id === loaded.id) : undefined;
           const previous = tabsRef.current.find((tab) => tab.id === action.tabId);
           if (!loaded.id || !fresh || !previous) {
-            failures.push({ name: item.name, message: loaded.error || 'Could not reload the file.' });
+            failures.push({ name: item.name, message: loaded.error || t('dialog.couldNotReload') });
             if (fresh) commit(tabsRef.current.filter((tab) => tab.id !== fresh.id), action.tabId);
           } else {
             const replaced = {
@@ -580,8 +583,8 @@ export const App: React.FC = () => {
       }
       if (action.type === 'ask-draft') {
         const choice = await ask(
-          'Recovered draft',
-          `An unsaved copy of ${item.name} was recovered. Restore it, or open the file on disk?`,
+          t('dialog.recovered'),
+          t('dialog.recoveredAsk', { name: item.name }),
           [...DRAFT_OPEN_BUTTONS]
         );
         if (choice === 'Restore' && item.draft) {
@@ -593,14 +596,14 @@ export const App: React.FC = () => {
           if (loaded.id) {
             if (!hadActive && !opened) commit(tabsRef.current, loaded.id);
             opened = true;
-          } else failures.push({ name: item.name, message: loaded.error || 'Could not open the file.' });
+          } else failures.push({ name: item.name, message: loaded.error || t('dialog.couldNotOpen') });
         }
         continue;
       }
       if (action.type === 'ask-replace') {
         const choice = await ask(
-          'Recovered draft',
-          `${item.name} is already open. Replace it with the recovered unsaved copy?`,
+          t('dialog.recovered'),
+          t('dialog.replaceAsk', { name: item.name }),
           [...DRAFT_REPLACE_BUTTONS]
         );
         if (choice === 'Replace' && item.draft) insertDraft(item.draft, action.tabId);
@@ -617,11 +620,11 @@ export const App: React.FC = () => {
       if (loaded.id) {
         if (!hadActive && !opened) commit(tabsRef.current, loaded.id);
         opened = true;
-      } else failures.push({ name: item.name, message: loaded.error || 'Could not open the file.' });
+      } else failures.push({ name: item.name, message: loaded.error || t('dialog.couldNotOpen') });
     }
 
     if (failures.length) {
-      await ask('Some files did not open', failures.map((failure) => `${failure.name}: ${failure.message}`).join('\n'), ['OK']);
+      await ask(t('dialog.someFailed'), failures.map((failure) => `${failure.name}: ${failure.message}`).join('\n'), ['OK']);
     }
     await refreshLists();
     } finally {
@@ -672,7 +675,7 @@ export const App: React.FC = () => {
         if (isDesktopPlatform()) await getPlatformAdapter().allowPath(path);
         files.push(await readFileFromPath(path));
       } catch (err: any) {
-        failures.push({ key: path, path, name: path.split(/[\\/]/).pop() || path, error: err?.message || 'Could not open the file.' });
+        failures.push({ key: path, path, name: path.split(/[\\/]/).pop() || path, error: err?.message || t('dialog.couldNotOpen') });
       }
     }
     await runOpen([...(await filesToIncoming(files)), ...failures], held);
@@ -687,13 +690,13 @@ export const App: React.FC = () => {
         await getPlatformAdapter().allowPath(item.path);
         const status = await getPlatformAdapter().pathStatus(item.path);
         if (status && !status.exists) {
-          await ask('Cannot find file', `${item.name} cannot be found.`, ['OK']);
+          await ask(t('dialog.cannotFind'), t('dialog.cannotFindBody', { name: item.name }), ['OK']);
           if (shouldRemoveRecent(status)) await removeRecentFile(item.id);
           await refreshLists();
           return;
         }
       } catch (err: any) {
-        await ask('Cannot open file', err?.message || 'Could not open the file.', ['OK']);
+        await ask(t('dialog.cannotOpen'), err?.message || t('dialog.couldNotOpen'), ['OK']);
         return;
       }
       await openPaths([item.path], true);
@@ -724,7 +727,7 @@ export const App: React.FC = () => {
       if (!tab) return true;
       if (tab.isDirty) {
         commit(tabsRef.current, id);
-        const choice = await ask('Save changes', `${tab.fileName} has unsaved changes. Save before closing?`, [...SAVE_BUTTONS]);
+        const choice = await ask(t('dialog.saveChanges'), t('dialog.saveChangesBody', { name: tab.fileName }), [...SAVE_BUTTONS]);
         if (choice === 'Save') {
           const outcome = await saveTab(tab, 'save', undefined, undefined, true);
           if (!closeContinues('Save', outcome)) {
@@ -788,6 +791,26 @@ export const App: React.FC = () => {
       busyRef.current = false;
     }
   };
+
+  useEffect(() => {
+    const bump = (lng: string) => setUiLanguage(lng);
+    i18n.on('languageChanged', bump);
+    return () => {
+      i18n.off('languageChanged', bump);
+    };
+  }, []);
+
+  useEffect(() => {
+    const blockNavigate = (event: DragEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('dragover', blockNavigate);
+    window.addEventListener('drop', blockNavigate);
+    return () => {
+      window.removeEventListener('dragover', blockNavigate);
+      window.removeEventListener('drop', blockNavigate);
+    };
+  }, []);
 
   useEffect(() => {
     const stopClose = setupCloseGuard(
@@ -875,7 +898,7 @@ export const App: React.FC = () => {
       const count = tab.kind === 'spreadsheet' ? tab.spreadsheetData?.length || 1 : tab.kind === 'presentation' ? tab.presentationData?.slides.length || 1 : tab.kind === 'pdf' ? pdfCount : 1;
       let scope: 'current' | 'all' = tab.kind === 'spreadsheet' ? 'current' : 'all';
       if (tab.kind !== 'document' && printScopeNeeded(tab.kind, count)) {
-        const selected = printScopeFromChoice(await ask('Print', `What should Folio print from ${tab.fileName}?`, printButtons(tab.kind)));
+        const selected = printScopeFromChoice(await ask(t('dialog.print'), t('dialog.printBody', { name: tab.fileName }), printButtons(tab.kind)));
         if (selected === 'cancel') return;
         scope = selected;
       }
@@ -908,8 +931,8 @@ export const App: React.FC = () => {
       let scope: 'current' | 'all' = tab.kind === 'spreadsheet' ? 'current' : 'all';
       if (tab.kind !== 'document' && printScopeNeeded(tab.kind, count)) {
         const choice = await ask(
-          'Save as PDF',
-          `What should Folio export to PDF from ${tab.fileName}?`,
+          t('dialog.exportPdf'),
+          t('dialog.exportBody', { name: tab.fileName }),
           printButtons(tab.kind)
         );
         const selected = printScopeFromChoice(choice);
@@ -946,19 +969,19 @@ export const App: React.FC = () => {
           { handle: saveHandle, path: savePath }
         );
         if (!saveRes.success) {
-          await ask('Export failed', 'The PDF could not be written to disk.', ['OK']);
+          await ask(t('dialog.exportFailed'), t('dialog.exportDisk'), ['OK']);
           return;
         }
 
         if (omissions.length > 0) {
           await ask(
-            'PDF exported with notices',
-            `The PDF was saved, but some content was omitted:\n${Array.from(new Set(omissions)).join('\n')}`,
+            t('dialog.exportNotices'),
+            t('dialog.exportNoticesBody', { items: Array.from(new Set(omissions)).join('\n') }),
             ['OK']
           );
         }
       } catch (err: any) {
-        await ask('Export failed', err?.message || 'The PDF could not be exported.', ['OK']);
+        await ask(t('dialog.exportFailed'), err?.message || t('dialog.exportError'), ['OK']);
       }
     } finally {
       busyRef.current = false;
@@ -976,12 +999,12 @@ export const App: React.FC = () => {
       try {
         result = await extractTextFromPdf(tab.pdfData);
       } catch {
-        await ask('Edit failed', 'This PDF is protected or unreadable.', ['OK']);
+        await ask(t('dialog.editFailed'), t('dialog.protected'), ['OK']);
         return;
       }
 
       if (result.paragraphsCount === 0) {
-        await ask('Nothing to edit', 'This PDF contains no selectable text to edit.', ['OK']);
+        await ask(t('dialog.nothing'), t('dialog.nothingBody'), ['OK']);
         return;
       }
 
@@ -995,19 +1018,25 @@ export const App: React.FC = () => {
         importedAt: new Date().toISOString(),
         warnings: [
           {
-            item: 'Layout discarded',
-            reason: 'Layout was discarded and reading order may be wrong.',
+            item: t('dialog.layoutItem'),
+            reason: t('dialog.layoutDiscarded'),
           },
           ...(result.skippedPages.length > 0
             ? [
                 {
-                  item: 'Skipped empty pages',
-                  reason: `Pages with no selectable text were skipped: ${result.skippedPages.join(', ')}`,
+                  item: t('dialog.skippedEmpty'),
+                  reason: t('dialog.skippedPages', { pages: result.skippedPages.join(', ') }),
                 },
               ]
             : []),
         ],
-        skippedFeatures: ['Layout', 'Columns', 'Tables', 'Images', 'Headers and footers'],
+        skippedFeatures: [
+          t('dialog.skipLayout'),
+          t('dialog.skipColumns'),
+          t('dialog.skipTables'),
+          t('dialog.skipImages'),
+          t('dialog.skipHeaders'),
+        ],
       };
 
       const newTab: EditorState = {
@@ -1087,7 +1116,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
+    <div data-ui-lang={uiLanguage} style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <input
         type="file"
         multiple

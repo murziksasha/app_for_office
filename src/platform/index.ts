@@ -77,3 +77,7 @@ export function setupOpenRequestHandler(onOpen: (paths: string[]) => void): () =
   return getPlatformAdapter().setupOpenRequestHandler(onOpen);
 }
 
+export function userRegion(): Promise<string | null> {
+  return getPlatformAdapter().userRegion();
+}
+
