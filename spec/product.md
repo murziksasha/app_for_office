@@ -50,7 +50,7 @@ Supporting modern open standards (Open XML, ODF, plain text, RFC 4180) ensures i
 The following capabilities are explicitly outside the scope of Folio:
 1. Real-time multiplayer collaborative editing.
 2. Embedded interactive 3D charts and dynamic OLAP pivot tables.
-3. Complex slide entrance/exit animations, timing curves, and media triggers.
+3. Complex slide entrance/exit animations, timing curves, and media triggers. One local mp4 per slide, with sound, plays in the editor and is stored in the presentation.
 4. Native PDF vector editing, page restructuring, annotation, and OCR. (Edit as Document extracts selectable text into a new Document tab, and Save as PDF exports a new PDF from Document, Spreadsheet, or Presentation; the opened PDF reader remains viewer-only, writing original bytes back).
 5. Macro scripting engines (VBA, VBScript, Python macros).
 6. Cloud storage synchronization servers or proprietary account management.

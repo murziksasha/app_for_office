@@ -711,6 +711,11 @@ async function exportPresentation(
         continue;
       }
 
+      if (elem.type === 'video') {
+        recordOmission('A slide video was left out of the PDF.');
+        continue;
+      }
+
       if (elem.type === 'image' && elem.src) {
         const embedded = await embedBase64Image(doc, elem.src);
         if (embedded.error) {

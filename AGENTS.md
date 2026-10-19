@@ -58,4 +58,4 @@ To add a format: sniff it in `detect.ts`, import into the in-app model, export f
 
 ## Out of scope
 
-Collaboration and cloud sync. Pivot tables and live charts. Slide animation and sound. Native PDF vector editing, annotations, and OCR (Edit as Document and Save as PDF are supported). Office 97–2003 binary parsers. Macro runtimes.
+Collaboration and cloud sync. Pivot tables and live charts. Slide animation and transition sound. One embedded mp4 per slide, with sound, is supported. Native PDF vector editing, annotations, and OCR (Edit as Document and Save as PDF are supported). Office 97–2003 binary parsers. Macro runtimes.

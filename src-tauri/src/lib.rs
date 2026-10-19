@@ -228,9 +228,58 @@ fn folio_write(path: String, bytes: Vec<u8>, state: tauri::State<AppState>) -> R
             path
         ));
     }
-    std::fs::write(&p, &bytes)
-        .map_err(|e| format!("Failed to write file '{}': {}", path, e))?;
+    write_replacing(&p, &bytes).map_err(|e| format!("Failed to write file '{}': {}", path, e))?;
     Ok(())
+}
+
+/// Write the bytes aside, then replace the target. A failed write leaves the previous file.
+fn write_replacing(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let name = target.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no file name")
+    })?;
+    let mut tmp_name = name.to_os_string();
+    tmp_name.push(".folio-tmp");
+    let tmp = target.with_file_name(tmp_name);
+    std::fs::write(&tmp, bytes)?;
+    match replace_file(&tmp, target) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(err)
+        }
+    }
+}
+
+#[cfg(windows)]
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    const MOVEFILE_REPLACE_EXISTING: u32 = 1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 8;
+    let ok = unsafe {
+        MoveFileExW(
+            from_w.as_ptr(),
+            to_w.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+}
+
+#[cfg(not(windows))]
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::rename(from, to)
 }
 
 #[tauri::command]

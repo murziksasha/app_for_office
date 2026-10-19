@@ -173,6 +173,38 @@ describe('PDF Export', () => {
     expect(extracted).toContain('Welcome to Slide Presentation');
   });
 
+  it('omits a slide video from the PDF and records it', async () => {
+    const slideState: EditorState = {
+      kind: 'presentation',
+      fileName: 'slides.pptx',
+      format: 'pptx',
+      isDirty: false,
+      presentationData: {
+        title: 'Video',
+        slides: [
+          {
+            id: 'slide-1',
+            elements: [
+              {
+                id: 'vid-1',
+                type: 'video',
+                x: 10,
+                y: 10,
+                width: 40,
+                height: 30,
+                src: 'data:video/mp4;base64,AAAA',
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const { bytes, omissions } = await exportPdf(slideState);
+    expect(bytes.length).toBeGreaterThan(100);
+    expect(omissions).toContain('A slide video was left out of the PDF.');
+  });
+
   it('rejects unsupported document kinds without writing', async () => {
     const invalidState: EditorState = {
       kind: 'pdf',

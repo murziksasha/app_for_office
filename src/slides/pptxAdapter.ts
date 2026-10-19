@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import PptxGenJS from 'pptxgenjs';
 import { ImportReport, ImportWarning, PresentationModel, Slide, SlideElement } from '../types';
+import { VIDEO_MSG, bytesToBase64, sniffMp4, toPptxVideoData } from './videoFile';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -12,8 +13,13 @@ const xmlParser = new XMLParser({
   },
 });
 
+interface SlideRel {
+  target: string;
+  type: string;
+}
+
 interface RelMap {
-  [id: string]: string;
+  [id: string]: SlideRel;
 }
 
 /**
@@ -30,7 +36,7 @@ async function loadSlideRels(zip: JSZip, slideRelPath: string): Promise<RelMap> 
     const map: RelMap = {};
     for (const r of list) {
       if (r['@_Id'] && r['@_Target']) {
-        map[r['@_Id']] = r['@_Target'];
+        map[r['@_Id']] = { target: r['@_Target'], type: r['@_Type'] || '' };
       }
     }
     return map;
@@ -39,15 +45,24 @@ async function loadSlideRels(zip: JSZip, slideRelPath: string): Promise<RelMap> 
   }
 }
 
+function zipMediaPath(target: string): string {
+  if (target.startsWith('ppt/')) return target;
+  if (target.startsWith('../')) return `ppt/${target.replace(/^(\.\.\/)+/, '')}`;
+  return `ppt/${target.replace(/^\//, '')}`;
+}
+
+function videoLinkId(pic: any): string | null {
+  const video = pic?.nvPicPr?.nvPr?.videoFile;
+  if (!video) return null;
+  const node = Array.isArray(video) ? video[0] : video;
+  return node?.['@_link'] || node?.['@_embed'] || null;
+}
+
 /**
  * Extracts image as a data URL from PPT zip.
  */
 async function extractPptImage(zip: JSZip, target: string): Promise<string | null> {
-  const cleanTarget = target.startsWith('ppt/')
-    ? target
-    : target.startsWith('../')
-    ? `ppt/${target.replace(/^(\.\.\/)+/, '')}`
-    : `ppt/${target.replace(/^\//, '')}`;
+  const cleanTarget = zipMediaPath(target);
 
   const file = zip.file(cleanTarget);
   if (!file) return null;
@@ -57,6 +72,17 @@ async function extractPptImage(zip: JSZip, target: string): Promise<string | nul
     const ext = cleanTarget.split('.').pop()?.toLowerCase() || 'png';
     const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
     return `data:${mime};base64,${b64}`;
+  } catch {
+    return null;
+  }
+}
+
+async function extractPptVideo(zip: JSZip, target: string): Promise<{ bytes: Uint8Array; base64: string } | null> {
+  const file = zip.file(zipMediaPath(target));
+  if (!file) return null;
+  try {
+    const bytes = await file.async('uint8array');
+    return { bytes, base64: bytesToBase64(bytes) };
   } catch {
     return null;
   }
@@ -108,7 +134,7 @@ export async function importPptx(
   const slideFileNames: string[] = [];
   for (const sld of slideIdEntries) {
     const rId = sld['@_id'];
-    const target = presRelMap[rId];
+    const target = presRelMap[rId]?.target;
     if (target) {
       const cleanPath = target.startsWith('slides/') ? `ppt/${target}` : `ppt/slides/${target}`;
       slideFileNames.push(cleanPath);
@@ -221,13 +247,53 @@ export async function importPptx(
       }
     }
 
-    // Parse pictures
+    if (sXml.includes('audioFile')) {
+      warnings.push({
+        item: `Slide ${sIdx + 1}`,
+        reason: VIDEO_MSG.skippedAudio,
+      });
+      if (!skippedFeatures.includes('Standalone audio')) skippedFeatures.push('Standalone audio');
+    }
+
+    // Parse pictures and videos. A video pic also carries a cover image; that cover is not a picture.
     const pics = spTree?.pic ? (Array.isArray(spTree.pic) ? spTree.pic : [spTree.pic]) : [];
+    let keptVideo = false;
     for (let pIdx = 0; pIdx < pics.length; pIdx++) {
       const pic = pics[pIdx];
       const bounds = getPercentBounds(pic.spPr?.xfrm);
+      const videoId = videoLinkId(pic);
+      if (videoId) {
+        const rel = slideRels[videoId];
+        const fileName = rel?.target?.split('/').pop() || 'video.mp4';
+        if (!rel) continue;
+        const media = await extractPptVideo(zip, rel.target);
+        if (!media) continue;
+        const sniff = sniffMp4(media.bytes, fileName);
+        if (!sniff.isMp4) {
+          warnings.push({ item: `Slide ${sIdx + 1}`, reason: VIDEO_MSG.skippedNonMp4 });
+          if (!skippedFeatures.includes('Non-mp4 video')) skippedFeatures.push('Non-mp4 video');
+          continue;
+        }
+        if (keptVideo) {
+          warnings.push({ item: `Slide ${sIdx + 1}`, reason: VIDEO_MSG.extraOnSlide });
+          if (!skippedFeatures.includes('Extra slide videos')) skippedFeatures.push('Extra slide videos');
+          continue;
+        }
+        if (!sniff.h264) {
+          warnings.push({ item: `Slide ${sIdx + 1}`, reason: VIDEO_MSG.otherPrograms });
+        }
+        elements.push({
+          id: `elem_vid_${sIdx}_${pIdx}`,
+          type: 'video',
+          ...bounds,
+          src: `data:video/mp4;base64,${media.base64}`,
+        });
+        keptVideo = true;
+        continue;
+      }
+
       const blipId = pic.blipFill?.blip?.['@_embed'];
-      const target = slideRels[blipId];
+      const target = slideRels[blipId]?.target;
       if (target) {
         const dataUrl = await extractPptImage(zip, target);
         if (dataUrl) {
@@ -345,6 +411,16 @@ export async function exportPptx(presentation: PresentationModel): Promise<Blob>
       } else if (elem.type === 'image' && elem.src) {
         s.addImage({
           data: elem.src,
+          x: xInch,
+          y: yInch,
+          w: wInch,
+          h: hInch,
+        });
+      } else if (elem.type === 'video' && elem.src) {
+        s.addMedia({
+          type: 'video',
+          data: toPptxVideoData(elem.src),
+          extn: 'mp4',
           x: xInch,
           y: yInch,
           w: wInch,
