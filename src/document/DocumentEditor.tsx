@@ -11,6 +11,7 @@ interface DocumentEditorProps {
   zoom?: number;
   onEditorReady?: (editor: any) => void;
   onSaveShortcut?: () => void;
+  findSignal?: number;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -20,6 +21,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   zoom = 100,
   onEditorReady,
   onSaveShortcut,
+  findSignal = 0,
 }) => {
   const [showFind, setShowFind] = useState(false);
   const [findText, setFindText] = useState('');
@@ -52,6 +54,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       prevContentRef.current = content;
     }
   }, [content, editor]);
+
+  const seenFindSignal = useRef(findSignal);
+  useEffect(() => {
+    if (findSignal !== seenFindSignal.current) {
+      seenFindSignal.current = findSignal;
+      setShowFind(true);
+    }
+  }, [findSignal]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -118,7 +128,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           className="folio-find-panel animate-fade-in"
           style={{
             position: 'fixed',
-            top: '110px',
+            top: '230px',
             right: '24px',
             zIndex: 100,
             background: 'var(--folio-panel)',

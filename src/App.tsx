@@ -64,7 +64,8 @@ import { TabStrip } from './shell/TabStrip';
 import { PrintView } from './shell/PrintView';
 import { DocumentEditor } from './document/DocumentEditor';
 import { SpreadsheetEditor } from './spreadsheet/SpreadsheetEditor';
-import { SlideEditor } from './slides/SlideEditor';
+import { SlideEditor, emptySlideCommandState, type SlideCommandState, type SlideEditorHandle } from './slides/SlideEditor';
+import type { WorkbookInstance } from '@fortune-sheet/react';
 import { PdfViewer } from './pdf/PdfViewer';
 
 interface ChoiceState {
@@ -99,6 +100,13 @@ export const App: React.FC = () => {
   const [pdfPage, setPdfPage] = useState(1);
   const [pdfCount, setPdfCount] = useState(1);
   const [printJob, setPrintJob] = useState<{ tab: EditorState; scope: 'current' | 'all' } | null>(null);
+  const [findSignal, setFindSignal] = useState(0);
+  const [slideState, setSlideState] = useState<SlideCommandState>(emptySlideCommandState);
+  const slideCommands = useRef<SlideEditorHandle>(null);
+  const sheetApi = useRef<WorkbookInstance | null>(null);
+  const handleWorkbookReady = useCallback((api: WorkbookInstance | null) => {
+    sheetApi.current = api;
+  }, []);
 
   const tabsRef = useRef<EditorState[]>([]);
   const activeRef = useRef<string | null>(null);
@@ -1136,6 +1144,10 @@ export const App: React.FC = () => {
             onOpenRecent={(item) => void openRecent(item)}
             onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
             onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
+            onFind={() => setFindSignal((n) => n + 1)}
+            slideCommands={slideCommands}
+            slideState={slideState}
+            sheetApi={sheetApi}
           />
           <main className="folio-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
             {activeTab.kind === 'document' && (
@@ -1147,6 +1159,7 @@ export const App: React.FC = () => {
                 onChange={(doc) => updateActive({ documentContent: doc })}
                 onEditorReady={setDocumentEditorInstance}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
+                findSignal={findSignal}
               />
             )}
             {activeTab.kind === 'spreadsheet' && (
@@ -1155,15 +1168,18 @@ export const App: React.FC = () => {
                 sheets={activeTab.spreadsheetData || []}
                 onChange={(sheets) => updateActive({ spreadsheetData: sheets })}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
+                onWorkbookReady={handleWorkbookReady}
               />
             )}
             {activeTab.kind === 'presentation' && (
               <SlideEditor
                 key={`${activeTab.id}-${activeTab.historyEpoch || 0}`}
+                ref={slideCommands}
                 presentation={activeTab.presentationData || { title: activeTab.fileName, slides: [] }}
                 onChange={(presentation) => updateActive({ presentationData: presentation })}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
                 onActiveSlideChange={setSlideIndex}
+                onSelectionChange={setSlideState}
               />
             )}
             {activeTab.kind === 'pdf' && activeTab.pdfData && (

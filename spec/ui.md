@@ -33,3 +33,27 @@ Avoids trademark infringement and presents Folio as an independent, modern local
 ### The Check
 Playwright smoke tests in `e2e/smoke.spec.ts` assert heading labels `"New Document"`, `"New Spreadsheet"`, and `"New Presentation"`.
 
+---
+
+## 3. Ribbon Tabs and Instrument Groups
+
+### The Rule
+The ribbon is a tab row plus a strip of labeled instrument groups. Each group shows its tools on top and a caption underneath: Clipboard, Font, Paragraph, Styles, and the other captions for that tab.
+
+Tabs follow the open file:
+
+- Document: File, Home, Insert, Layout.
+- Spreadsheet: File, Home, Insert. FortuneSheet’s own toolbar stays hidden. The formula bar and sheet tabs stay.
+- Presentation: File, Home, Insert. Slide, text, picture, video, and shape commands live here. The thumbnail rail stays beside the canvas.
+- PDF: File only. Page navigation stays on the viewer.
+
+File groups are New, Open, Save, and Print. Save as PDF is absent on a PDF tab. Edit as Document is present on a PDF tab. Drafts and recent files stay listed under the File groups.
+
+The ribbon does not include dictation, designer assistance, add-ins, sharing, ink drawing, transitions, animations, a presenter view, mailings, or comments.
+
+### The Reason
+People expect writing tools in one place, grouped the way the rest of an office app groups them. A second toolbar inside the sheet or above the slide duplicates that and hides commands that already exist.
+
+### The Check
+`e2e/smoke.spec.ts` expects the document captions Clipboard, Font, Paragraph, and Styles, a presentation New slide control that adds a thumbnail, and a spreadsheet ribbon that shows Font and Number with FortuneSheet’s toolbar absent.
+

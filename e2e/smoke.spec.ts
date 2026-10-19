@@ -29,6 +29,12 @@ test.describe('Folio Smoke Test Suite', () => {
     await editor.click();
     await page.keyboard.type('Hello Folio Local Office');
 
+    // Home instrument groups are labeled
+    const ribbon = page.locator('.folio-ribbon');
+    for (const caption of ['Clipboard', 'Font', 'Paragraph', 'Styles']) {
+      await expect(ribbon.locator('.folio-ribbon-caption', { hasText: caption })).toBeVisible();
+    }
+
     // Select text and click Bold in ribbon
     await page.keyboard.press('Control+A');
     const boldBtn = page.locator('button[title*="Bold"]');
@@ -37,6 +43,9 @@ test.describe('Folio Smoke Test Suite', () => {
     // Verify <strong> tag exists in the editor DOM
     const boldText = editor.locator('strong');
     await expect(boldText).toContainText('Hello Folio Local Office');
+
+    await ribbon.getByRole('button', { name: 'Find' }).click();
+    await expect(page.getByText('Find & Replace')).toBeVisible();
 
     // Status bar / Ribbon should show unsaved changes
     await expect(page.getByText('Unsaved changes').first()).toBeVisible();
@@ -69,6 +78,12 @@ test.describe('Folio Smoke Test Suite', () => {
 
     // Status bar should indicate spreadsheet mode
     await expect(page.getByText(/Spreadsheet · \d+ sheet/i)).toBeVisible();
+
+    // Folio ribbon replaces FortuneSheet's toolbar
+    await expect(page.locator('.fortune-toolbar')).toHaveCount(0);
+    const ribbon = page.locator('.folio-ribbon');
+    await expect(ribbon.locator('.folio-ribbon-caption', { hasText: 'Font' })).toBeVisible();
+    await expect(ribbon.locator('.folio-ribbon-caption', { hasText: 'Number' })).toBeVisible();
   });
 
   test('5. Opens fixture PPTX and displays presentation editor', async ({ page }) => {
@@ -85,6 +100,14 @@ test.describe('Folio Smoke Test Suite', () => {
     const canvas = page.locator('.folio-slide-canvas');
     await expect(canvas).toBeVisible();
     await expect(canvas).toContainText('Folio Presentation Deck');
+  });
+
+  test('5b. New slide from the ribbon adds a thumbnail', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('heading', { name: 'New Presentation' }).click();
+    await expect(page.getByText('SLIDES (1)')).toBeVisible();
+    await page.locator('.folio-ribbon').getByRole('button', { name: 'New slide' }).click();
+    await expect(page.getByText('SLIDES (2)')).toBeVisible();
   });
 
   test('6. Opens a second tab without a prompt and closes a dirty tab', async ({ page }) => {

@@ -1,33 +1,44 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { PresentationModel, Slide, SlideElement } from '../types';
 import { createEmptySlide } from './pptxAdapter';
 import { Box, ResizeDir, minPercents, moveBox, resizeBox } from './geometry';
 import { VIDEO_MSG, bytesToBase64, probeVideoPlayable, sniffMp4 } from './videoFile';
-import {
-  Plus,
-  Trash2,
-  Copy,
-  ChevronUp,
-  ChevronDown,
-  Type,
-  Image as ImageIcon,
-  Video,
-  Bold,
-  Italic,
-  Underline,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Undo2,
-  Play,
-  Pause,
-} from 'lucide-react';
+import { Plus, Trash2, Copy, ChevronUp, ChevronDown, Play, Pause } from 'lucide-react';
+
+export interface SlideEditorHandle {
+  addSlide: () => void;
+  duplicateSlide: () => void;
+  deleteSlide: () => void;
+  moveSlide: (direction: 'up' | 'down') => void;
+  addText: () => void;
+  addImage: () => void;
+  addVideo: () => void;
+  addShape: () => void;
+  undo: () => void;
+  deleteSelected: () => void;
+  patchSelected: (updates: Partial<SlideElement>) => void;
+}
+
+export interface SlideCommandState {
+  canUndo: boolean;
+  slideCount: number;
+  slideIndex: number;
+  element: Pick<SlideElement, 'id' | 'type' | 'bold' | 'italic' | 'underline' | 'fontSize' | 'color' | 'align'> | null;
+}
+
+export const emptySlideCommandState: SlideCommandState = {
+  canUndo: false,
+  slideCount: 0,
+  slideIndex: 0,
+  element: null,
+};
 
 interface SlideEditorProps {
   presentation: PresentationModel;
   onChange: (presentation: PresentationModel) => void;
   onSaveShortcut?: () => void;
   onActiveSlideChange?: (index: number) => void;
+  onSelectionChange?: (state: SlideCommandState) => void;
 }
 
 interface UndoSlot {
@@ -106,12 +117,10 @@ function boxOf(elem: SlideElement): Box {
   return { x: elem.x, y: elem.y, width: elem.width, height: elem.height };
 }
 
-export const SlideEditor: React.FC<SlideEditorProps> = ({
-  presentation,
-  onChange,
-  onSaveShortcut,
-  onActiveSlideChange,
-}) => {
+export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>(function SlideEditor(
+  { presentation, onChange, onSaveShortcut, onActiveSlideChange, onSelectionChange },
+  ref,
+) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -375,6 +384,24 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
     input.click();
   };
 
+  const handleAddShape = () => {
+    clearUndo();
+    const newEl: SlideElement = {
+      id: `rect_${Date.now()}`,
+      type: 'rect',
+      x: 30,
+      y: 30,
+      width: 28,
+      height: 18,
+      fill: '#d6f3ef',
+      borderColor: '#0f766e',
+      borderWidth: 2,
+    };
+    mapActive((elements) => [...elements, newEl]);
+    setSelectedElementId(newEl.id);
+    setEditingId(null);
+  };
+
   const handleDeleteSelectedElement = () => {
     if (!selectedElementId) return;
     const id = selectedElementId;
@@ -466,7 +493,52 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
     window.addEventListener('pointerup', end);
   };
 
-  const selectedElem = currentSlide?.elements.find((e) => e.id === selectedElementId);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      addSlide: handleAddSlide,
+      duplicateSlide: () => handleDuplicateSlide(indexRef.current),
+      deleteSlide: () => handleDeleteSlide(indexRef.current),
+      moveSlide: (direction) => handleMoveSlide(indexRef.current, direction),
+      addText: handleAddTextBox,
+      addImage: handleAddImage,
+      addVideo: handleAddVideo,
+      addShape: handleAddShape,
+      undo: applyUndo,
+      deleteSelected: handleDeleteSelectedElement,
+      patchSelected: (updates) => {
+        const id = selectedElementId;
+        if (!id) return;
+        patchElement(id, updates, true);
+      },
+    }),
+    [selectedElementId],
+  );
+
+  useEffect(() => {
+    const slide = (presentationRef.current.slides || [])[indexRef.current];
+    const el = slide?.elements.find((item) => item.id === selectedElementId) || null;
+    onSelectionChangeRef.current?.({
+      canUndo: Boolean(undoSlot),
+      slideCount: (presentationRef.current.slides || []).length,
+      slideIndex: indexRef.current,
+      element: el
+        ? {
+            id: el.id,
+            type: el.type,
+            bold: el.bold,
+            italic: el.italic,
+            underline: el.underline,
+            fontSize: el.fontSize,
+            color: el.color,
+            align: el.align,
+          }
+        : null,
+    });
+  }, [selectedElementId, undoSlot, presentation, activeSlideIndex]);
 
   return (
     <div
@@ -666,194 +738,6 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         )}
 
         <div
-          style={{
-            marginBottom: '16px',
-            background: 'var(--folio-panel)',
-            border: '1px solid var(--folio-border)',
-            borderRadius: 'var(--folio-radius-md)',
-            padding: '6px 12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: 'var(--folio-shadow-sm)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={applyUndo}
-            disabled={!undoSlot}
-            title="Undo move or resize"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-              opacity: undoSlot ? 1 : 0.4,
-            }}
-          >
-            <Undo2 size={14} /> Undo
-          </button>
-          <button
-            type="button"
-            onClick={handleAddTextBox}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-            }}
-          >
-            <Type size={14} /> Add Text
-          </button>
-          <button
-            type="button"
-            onClick={handleAddImage}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-            }}
-          >
-            <ImageIcon size={14} /> Add Picture
-          </button>
-          <button
-            type="button"
-            onClick={handleAddVideo}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-            }}
-          >
-            <Video size={14} /> Add Video
-          </button>
-
-          {selectedElem && (
-            <>
-              <div style={{ height: '16px', width: '1px', background: 'var(--folio-border)' }} />
-
-              {selectedElem.type === 'text' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { bold: !selectedElem.bold }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.bold ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <Bold size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { italic: !selectedElem.italic }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.italic ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <Italic size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { underline: !selectedElem.underline }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.underline ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <Underline size={14} />
-                  </button>
-
-                  <select
-                    value={selectedElem.fontSize || 18}
-                    onChange={(e) =>
-                      patchElement(selectedElem.id, { fontSize: parseInt(e.target.value, 10) }, true)
-                    }
-                    style={{
-                      padding: '2px 4px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--folio-border)',
-                      fontSize: '12px',
-                    }}
-                  >
-                    {[12, 14, 16, 18, 20, 24, 28, 32, 36, 44, 54, 72].map((sz) => (
-                      <option key={sz} value={sz}>
-                        {sz}pt
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { align: 'left' }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.align === 'left' ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <AlignLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { align: 'center' }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.align === 'center' ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <AlignCenter size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { align: 'right' }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.align === 'right' ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <AlignRight size={14} />
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={handleDeleteSelectedElement}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  color: '#dc2626',
-                  marginLeft: 'auto',
-                }}
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-            </>
-          )}
-        </div>
-
-        <div
           ref={canvasRef}
           className="folio-slide-canvas"
           style={{
@@ -991,7 +875,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
       </div>
     </div>
   );
-};
+});
 
 function VideoBlock({
   src,
