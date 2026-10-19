@@ -30,7 +30,7 @@ Folio must support opening and saving the following formats according to their c
 | `.csv` | Spreadsheet | Yes | Yes | RFC 4180 CSV parser and serializer |
 | `.tsv` | Spreadsheet | Yes | Yes | Tab-delimited parser and serializer |
 | `.pptx` | Presentation | Yes | Yes | Open XML slide parser; PptxGenJS exporter |
-| `.pdf` | Viewer | Yes | No | PDF.js rendering canvas (read-only) |
+| `.pdf` | Viewer | Yes | No | PDF.js rendering canvas (viewer in, original bytes out) |
 
 Binary Office 97–2003 formats (`.doc`, `.xls`, `.ppt`) and macro-enabled files (`.docm`, `.xlsm`, `.pptm`) are handled as restricted formats:
 - Legacy binaries must be refused with an explicit diagnostic message instructing the user to convert to modern Open XML.
@@ -51,7 +51,7 @@ The following capabilities are explicitly outside the scope of Folio:
 1. Real-time multiplayer collaborative editing.
 2. Embedded interactive 3D charts and dynamic OLAP pivot tables.
 3. Complex slide entrance/exit animations, timing curves, and media triggers.
-4. Native PDF vector editing or page restructuring (PDF is viewer-only).
+4. Native PDF vector editing, page restructuring, annotation, and OCR. (Edit as Document extracts selectable text into a new Document tab, and Save as PDF exports a new PDF from Document, Spreadsheet, or Presentation; the opened PDF reader remains viewer-only, writing original bytes back).
 5. Macro scripting engines (VBA, VBScript, Python macros).
 6. Cloud storage synchronization servers or proprietary account management.
 

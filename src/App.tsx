@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { DraftItem, DocumentKind, EditorState, RecentItem, SupportedFormat } from './types';
+import { DraftItem, DocumentKind, EditorState, ImportReport, RecentItem, SupportedFormat } from './types';
 import {
   getPlatformAdapter,
   hasFileSystemAccess,
@@ -25,6 +25,7 @@ import {
   RELOAD_BUTTONS,
   SAVE_BUTTONS,
   closeContinues,
+  contentHash,
   decideSave,
   findTabByHandle,
   getActiveSheet,
@@ -33,6 +34,7 @@ import {
   isSafeSavePath,
   lossyWarningMessage,
   nextDirtyIndex,
+  nextFileName,
   pathsMatch,
   planOpenBatch,
   printButtons,
@@ -49,7 +51,9 @@ import {
 import { htmlToDocument } from './document/model';
 import { markdownToHtml, plainTextToHtml } from './document/textMdHtml';
 import { importCsvTsv } from './spreadsheet/adapters';
-import { applyEdit, blankTab, draftContent, stampClean, tabFromDraft } from './files/tabs';
+import { applyEdit, blankTab, draftContent, newTabId, stampClean, tabFromDraft } from './files/tabs';
+import { exportPdf } from './pdf/exportPdf';
+import { extractTextFromPdf } from './pdf/extractText';
 import { StartScreen } from './shell/StartScreen';
 import { Ribbon } from './shell/Ribbon';
 import { StatusBar } from './shell/StatusBar';
@@ -105,6 +109,8 @@ export const App: React.FC = () => {
     openFiles: async (_files: PlatformFileResult[]) => {},
     saveActive: async () => {},
     saveAsActive: async () => {},
+    savePdfActive: async () => {},
+    editAsDocumentActive: async () => {},
     closeActive: async () => {},
     printActive: async () => {},
     newActive: () => {},
@@ -825,6 +831,145 @@ export const App: React.FC = () => {
     }
   };
 
+  const savePdfActive = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      const tab = tabsRef.current.find((item) => item.id === activeRef.current);
+      if (!tab || tab.kind === 'pdf') return;
+
+      const count =
+        tab.kind === 'spreadsheet'
+          ? tab.spreadsheetData?.length || 1
+          : tab.kind === 'presentation'
+          ? tab.presentationData?.slides.length || 1
+          : 1;
+
+      let scope: 'current' | 'all' = tab.kind === 'spreadsheet' ? 'current' : 'all';
+      if (tab.kind !== 'document' && printScopeNeeded(tab.kind, count)) {
+        const choice = await ask(
+          'Save as PDF',
+          `What should Folio export to PDF from ${tab.fileName}?`,
+          printButtons(tab.kind)
+        );
+        const selected = printScopeFromChoice(choice);
+        if (selected === 'cancel') return;
+        scope = selected;
+      }
+
+      const baseName = tab.fileName.replace(/\.[^/.]+$/, '');
+      const suggested = `${baseName}.pdf`;
+
+      let saveName = suggested;
+      let saveHandle: FileSystemFileHandle | undefined;
+      let savePath: string | undefined;
+
+      if (isDesktopPlatform() || hasSaveFilePicker()) {
+        const picked = await getPlatformAdapter().pickSaveTarget(suggested, [
+          { format: 'pdf', label: 'PDF Document', extensions: ['pdf'] },
+        ]);
+        if (!picked || (!picked.path && !picked.handle)) {
+          return;
+        }
+        saveName = picked.name || suggested;
+        saveHandle = picked.handle;
+        savePath = picked.path;
+      }
+
+      try {
+        const { bytes, omissions } = await exportPdf(tab, { scope, slideIndex });
+
+        const saveRes = await getPlatformAdapter().saveFile(
+          bytes,
+          saveName,
+          'pdf',
+          { handle: saveHandle, path: savePath }
+        );
+        if (!saveRes.success) {
+          await ask('Export failed', 'The PDF could not be written to disk.', ['OK']);
+          return;
+        }
+
+        if (omissions.length > 0) {
+          await ask(
+            'PDF exported with notices',
+            `The PDF was saved, but some content was omitted:\n${Array.from(new Set(omissions)).join('\n')}`,
+            ['OK']
+          );
+        }
+      } catch (err: any) {
+        await ask('Export failed', err?.message || 'The PDF could not be exported.', ['OK']);
+      }
+    } finally {
+      busyRef.current = false;
+    }
+  };
+
+  const editAsDocumentActive = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      const tab = tabsRef.current.find((item) => item.id === activeRef.current);
+      if (!tab || tab.kind !== 'pdf' || !tab.pdfData) return;
+
+      let result;
+      try {
+        result = await extractTextFromPdf(tab.pdfData);
+      } catch {
+        await ask('Edit failed', 'This PDF is protected or unreadable.', ['OK']);
+        return;
+      }
+
+      if (result.paragraphsCount === 0) {
+        await ask('Nothing to edit', 'This PDF contains no selectable text to edit.', ['OK']);
+        return;
+      }
+
+      const openNames = tabsRef.current.map((t) => t.fileName);
+      const docTitle = nextFileName('document', openNames, tab.fileName);
+      const docModel = htmlToDocument(result.html);
+
+      const report: ImportReport = {
+        fileName: docTitle,
+        format: 'docx',
+        importedAt: new Date().toISOString(),
+        warnings: [
+          {
+            item: 'Layout discarded',
+            reason: 'Layout was discarded and reading order may be wrong.',
+          },
+          ...(result.skippedPages.length > 0
+            ? [
+                {
+                  item: 'Skipped empty pages',
+                  reason: `Pages with no selectable text were skipped: ${result.skippedPages.join(', ')}`,
+                },
+              ]
+            : []),
+        ],
+        skippedFeatures: ['Layout', 'Columns', 'Tables', 'Images', 'Headers and footers'],
+      };
+
+      const newTab: EditorState = {
+        id: newTabId(),
+        kind: 'document',
+        fileName: docTitle,
+        format: 'docx',
+        isDirty: true,
+        cleanHash: '',
+        contentHash: contentHash(docModel),
+        documentContent: docModel,
+        importReport: report,
+        lastSavedAt: new Date(),
+      };
+
+      commit([...tabsRef.current, newTab], newTab.id);
+      setShowImportReport(true);
+    } finally {
+      busyRef.current = false;
+    }
+  };
+
   actionsRef.current = {
     confirmClose,
     openPaths,
@@ -837,6 +982,8 @@ export const App: React.FC = () => {
       const tab = tabsRef.current.find((item) => item.id === activeRef.current);
       if (tab) await saveTab(tab, 'save-as');
     },
+    savePdfActive,
+    editAsDocumentActive,
     closeActive: async () => {
       if (activeRef.current) await closeTab(activeRef.current);
     },
@@ -902,6 +1049,8 @@ export const App: React.FC = () => {
             onZoomChange={setZoom}
             onSave={() => void actionsRef.current.saveActive()}
             onSaveAs={() => void actionsRef.current.saveAsActive()}
+            onSavePdf={() => void actionsRef.current.savePdfActive()}
+            onEditAsDocument={() => void actionsRef.current.editAsDocumentActive()}
             onPrint={() => void printActive()}
             onCloseFile={() => activeTab.id && void closeTab(activeTab.id)}
             onNew={createNew}
@@ -950,6 +1099,7 @@ export const App: React.FC = () => {
                   setPdfPage(page);
                   setPdfCount(pages);
                 }}
+                onEditAsDocument={() => void actionsRef.current.editAsDocumentActive()}
               />
             )}
           </main>

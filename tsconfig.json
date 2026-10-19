@@ -15,10 +15,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "tests", "fixtures", "vite.config.ts"]
+  "include": ["src", "tests", "fixtures", "vite.config.ts", "e2e", "playwright.config.ts"]
 }
-

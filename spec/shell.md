@@ -62,6 +62,9 @@ Ctrl+S saves the active tab. Save, Save As, F12, or Ctrl+Shift+S on a tab with n
 
 Names for new files are `DocumentN.docx`, `WorkbookN.xlsx`, and `PresentationN.pptx`, using the smallest N not used by an open tab of that kind.
 
+- **Save as PDF**: A File command available on Document, Spreadsheet, and Presentation editors (absent on the PDF reader). Always prompts for a target path (suggesting the current base name plus `.pdf`), renders the PDF in memory, and writes it. Spreadsheets and presentations reuse the print scope dialog (Active sheet vs All sheets, All slides vs This slide) when multiple units exist; a single unit skips the question, and Cancel writes nothing. Save as PDF never clears dirty, never retargets the tab, and does not alter the tab's name, path, or format.
+- **Edit as Document**: Available on loaded PDF tabs via the File ribbon and the PDF viewer toolbar. It extracts selectable text and opens it as a new Document tab (format `docx`, dirty, no path or handle, named from the PDF base name using `nextFileName` to avoid duplicate titles). The PDF tab remains open, clean, and continues to save its original bytes. Unavailable on protected or unreadable PDFs; if no selectable text exists, no tab is created.
+
 ### The Reason
 One path cannot have two tabs, a silent overwrite can destroy a save made by another program, and lossy format conversions must be acknowledged before discarding document structure.
 
