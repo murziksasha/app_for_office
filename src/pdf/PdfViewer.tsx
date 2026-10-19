@@ -2,18 +2,20 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 // @ts-ignore
 import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Search, X, FileText } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
 interface PdfViewerProps {
   pdfData: Uint8Array;
   onPageInfo?: (info: { page: number; pages: number }) => void;
+  onEditAsDocument?: () => void;
 }
 
-export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo }) => {
+export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEditAsDocument }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [numPages, setNumPages] = useState(1);
   const [scale, setScale] = useState(1.2);
@@ -27,7 +29,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo }) => 
     let isCancelled = false;
     const loadPdf = async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+        setLoadError(null);
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData.slice() });
         const doc = await loadingTask.promise;
         if (!isCancelled) {
           setPdfDoc(doc);
@@ -36,6 +39,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo }) => 
         }
       } catch (err) {
         console.error('Failed to load PDF document:', err);
+        if (!isCancelled) {
+          setPdfDoc(null);
+          setLoadError('This PDF is protected or unreadable');
+        }
       }
     };
 
@@ -227,6 +234,29 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo }) => 
             <span style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>{searchStatus}</span>
           )}
         </div>
+
+        {/* Edit as Document button on toolbar */}
+        {onEditAsDocument && (
+          <button
+            onClick={onEditAsDocument}
+            disabled={Boolean(loadError) || !pdfDoc}
+            title="Edit as Document"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--folio-bg)',
+              color: 'var(--folio-ink)',
+              fontSize: '12px',
+              cursor: Boolean(loadError) || !pdfDoc ? 'not-allowed' : 'pointer',
+              opacity: Boolean(loadError) || !pdfDoc ? 0.4 : 1,
+            }}
+          >
+            <FileText size={14} /> Edit as Document
+          </button>
+        )}
       </div>
 
       {/* Canvas Viewport */}
@@ -240,17 +270,40 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo }) => 
           padding: '32px 16px',
         }}
       >
-        <div
-          style={{
-            backgroundColor: '#ffffff',
-            boxShadow: 'var(--folio-shadow-paper)',
-            borderRadius: '2px',
-            border: '1px solid var(--folio-border-light)',
-            overflow: 'hidden',
-          }}
-        >
-          <canvas ref={canvasRef} />
-        </div>
+        {loadError ? (
+          <div
+            data-testid="pdf-error-banner"
+            style={{
+              padding: '24px 32px',
+              backgroundColor: '#fff3cd',
+              color: '#664d03',
+              border: '1px solid #ffe69c',
+              borderRadius: '6px',
+              textAlign: 'center',
+              maxWidth: '480px',
+              marginTop: '40px',
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: '15px', marginBottom: '8px' }}>
+              This PDF is protected or unreadable
+            </div>
+            <div style={{ fontSize: '13px', opacity: 0.9 }}>
+              Folio cannot display this document. It may be password-protected or have an unsupported structure.
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              boxShadow: 'var(--folio-shadow-paper)',
+              borderRadius: '2px',
+              border: '1px solid var(--folio-border-light)',
+              overflow: 'hidden',
+            }}
+          >
+            <canvas ref={canvasRef} />
+          </div>
+        )}
       </div>
     </div>
   );

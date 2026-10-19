@@ -89,7 +89,8 @@ export const StartScreen: React.FC<StartScreenProps> = ({
     <div
       style={{
         flex: 1,
-        height: '100vh',
+        minHeight: 0,
+        height: '100%',
         overflowY: 'auto',
         backgroundColor: 'var(--folio-bg)',
         display: 'flex',

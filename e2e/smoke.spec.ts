@@ -137,4 +137,44 @@ test.describe('Folio Smoke Test Suite', () => {
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('Document1.docx');
   });
+
+  test('8. Opens Home tab from file-tab +, creates a second file, and closes Home', async ({ page }) => {
+    await page.goto('/');
+
+    // Create a document
+    await page.getByRole('heading', { name: 'New Document' }).click();
+    await expect(page.getByRole('button', { name: 'Document1.docx', exact: true })).toBeVisible();
+
+    // Click +
+    await page.getByTestId('tab-new').click();
+
+    // See the Home chip and "New Document" while the document chip remains
+    await expect(page.getByTestId('tab-home')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'New Document' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Document1.docx', exact: true })).toBeVisible();
+
+    // Create a spreadsheet from that screen
+    await page.getByRole('heading', { name: 'New Spreadsheet' }).click();
+
+    // Land in the spreadsheet with both file chips and Home still present
+    await expect(page.locator('.folio-spreadsheet-container')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Document1.docx', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Workbook1.xlsx', exact: true })).toBeVisible();
+    await expect(page.getByTestId('tab-home')).toBeVisible();
+
+    // Close Home
+    await page.getByRole('button', { name: 'Close Home' }).click();
+
+    // Confirm the spreadsheet is still there
+    await expect(page.locator('.folio-spreadsheet-container')).toBeVisible();
+    await expect(page.getByTestId('tab-home')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Workbook1.xlsx', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Document1.docx', exact: true })).toBeVisible();
+
+    // The existing last-tab close still expects no chip row
+    await page.getByRole('button', { name: 'Close Workbook1.xlsx' }).click();
+    await page.getByRole('button', { name: 'Close Document1.docx' }).click();
+    await expect(page.getByRole('heading', { name: 'Folio' })).toBeVisible();
+    await expect(page.getByTestId('tab-strip')).toHaveCount(0);
+  });
 });

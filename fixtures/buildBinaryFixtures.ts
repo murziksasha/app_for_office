@@ -9,6 +9,28 @@ import { PresentationModel } from '../src/types';
 export async function buildFixtures() {
   const fixturesDir = path.resolve(import.meta.dirname, '.');
 
+  const files = [
+    'sample.docx',
+    'sample.odt',
+    'sample.xlsx',
+    'sample.pptx',
+    'sample_binary.doc',
+    'sample_text.pdf',
+    'sample_empty.pdf',
+  ];
+  const allExist = files.every((f) => {
+    const p = path.join(fixturesDir, f);
+    try {
+      return fs.existsSync(p) && fs.statSync(p).size > 0;
+    } catch {
+      return false;
+    }
+  });
+
+  if (allExist) {
+    return;
+  }
+
   // 1. DOCX fixture
   const docxHtml = `
     <h1>Folio Executive Summary</h1>
@@ -116,6 +138,21 @@ export async function buildFixtures() {
   // 5. Legacy binary .doc fixture (OLE compound header)
   const oleHeader = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0x00, 0x00]);
   fs.writeFileSync(path.join(fixturesDir, 'sample_binary.doc'), oleHeader);
+
+  // 6. PDF fixtures
+  const { PDFDocument, StandardFonts } = await import('pdf-lib');
+  const textPdfDoc = await PDFDocument.create();
+  const font = await textPdfDoc.embedFont(StandardFonts.Helvetica);
+  const p1 = textPdfDoc.addPage([612, 792]);
+  p1.drawText('Sample Notes from PDF', { x: 54, y: 720, size: 14, font });
+  p1.drawText('This is paragraph one of the notes.', { x: 54, y: 690, size: 12, font });
+  p1.drawText('Second line of paragraph one.', { x: 54, y: 674, size: 12, font });
+  p1.drawText('And this is paragraph two.', { x: 54, y: 620, size: 12, font });
+  fs.writeFileSync(path.join(fixturesDir, 'sample_text.pdf'), Buffer.from(await textPdfDoc.save()));
+
+  const emptyPdfDoc = await PDFDocument.create();
+  emptyPdfDoc.addPage([612, 792]);
+  fs.writeFileSync(path.join(fixturesDir, 'sample_empty.pdf'), Buffer.from(await emptyPdfDoc.save()));
 
   console.log('Fixtures generated successfully.');
 }

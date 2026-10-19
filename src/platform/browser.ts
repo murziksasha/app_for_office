@@ -66,6 +66,23 @@ export function hasSaveFilePicker(): boolean {
   return typeof window !== 'undefined' && typeof (window as any).showSaveFilePicker === 'function';
 }
 
+/** Commit only after the full blob is written. abort() drops the swap file and keeps the previous bytes. */
+async function writeBlobToHandle(handle: FileSystemFileHandle, blob: Blob): Promise<void> {
+  // @ts-ignore File System Access writable
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(blob);
+    await writable.close();
+  } catch (err) {
+    try {
+      await writable.abort();
+    } catch {
+      // The previous file stays if close() never ran.
+    }
+    throw err;
+  }
+}
+
 export async function verifyPermission(
   fileHandle: FileSystemFileHandle,
   readWrite = true
@@ -205,10 +222,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
       try {
         const permitted = await verifyPermission(options.handle, true);
         if (permitted) {
-          // @ts-ignore
-          const writable = await options.handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
+          await writeBlobToHandle(options.handle, blob);
           return { success: true, handle: options.handle, newFileName: fileName };
         }
       } catch (err) {
@@ -235,10 +249,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
           types,
         });
 
-        // @ts-ignore
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
+        await writeBlobToHandle(handle, blob);
         return { success: true, handle, newFileName: handle.name };
       } catch (err: any) {
         if (err.name === 'AbortError') {

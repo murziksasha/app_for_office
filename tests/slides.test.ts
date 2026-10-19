@@ -1,8 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import PptxGenJS from 'pptxgenjs';
 import { importPptx, exportPptx, createEmptySlide } from '../src/slides/pptxAdapter';
 import { PresentationModel } from '../src/types';
+import { clampBox, moveBox, resizeBox } from '../src/slides/geometry';
+import { VIDEO_MSG, bytesToBase64, sniffMp4, toPptxVideoData } from '../src/slides/videoFile';
+
+function mp4Bytes(codec: 'avc1' | 'hvc1'): Uint8Array {
+  const brands = codec === 'avc1' ? ['isom', 'mp41', 'avc1'] : ['isom', 'mp41', 'hvc1'];
+  const size = 8 + 4 + 4 + (brands.length - 1) * 4;
+  const bytes = new Uint8Array(size);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, size);
+  bytes.set([0x66, 0x74, 0x79, 0x70], 4); // ftyp
+  const writeBrand = (offset: number, brand: string) => {
+    bytes.set(Array.from(brand, (ch) => ch.charCodeAt(0)), offset);
+  };
+  writeBrand(8, brands[0]);
+  view.setUint32(12, 0);
+  brands.slice(1).forEach((brand, index) => writeBrand(16 + index * 4, brand));
+  return bytes;
+}
 
 describe('Slides / PPTX Importer and Exporter', () => {
   it('reads pre-generated sample.pptx fixture', async () => {
@@ -57,6 +76,71 @@ describe('Slides / PPTX Importer and Exporter', () => {
 
     expect(presentation.slides.length).toBe(1);
     expect(presentation.slides[0].elements[0].text).toContain('Modern Office App');
+  });
+
+  it('moves and resizes a box without leaving the slide', () => {
+    const start = { x: 10, y: 10, width: 30, height: 20 };
+    expect(moveBox(start, 5, -3, 8, 8)).toEqual({ x: 15, y: 7, width: 30, height: 20 });
+    expect(moveBox(start, -40, 0, 8, 8).x).toBe(0);
+    const resized = resizeBox(start, 'se', 10, 5, 8, 8);
+    expect(resized).toEqual({ x: 10, y: 10, width: 40, height: 25 });
+    const shrunk = resizeBox(start, 'w', 100, 0, 8, 8);
+    expect(shrunk.width).toBe(8);
+    expect(shrunk.x).toBeGreaterThanOrEqual(0);
+    expect(clampBox({ x: -5, y: 90, width: 2, height: 40 }, 8, 8).width).toBe(8);
+  });
+
+  it('sniffs mp4 and H.264 separately from other brands', () => {
+    expect(sniffMp4(mp4Bytes('avc1'), 'clip.mp4')).toEqual({ isMp4: true, h264: true });
+    expect(sniffMp4(mp4Bytes('hvc1'), 'clip.mp4')).toEqual({ isMp4: true, h264: false });
+    expect(sniffMp4(mp4Bytes('avc1'), 'clip.mov').isMp4).toBe(false);
+    expect(toPptxVideoData('data:video/mp4;base64,AAAA')).toBe('video/mp4;base64,AAAA');
+  });
+
+  it('round-trips an mp4 and keeps only the first mp4 on a slide', async () => {
+    const h264 = bytesToBase64(mp4Bytes('avc1'));
+    const hevc = bytesToBase64(mp4Bytes('hvc1'));
+    const testPres: PresentationModel = {
+      title: 'Video Deck',
+      slides: [
+        {
+          id: 'slide_1',
+          background: '#ffffff',
+          elements: [
+            {
+              id: 'vid_1',
+              type: 'video',
+              x: 12,
+              y: 18,
+              width: 40,
+              height: 30,
+              src: `data:video/mp4;base64,${h264}`,
+            },
+          ],
+        },
+      ],
+    };
+
+    const blob = await exportPptx(testPres);
+    const { presentation, report } = await importPptx(await blob.arrayBuffer(), 'video.pptx');
+    const video = presentation.slides[0].elements.find((el) => el.type === 'video');
+    expect(video).toBeDefined();
+    expect(video?.x).toBeGreaterThan(0);
+    expect(video?.src).toContain(h264);
+    expect(report.warnings.some((warning) => warning.reason === VIDEO_MSG.otherPrograms)).toBe(false);
+
+    const pptx = new PptxGenJS();
+    const slide = pptx.addSlide();
+    slide.addMedia({ type: 'video', data: `video/mp4;base64,${h264}`, x: 0.5, y: 0.5, w: 4, h: 2 });
+    slide.addMedia({ type: 'video', data: `video/mp4;base64,${hevc}`, x: 5, y: 0.5, w: 4, h: 2 });
+    slide.addMedia({ type: 'video', data: `video/quicktime;base64,${h264}`, x: 0.5, y: 3, w: 3, h: 2 });
+    const packed = (await pptx.write({ outputType: 'arraybuffer' })) as ArrayBuffer;
+    const imported = await importPptx(packed, 'mixed.pptx');
+    const videos = imported.presentation.slides[0].elements.filter((el) => el.type === 'video');
+    expect(videos).toHaveLength(1);
+    expect(videos[0].src).toContain(h264);
+    expect(imported.report.warnings.some((warning) => warning.reason === VIDEO_MSG.extraOnSlide)).toBe(true);
+    expect(imported.report.warnings.some((warning) => warning.reason === VIDEO_MSG.skippedNonMp4)).toBe(true);
   });
 });
 

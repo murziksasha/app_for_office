@@ -48,7 +48,7 @@ IPC: `folio_pick_open`, `folio_pick_save`, `folio_read`, `folio_write`, `folio_a
 | txt, md, html | yes | yes | text; markdown-it + DOMPurify in, turndown out |
 | xlsx, csv, tsv | yes | yes | ExcelJS ↔ FortuneSheet; RFC 4180 for csv/tsv |
 | pptx | yes | yes | slide XML in; pptxgenjs out |
-| pdf | yes | no | pdfjs-dist |
+| pdf | yes | no | pdfjs-dist (viewer in, original bytes out; Edit as Document extracts to new docx; Save as PDF writes from editors) |
 
 To add a format: sniff it in `detect.ts`, import into the in-app model, export from that model, add a fixture under `fixtures/`, and add a Vitest file under `tests/`. Open and save go through `src/files/open.ts` and `save.ts` only.
 
@@ -58,4 +58,4 @@ To add a format: sniff it in `detect.ts`, import into the in-app model, export f
 
 ## Out of scope
 
-Collaboration and cloud sync. Pivot tables and live charts. Slide animation and sound. PDF editing. Office 97–2003 binary parsers. Macro runtimes.
+Collaboration and cloud sync. Pivot tables and live charts. Slide animation and transition sound. One embedded mp4 per slide, with sound, is supported. Native PDF vector editing, annotations, and OCR (Edit as Document and Save as PDF are supported). Office 97–2003 binary parsers. Macro runtimes.

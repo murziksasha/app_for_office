@@ -10,6 +10,10 @@ interface ImportReportDialogProps {
 export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, onClose }) => {
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Import Report"
+      data-testid="import-report-dialog"
       style={{
         position: 'fixed',
         inset: 0,

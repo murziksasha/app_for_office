@@ -45,6 +45,8 @@ interface RibbonProps {
   onCloseFile: () => void;
   onNew: (kind: DocumentKind) => void;
   onOpen: () => void;
+  onSavePdf?: () => void;
+  onEditAsDocument?: () => void;
   onOpenReport?: () => void;
   recentFiles?: RecentItem[];
   drafts?: DraftItem[];
@@ -63,6 +65,8 @@ export const Ribbon: React.FC<RibbonProps> = ({
   onSave,
   onSaveAs,
   onPrint,
+  onSavePdf,
+  onEditAsDocument,
   onCloseFile,
   onNew,
   onOpen,
@@ -410,6 +414,35 @@ export const Ribbon: React.FC<RibbonProps> = ({
             >
               <Printer size={14} /> Print
             </button>
+            {editorState.kind !== 'pdf' ? (
+              <button
+                onClick={onSavePdf}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--folio-bg)',
+                }}
+              >
+                <FileText size={14} /> Save as PDF
+              </button>
+            ) : (
+              <button
+                onClick={onEditAsDocument}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--folio-bg)',
+                }}
+              >
+                <FileText size={14} /> Edit as Document
+              </button>
+            )}
           </div>
           {(recentFiles.length > 0 || drafts.length > 0) && (
             <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', fontSize: '12px' }}>

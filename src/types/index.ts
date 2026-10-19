@@ -54,7 +54,7 @@ export interface DraftItem {
 // Slide model
 export interface SlideElement {
   id: string;
-  type: 'text' | 'image' | 'rect';
+  type: 'text' | 'image' | 'rect' | 'video';
   x: number; // percentage or pt (0-100% or px)
   y: number;
   width: number;

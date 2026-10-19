@@ -98,11 +98,30 @@ export function findTabByPath(tabs: TabRef[], path?: string | null): TabRef | un
 
 export function nextFileName(
   kind: 'document' | 'spreadsheet' | 'presentation',
-  openNames: string[]
+  openNames: string[],
+  baseTitle?: string
 ): string {
+  const used = new Set(openNames.map((name) => name.toLowerCase()));
+
+  if (baseTitle) {
+    const cleanBase = baseTitle.replace(/\.[^/.]+$/, '');
+    if (!used.has(cleanBase.toLowerCase()) && !used.has(`${cleanBase}.docx`.toLowerCase())) {
+      return cleanBase;
+    }
+    let n = 2;
+    while (
+      used.has(`${cleanBase} ${n}`.toLowerCase()) ||
+      used.has(`${cleanBase}${n}`.toLowerCase()) ||
+      used.has(`${cleanBase} ${n}.docx`.toLowerCase()) ||
+      used.has(`${cleanBase}${n}.docx`.toLowerCase())
+    ) {
+      n += 1;
+    }
+    return `${cleanBase} ${n}`;
+  }
+
   const base = kind === 'document' ? 'Document' : kind === 'spreadsheet' ? 'Workbook' : 'Presentation';
   const ext = kind === 'document' ? 'docx' : kind === 'spreadsheet' ? 'xlsx' : 'pptx';
-  const used = new Set(openNames.map((name) => name.toLowerCase()));
   let n = 1;
   while (used.has(`${base}${n}.${ext}`.toLowerCase())) n += 1;
   return `${base}${n}.${ext}`;
