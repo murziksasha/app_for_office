@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import { ImportReport, ImportWarning } from '../../types';
 import { sanitizeHtml } from '../sanitize';
+import { pageSizeLabel, readOdtPageSetup, type PageSetup } from '../pageSetup';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -24,11 +25,30 @@ interface StyleDef {
 export async function importOdt(
   buffer: ArrayBuffer,
   fileName: string
-): Promise<{ html: string; report: ImportReport }> {
+): Promise<{ html: string; report: ImportReport; pageSetup?: PageSetup | null }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
 
   const zip = await JSZip.loadAsync(buffer);
+  let pageSetup: PageSetup | null = null;
+  const stylesFile = zip.file('styles.xml');
+  if (stylesFile) {
+    try {
+      const stylesText = await stylesFile.async('text');
+      const section = readOdtPageSetup(xmlParser.parse(stylesText));
+      if (section) {
+        pageSetup = section.setup;
+        if (section.adjusted) {
+          warnings.push({
+            item: 'Page size',
+            reason: `Page size was adjusted to ${pageSizeLabel(section.setup.size)}.`,
+          });
+        }
+      }
+    } catch {
+      pageSetup = null;
+    }
+  }
   const contentFile = zip.file('content.xml');
   if (!contentFile) {
     throw new Error('Invalid ODT package: content.xml not found');
@@ -36,6 +56,18 @@ export async function importOdt(
 
   const xmlText = await contentFile.async('text');
   const parsed = xmlParser.parse(xmlText);
+  if (!pageSetup) {
+    const fromContent = readOdtPageSetup(parsed);
+    if (fromContent) {
+      pageSetup = fromContent.setup;
+      if (fromContent.adjusted) {
+        warnings.push({
+          item: 'Page size',
+          reason: `Page size was adjusted to ${pageSizeLabel(fromContent.setup.size)}.`,
+        });
+      }
+    }
+  }
   const doc = parsed?.['document-content'] || parsed?.document;
 
   if (!doc) {
@@ -72,6 +104,7 @@ export async function importOdt(
   if (!bodyText) {
     return {
       html: '<p></p>',
+      pageSetup,
       report: { fileName, format: 'odt', importedAt: new Date().toISOString(), warnings, skippedFeatures },
     };
   }
@@ -199,6 +232,7 @@ export async function importOdt(
 
   return {
     html: sanitized,
+    pageSetup,
     report: {
       fileName,
       format: 'odt',

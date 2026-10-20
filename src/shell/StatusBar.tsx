@@ -2,11 +2,11 @@ import React from 'react';
 import { EditorState } from '../types';
 import { ZoomIn, ZoomOut, Check, HardDrive, AlertCircle } from 'lucide-react';
 import { t } from '../i18n/instance';
+import { pageSetupFromDoc } from '../document/pageSetup';
 
 interface StatusBarProps {
   editorState: EditorState;
   documentEditor?: any;
-  pageSize: 'letter' | 'a4';
   zoom: number;
   onZoomChange: (newZoom: number) => void;
 }
@@ -14,7 +14,6 @@ interface StatusBarProps {
 export const StatusBar: React.FC<StatusBarProps> = ({
   editorState,
   documentEditor,
-  pageSize,
   zoom,
   onZoomChange,
 }) => {
@@ -50,7 +49,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <span>
               {t(wordCount === 1 ? 'status.wordOne' : 'status.wordMany', { count: wordCount, chars: charCount })}
             </span>
-            <span>{t('status.page', { size: pageSize.toUpperCase() })}</span>
+            <span>{t('status.page', { size: pageSetupFromDoc(editorState.documentContent).size === 'a4' ? 'A4' : 'LETTER' })}</span>
           </>
         )}
 

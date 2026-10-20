@@ -264,4 +264,39 @@ test.describe('Folio Smoke Test Suite', () => {
     await expect(page.getByRole('button', { name: 'outside.md', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'sample.md', exact: true })).toBeVisible();
   });
+
+  test('opens a drop on the Home recent list', async ({ page }) => {
+    await page.goto('/');
+    const fixture = fs.readFileSync(path.resolve(import.meta.dirname, '../fixtures/sample.md'), 'utf8');
+    const opened = await page.evaluate(async (body) => {
+      const file = new File([body], 'recent-drop.md', { type: 'text/markdown' });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      const recent = document.querySelector('[data-folio-recent]');
+      if (!recent) return false;
+      recent.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      recent.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      return true;
+    }, fixture);
+    expect(opened).toBe(true);
+    await expect(page.getByRole('button', { name: 'recent-drop.md', exact: true })).toBeVisible({ timeout: 10000 });
+  });
+
+  test('moves the left page margin from the ruler and undoes it', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('heading', { name: 'New Document' }).click();
+    const prose = page.locator('.folio-prose .ProseMirror');
+    await expect(prose).toBeVisible();
+    const before = await prose.evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft));
+    const slider = page.getByRole('slider', { name: 'Left margin' });
+    await slider.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => prose.evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft))).toBeGreaterThan(before);
+    await page.getByRole('button', { name: 'Layout', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Left margin' })).toHaveValue('1.04');
+    await prose.click();
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => prose.evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft))).toBeLessThan(before + 1);
+    await expect(page.getByRole('textbox', { name: 'Left margin' })).toHaveValue('1.00');
+  });
 });

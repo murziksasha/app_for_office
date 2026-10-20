@@ -6,9 +6,9 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 1. Word Documents (`.docx`)
 
-- **Read Pipeline**: Decompressed via `JSZip`. `word/document.xml` is parsed with `fast-xml-parser` extracting paragraphs, runs, headings, tables, and images into HTML.
+- **Read Pipeline**: Decompressed via `JSZip`. `word/document.xml` is parsed with `fast-xml-parser` extracting paragraphs, runs, headings, tables, and images into HTML. `sectPr` page size and margins are read. Portrait Letter and A4 are kept. Any other size, including landscape, snaps to the nearer portrait size and is named on the import report. Missing section properties use the default page setup.
 - **Mammoth Fallback**: If the custom XML parser fails or encounters corrupt markup, the file is automatically processed using `mammoth.convertToHtml` as a resilient fallback. The import report records `fallbackUsed: true`.
-- **Write Pipeline**: Exported using the `docx` library, translating HTML nodes into native Open XML paragraphs, tables, images, and text runs.
+- **Write Pipeline**: Exported using the `docx` library, translating HTML nodes into native Open XML paragraphs, tables, images, and text runs. The section page size and margins are written from the document `pageSetup`.
 - **Skipped Features**: VBA macros, complex shape drawing art, SmartArt diagrams, tracked revision history.
 - **Fixture**: `fixtures/sample.docx`.
 - **Failure Behavior**: Never present a blank document with no report. Any unparseable file triggers an `ImportReport` with diagnostic notices.
@@ -17,8 +17,8 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 2. OpenDocument Text (`.odt`)
 
-- **Read Pipeline**: Decompressed via `JSZip`. `content.xml` is parsed into semantic HTML.
-- **Write Pipeline**: Repackaged into an ODF container ZIP with valid `mimetype`, `META-INF/manifest.xml`, and `content.xml`.
+- **Read Pipeline**: Decompressed via `JSZip`. `content.xml` is parsed into semantic HTML. Page width, height, and margins are read from `styles.xml` when present, otherwise from `content.xml`.
+- **Write Pipeline**: Repackaged into an ODF container ZIP with valid `mimetype`, `META-INF/manifest.xml`, and `content.xml`. `styles.xml` stores the document page size and margins.
 - **Skipped Features**: Complex frame styles, embedded OLE objects.
 - **Fixture**: `fixtures/sample.odt`.
 
@@ -100,7 +100,7 @@ This document details the import, export, fallback behavior, and fixture require
 
 - **Trigger & Scope**: Available via the File ribbon on Document, Spreadsheet, and Presentation editors (including Documents created via Edit as Document). Spreadsheets and presentations reuse the print scope prompt (Active sheet vs All sheets, All slides vs This slide) when there are multiple units.
 - **Write Pipeline**: Built entirely in memory using `pdf-lib` with subset embedded Noto Sans fonts (Regular, Bold, Italic, Bold Italic covering Latin, Greek, and Cyrillic). The caller writes the file to the chosen path via platform I/O only after complete byte generation succeeds. The active tab's path, format, name, and clean/dirty state remain unchanged.
-- **Document Export**: US Letter portrait, 54 pt margins, flowing text. Headings, paragraphs, bullet/numbered lists, tables (shrunk to content width), images (JPEG/PNG), bold, italic, underline, and page breaks are rendered. Link URLs, strikethrough, text color, highlight, font family, font size, alignment, and indentation are omitted.
+- **Document Export**: The document `pageSetup` chooses Letter or A4 portrait and the four margins, converted to points. Flowing text. Headings, paragraphs, bullet/numbered lists, tables (shrunk to content width), images (JPEG/PNG), bold, italic, underline, and page breaks are rendered. Link URLs, strikethrough, text color, highlight, font family, font size, alignment, and indentation are omitted.
 - **Spreadsheet Export**: US Letter portrait, used cell range, displayed text (`m` or `v`), one line per cell, uniform shrink-to-fit width, rows flowing to subsequent pages. Sheet bold and italic are preserved; formula strings and colors are omitted.
 - **Presentation Export**: US Letter landscape (one slide per page, scaled uniformly). Slide text runs, images, and rectangles are placed from percentages with background, fill, and font colors preserved. Videos are omitted and recorded.
 - **Omissions & Fallback**: Characters not covered by the font are dropped and recorded as omissions. Non-JPEG/PNG images that cannot be embedded are omitted and recorded. Folio displays a notice summarizing any omissions after writing. Export or write failures leave no file on disk.

@@ -89,7 +89,6 @@ export const App: React.FC = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [homeOpen, setHomeOpen] = useState(false);
   const [documentEditorInstance, setDocumentEditorInstance] = useState<any>(null);
-  const [pageSize, setPageSize] = useState<'letter' | 'a4'>('letter');
   const [zoom, setZoom] = useState<number>(100);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [showImportReport, setShowImportReport] = useState(false);
@@ -1155,8 +1154,6 @@ export const App: React.FC = () => {
           <Ribbon
             editorState={activeTab}
             documentEditor={documentEditorInstance}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
             zoom={zoom}
             onZoomChange={setZoom}
             onSave={() => void actionsRef.current.saveActive()}
@@ -1183,7 +1180,6 @@ export const App: React.FC = () => {
               <DocumentEditor
                 key={`${activeTab.id}-${activeTab.historyEpoch || 0}`}
                 content={activeTab.documentContent || { type: 'doc', content: [{ type: 'paragraph' }] }}
-                pageSize={pageSize}
                 zoom={zoom}
                 onChange={(doc) => updateActive({ documentContent: doc })}
                 onEditorReady={setDocumentEditorInstance}
@@ -1223,7 +1219,7 @@ export const App: React.FC = () => {
               />
             )}
           </main>
-          <StatusBar editorState={activeTab} documentEditor={documentEditorInstance} pageSize={pageSize} zoom={zoom} onZoomChange={setZoom} />
+          <StatusBar editorState={activeTab} documentEditor={documentEditorInstance} zoom={zoom} onZoomChange={setZoom} />
         </>
       )}
 

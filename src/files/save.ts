@@ -1,6 +1,7 @@
 import { EditorState, SupportedFormat } from '../types';
 import { saveToFileSystem } from './fileSystem';
 import { documentToHtml } from '../document/model';
+import { pageSetupFromDoc } from '../document/pageSetup';
 import { exportDocx } from '../document/docx/exporter';
 import { exportOdt } from '../document/odt/exporter';
 import { exportRtf } from '../document/rtf/exporter';
@@ -34,10 +35,11 @@ export async function saveEditorContent(
       case 'document': {
         // DocumentToHtml runs only inside save and export boundaries
         const html = state.documentContent ? documentToHtml(state.documentContent) : '<p></p>';
+        const pageSetup = pageSetupFromDoc(state.documentContent);
         if (format === 'docx' || format === 'tmdx') {
-          blob = await exportDocx(html);
+          blob = await exportDocx(html, pageSetup);
         } else if (format === 'odt') {
-          blob = await exportOdt(html);
+          blob = await exportOdt(html, pageSetup);
         } else if (format === 'rtf') {
           blob = await exportRtf(html);
         } else if (format === 'md') {

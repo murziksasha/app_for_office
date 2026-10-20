@@ -114,6 +114,16 @@ input, select, textarea {
     margin: 0 !important;
     width: 100% !important;
     padding: 0 !important;
+    transform: none !important;
+  }
+  .folio-prose .ProseMirror {
+    padding: 0 !important;
+    min-height: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .folio-page-gap {
+    display: none !important;
   }
   .folio-page-break {
     page-break-after: always !important;

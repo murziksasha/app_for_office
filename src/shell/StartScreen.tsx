@@ -4,7 +4,7 @@ import { getRecentFiles, clearRecentFiles } from '../files/recent';
 import { getAllDrafts } from '../files/drafts';
 import { t } from '../i18n/instance';
 import { LanguageButton } from './LanguageButton';
-import { DROP_TARGET_ATTR } from './dropTarget';
+import { DROP_TARGET_ATTR, HOME_DRAG_EVENT } from './dropTarget';
 import {
   FileText,
   Table as TableIcon,
@@ -44,6 +44,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({
     getAllDrafts().then(setDrafts);
   }, [listsRevision]);
 
+  useEffect(() => {
+    const onHover = (event: Event) => {
+      setIsDragging(Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active));
+    };
+    window.addEventListener(HOME_DRAG_EVENT, onHover);
+    return () => window.removeEventListener(HOME_DRAG_EVENT, onHover);
+  }, []);
+
   const handleClearHistory = async () => {
     await clearRecentFiles();
     setRecentFiles([]);
@@ -51,6 +59,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     setIsDragging(true);
   };
 
@@ -95,6 +104,10 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
   return (
     <div
+      {...{ [DROP_TARGET_ATTR]: '' }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         flex: 1,
         minHeight: 0,
@@ -375,7 +388,6 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
         {/* Drag and Drop Zone */}
         <div
-          {...{ [DROP_TARGET_ATTR]: '' }}
           style={{
             border: isDragging ? '2px dashed var(--folio-teal)' : '2px dashed var(--folio-border)',
             borderRadius: 'var(--folio-radius-lg)',
@@ -390,9 +402,6 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             cursor: 'pointer',
           }}
           onClick={onOpen}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
         >
           <Upload size={28} color="var(--folio-teal)" />
           <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--folio-ink)' }}>
@@ -404,7 +413,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         </div>
 
         {/* Recent Files Section */}
-        <div>
+        <div data-folio-recent="">
           <div
             style={{
               display: 'flex',

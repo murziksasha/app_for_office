@@ -3,6 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 import mammoth from 'mammoth';
 import { ImportReport, ImportWarning } from '../../types';
 import { sanitizeHtml } from '../sanitize';
+import { pageSizeLabel, readDocxSection, type PageSetup } from '../pageSetup';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -142,7 +143,7 @@ async function extractImageDataUrl(zip: JSZip, target: string): Promise<string |
 export async function importDocx(
   buffer: ArrayBuffer,
   fileName: string
-): Promise<{ html: string; report: ImportReport }> {
+): Promise<{ html: string; report: ImportReport; pageSetup?: PageSetup | null }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
 
@@ -400,9 +401,18 @@ export async function importDocx(
     }
     flushList();
 
+    const section = readDocxSection(body);
+    if (section?.adjusted) {
+      warnings.push({
+        item: 'Page size',
+        reason: `Page size was adjusted to ${pageSizeLabel(section.setup.size)}.`,
+      });
+    }
+
     const sanitized = sanitizeHtml(resultHtml || '<p></p>');
     return {
       html: sanitized,
+      pageSetup: section?.setup ?? null,
       report: {
         fileName,
         format: 'docx',

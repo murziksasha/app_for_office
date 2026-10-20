@@ -2,6 +2,7 @@ import { PDFDocument, PDFPage, rgb, RGB, PDFImage } from 'pdf-lib';
 import { EditorState } from '../types';
 import { embedNotoFonts, EmbeddedFonts } from './fonts';
 import { getActiveSheet } from '../files/session';
+import { mmToPt, PAGE_MM, pageSetupFromDoc } from '../document/pageSetup';
 
 export interface ExportPdfOptions {
   scope?: 'current' | 'all';
@@ -165,18 +166,23 @@ async function exportDocument(
   fonts: EmbeddedFonts,
   recordOmission: (msg: string) => void
 ) {
-  const PAGE_WIDTH = 612; // US Letter portrait
-  const PAGE_HEIGHT = 792;
-  const MARGIN = 54;
-  const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2; // 504 pt
+  const setup = pageSetupFromDoc(state.documentContent);
+  const pageBox = PAGE_MM[setup.size];
+  const PAGE_WIDTH = mmToPt(pageBox.width);
+  const PAGE_HEIGHT = mmToPt(pageBox.height);
+  const marginLeft = mmToPt(setup.marginLeft);
+  const marginRight = mmToPt(setup.marginRight);
+  const marginTop = mmToPt(setup.marginTop);
+  const marginBottom = mmToPt(setup.marginBottom);
+  const CONTENT_WIDTH = PAGE_WIDTH - marginLeft - marginRight;
 
   let currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let cursorY = PAGE_HEIGHT - MARGIN;
+  let cursorY = PAGE_HEIGHT - marginTop;
 
   const ensureSpace = (neededHeight: number): PDFPage => {
-    if (cursorY - neededHeight < MARGIN) {
+    if (cursorY - neededHeight < marginBottom) {
       currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      cursorY = PAGE_HEIGHT - MARGIN;
+      cursorY = PAGE_HEIGHT - marginTop;
     }
     return currentPage;
   };
@@ -186,7 +192,7 @@ async function exportDocument(
   for (const node of nodes) {
     if (node.type === 'pageBreak') {
       currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      cursorY = PAGE_HEIGHT - MARGIN;
+      cursorY = PAGE_HEIGHT - marginTop;
       continue;
     }
 
@@ -201,7 +207,7 @@ async function exportDocument(
         currentPage,
         ensureSpace,
         tokens,
-        MARGIN,
+        marginLeft,
         cursorY,
         CONTENT_WIDTH,
         fontSize,
@@ -227,7 +233,7 @@ async function exportDocument(
         currentPage,
         ensureSpace,
         tokens,
-        MARGIN,
+        marginLeft,
         cursorY,
         CONTENT_WIDTH,
         fontSize,
@@ -261,7 +267,7 @@ async function exportDocument(
           currentPage,
           ensureSpace,
           itemTokens,
-          MARGIN + indent,
+          marginLeft + indent,
           cursorY,
           CONTENT_WIDTH - indent,
           fontSize,
@@ -293,7 +299,7 @@ async function exportDocument(
 
       ensureSpace(drawHeight + 10);
       currentPage.drawImage(img, {
-        x: MARGIN,
+        x: marginLeft,
         y: cursorY - drawHeight,
         width: drawWidth,
         height: drawHeight,
@@ -334,7 +340,7 @@ async function exportDocument(
         ensureSpace(rowHeight);
 
         for (let c = 0; c < colCount; c++) {
-          const cellX = MARGIN + c * colWidth;
+          const cellX = marginLeft + c * colWidth;
           const cellY = cursorY - rowHeight;
 
           // Border

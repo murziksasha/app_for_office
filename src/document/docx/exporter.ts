@@ -12,6 +12,7 @@ import {
   Packer,
   ExternalHyperlink,
 } from 'docx';
+import { clampPageSetup, mmToTwip, PAGE_MM, readPageSetup, type PageSetup } from '../pageSetup';
 
 function getAlignment(styleAttr: string | null): (typeof AlignmentType)[keyof typeof AlignmentType] {
   if (!styleAttr) return AlignmentType.LEFT;
@@ -119,7 +120,7 @@ function extractRuns(node: Node, ctx: RunStyleContext = {}): Array<TextRun | Ext
   return runs;
 }
 
-export async function exportDocx(htmlContent: string): Promise<Blob> {
+export async function exportDocx(htmlContent: string, pageSetup?: PageSetup | null): Promise<Blob> {
   const parser = new (globalThis.DOMParser || DOMParser)();
   const parsedDoc = parser.parseFromString(htmlContent, 'text/html');
   const docElement = parsedDoc.body;
@@ -229,10 +230,25 @@ export async function exportDocx(htmlContent: string): Promise<Blob> {
     paragraphsOrTables.push(new Paragraph({ text: '' }));
   }
 
+  const setup = clampPageSetup(pageSetup ?? readPageSetup(null));
+  const page = PAGE_MM[setup.size];
   const doc = new Document({
     sections: [
       {
-        properties: {},
+        properties: {
+          page: {
+            size: {
+              width: mmToTwip(page.width),
+              height: mmToTwip(page.height),
+            },
+            margin: {
+              top: mmToTwip(setup.marginTop),
+              right: mmToTwip(setup.marginRight),
+              bottom: mmToTwip(setup.marginBottom),
+              left: mmToTwip(setup.marginLeft),
+            },
+          },
+        },
         children: paragraphsOrTables,
       },
     ],

@@ -4,7 +4,7 @@
 
 ### The Rule
 The stored representation of text documents is Tiptap JSON (`JSONContent`), defined in `src/document/model.ts`:
-- **In-App Model**: A tree of structured ProseMirror nodes and marks (headings, paragraphs, lists, tables, bold, italic, underline, font size, indent, page breaks).
+- **In-App Model**: A tree of structured ProseMirror nodes and marks (headings, paragraphs, lists, tables, bold, italic, underline, font size, indent, page breaks). The doc node stores `pageSetup`: portrait `letter` or `a4`, and top, right, bottom, and left margins in millimeters. The default is Letter with 25.4 mm on every side. A margin change is one undo step and is part of the document hash.
 - **Import Boundary**: All incoming content (DOCX, ODT, RTF, Markdown, HTML, Plain Text) must be converted into sanitized HTML and passed through `htmlToDocument(html)` exactly once.
 - **Export Boundary**: Conversion to HTML via `documentToHtml(doc)` occurs only at save time within export adapters.
 - **Component Interface**: `DocumentEditor` receives `content: JSONContent` and emits `onChange: (doc: JSONContent) => void`.

@@ -24,7 +24,7 @@ Local-first office app. Windows desktop is Tauri 2 (`src-tauri`). The browser bu
 
 ## Desktop (already built)
 
-Window is `1280×800`, minimum `960×640`. The installer is NSIS. WebView2 uses `downloadBootstrapper`. App id is `app.folio.local`. A second launch focuses `main` and emits `folio://open-file` with the path. Startup CLI file args are allow-listed. A window drop is allow-listed in Rust. `DesktopPlatformAdapter` reads and opens it only when the drop lands on the Home box. Save writes the existing path with `folio_write` and calls `folio_pick_save` only when there is no path. The title is `Folio - {name}`, with ` *` when dirty. Closing with unsaved edits asks, then destroys the window.
+Window is `1280×800`, minimum `960×640`. The installer is NSIS. WebView2 uses `downloadBootstrapper`. App id is `app.folio.local`. A second launch focuses `main` and emits `folio://open-file` with the path. Startup CLI file args are allow-listed. A window drop is allow-listed in Rust. `DesktopPlatformAdapter` reads and opens it only when the drop lands on the visible Home surface. The cursor may be reported in logical or physical pixels; either reading that hits Home counts. Save writes the existing path with `folio_write` and calls `folio_pick_save` only when there is no path. The title is `Folio - {name}`, with ` *` when dirty. Closing with unsaved edits asks, then destroys the window.
 
 Shell associations, and no others: `docx odt rtf txt md html htm xlsx csv tsv pptx pdf`.
 

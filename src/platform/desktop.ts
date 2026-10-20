@@ -1,6 +1,6 @@
 import { FormatFilter, PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
 import { FORMAT_MIME_TYPES } from './browser';
-import { dropHitsTarget, measureHomeDropTarget } from '../shell/dropTarget';
+import { dropHitsTarget, emitHomeDrag, measureHomeDropTarget } from '../shell/dropTarget';
 
 interface RustFilePayload {
   path: string;
@@ -196,10 +196,19 @@ export class DesktopPlatformAdapter implements PlatformAdapter {
         const { getCurrentWebview } = await import('@tauri-apps/api/webview');
         const webview = getCurrentWebview();
         unlisten = await webview.onDragDropEvent(async (event) => {
-          if (event.payload.type !== 'drop' || !event.payload.paths?.length) return;
+          if (event.payload.type === 'leave') {
+            emitHomeDrag(false);
+            return;
+          }
           const box = measureHomeDropTarget();
           const ratio = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
-          if (!dropHitsTarget(event.payload.position, box, ratio)) return;
+          const hit = dropHitsTarget(event.payload.position, box, ratio);
+          if (event.payload.type === 'enter' || event.payload.type === 'over') {
+            emitHomeDrag(hit);
+            return;
+          }
+          emitHomeDrag(false);
+          if (event.payload.type !== 'drop' || !event.payload.paths?.length || !hit) return;
           const loaded: PlatformFileResult[] = [];
           for (const targetPath of event.payload.paths) {
             try {

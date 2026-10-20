@@ -12,6 +12,8 @@ Every file adapter, parser, and platform boundary must have automated test cover
 - `tests/spreadsheet.test.ts`: XLSX workbook parsing, cell formula preservation, CSV/TSV conversions.
 - `tests/slides.test.ts`: PowerPoint presentation element extraction and geometric layout.
 - `tests/open_save.test.ts`: Central `loadFileToEditor` pipeline, `DocumentModel` generation, script tag stripping, and platform selection verification.
+- `tests/drop_target.test.ts`: Home drop hit testing in logical and physical pixels.
+- `tests/page_setup.test.ts`: Margin clamp, unit conversion, docx and odt margin round-trip, and undo.
 
 ### The Reason
 Prevents regressions across document parsers when modifying schemas or adding new typographic features.

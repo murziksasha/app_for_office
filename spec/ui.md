@@ -55,6 +55,8 @@ The Home header and the editor title bar, before Save, share a language control.
 
 The ribbon does not include dictation, designer assistance, add-ins, sharing, ink drawing, transitions, animations, a presenter view, mailings, or comments.
 
+On a document, the Layout tab sets the page size and the four margins as numbers. The same margins are sliders on the page: a horizontal ruler above the sheet for the left and right margins, and a vertical ruler beside the first page for the top and bottom margins. English shows inches. Ukrainian shows centimeters. The stored unit is millimeters. Print uses those margins as the page margin. RTF, plain text, Markdown, and HTML keep the setup for the session and for drafts; their file bytes do not store a page box.
+
 ### The Reason
 People expect writing tools in one place, grouped the way the rest of an office app groups them. A second toolbar inside the sheet or above the slide duplicates that and hides commands that already exist.
 

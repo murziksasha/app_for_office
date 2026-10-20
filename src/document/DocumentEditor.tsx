@@ -2,13 +2,14 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import { documentExtensions, defaultDocumentModel } from './model';
-import { Search, ChevronDown, ChevronUp, X, Replace } from 'lucide-react';
-import { t } from '../i18n/instance';
+import { MarginRuler } from './MarginRuler';
+import { formatMargin, mergePageSetup, mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from './pageSetup';
+import { X } from 'lucide-react';
+import { i18n, t } from '../i18n/instance';
 
 interface DocumentEditorProps {
   content: JSONContent;
   onChange: (doc: JSONContent) => void;
-  pageSize?: 'letter' | 'a4';
   zoom?: number;
   onEditorReady?: (editor: any) => void;
   onSaveShortcut?: () => void;
@@ -18,7 +19,6 @@ interface DocumentEditorProps {
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   content,
   onChange,
-  pageSize = 'letter',
   zoom = 100,
   onEditorReady,
   onSaveShortcut,
@@ -28,6 +28,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [findText, setFindText] = useState('');
   const [replaceText, setReplaceText] = useState('');
   const [matchCount, setMatchCount] = useState(0);
+  const [preview, setPreview] = useState<PageSetup | null>(null);
 
   const editor = useEditor({
     extensions: documentExtensions,
@@ -105,9 +106,21 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     handleFind();
   };
 
-  // Dimensions
-  const pageWidth = pageSize === 'a4' ? '794px' : '816px';
-  const minHeight = pageSize === 'a4' ? '1123px' : '1056px';
+  const committed = pageSetupFromDoc(content);
+  const display = preview ?? committed;
+  const page = PAGE_MM[display.size];
+  const pageW = mmToPx(page.width);
+  const pageH = mmToPx(page.height);
+  const scale = zoom / 100;
+  const visualW = pageW * scale;
+  const visualH = pageH * scale;
+  const lang = i18n.language;
+  const marginText = (mm: number) => `${formatMargin(mm, lang)} ${lang.toLowerCase().startsWith('uk') ? t('ribbon.unitCm') : t('ribbon.unitIn')}`;
+
+  const commitSetup = (partial: Partial<PageSetup>) => {
+    editor?.commands.setPageSetup(partial);
+    setPreview(null);
+  };
 
   return (
     <div
@@ -213,34 +226,94 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       )}
 
-      {/* Paper Sheet */}
-      <div
-        className="folio-paper-sheet"
-        style={{
-          width: pageWidth,
-          minHeight,
-          background: '#ffffff',
-          boxShadow: 'var(--folio-shadow-paper)',
-          borderRadius: '2px',
-          border: '1px solid var(--folio-border-light)',
-          padding: '64px 72px',
-          transform: `scale(${zoom / 100})`,
-          transformOrigin: 'top center',
-          transition: 'transform 0.1s ease',
-          marginBottom: '60px',
-        }}
-      >
-        <EditorContent editor={editor} className="folio-prose" />
+      <style>{`@page { size: ${display.size === 'a4' ? 'A4' : 'letter'}; margin: ${display.marginTop}mm ${display.marginRight}mm ${display.marginBottom}mm ${display.marginLeft}mm; }`}</style>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '0 auto 48px' }}>
+        <div style={{ paddingTop: 30 }}>
+          <MarginRuler
+            axis="vertical"
+            length={visualH}
+            pageMm={page.height}
+            startMm={display.marginTop}
+            endMm={display.marginBottom}
+            startLabel={t('ribbon.marginTop')}
+            endLabel={t('ribbon.marginBottom')}
+            startText={marginText(display.marginTop)}
+            endText={marginText(display.marginBottom)}
+            onPreview={(partial) => setPreview(mergePageSetup(committed, partial))}
+            onCommit={commitSetup}
+          />
+        </div>
+        <div style={{ width: visualW }}>
+          <MarginRuler
+            axis="horizontal"
+            length={visualW}
+            pageMm={page.width}
+            startMm={display.marginLeft}
+            endMm={display.marginRight}
+            startLabel={t('ribbon.marginLeft')}
+            endLabel={t('ribbon.marginRight')}
+            startText={marginText(display.marginLeft)}
+            endText={marginText(display.marginRight)}
+            onPreview={(partial) => setPreview(mergePageSetup(committed, partial))}
+            onCommit={commitSetup}
+          />
+          <div style={{ height: 8 }} />
+          <div style={{ width: visualW, overflow: 'visible' }}>
+            <div
+              className="folio-paper-sheet"
+              style={{
+                width: pageW,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              <div
+                className="folio-prose"
+                style={
+                  {
+                    ['--folio-margin-top' as string]: `${mmToPx(display.marginTop)}px`,
+                    ['--folio-margin-right' as string]: `${mmToPx(display.marginRight)}px`,
+                    ['--folio-margin-bottom' as string]: `${mmToPx(display.marginBottom)}px`,
+                    ['--folio-margin-left' as string]: `${mmToPx(display.marginLeft)}px`,
+                    ['--folio-page-height' as string]: `${pageH}px`,
+                  } as React.CSSProperties
+                }
+              >
+                <EditorContent editor={editor} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`
         .folio-prose .ProseMirror {
           outline: none;
-          min-height: 800px;
+          min-height: var(--folio-page-height, 1056px);
+          padding: var(--folio-margin-top, 96px) var(--folio-margin-right, 96px) var(--folio-margin-bottom, 96px) var(--folio-margin-left, 96px);
+          background: #ffffff;
+          box-shadow: var(--folio-shadow-paper);
+          border: 1px solid var(--folio-border-light);
+          box-sizing: border-box;
           color: var(--folio-ink);
           font-family: Georgia, 'Times New Roman', Cambria, serif;
           font-size: 11pt;
           line-height: 1.6;
+        }
+        .folio-page-gap {
+          margin-left: calc(-1 * var(--folio-margin-left, 96px));
+          margin-right: calc(-1 * var(--folio-margin-right, 96px));
+          user-select: none;
+          pointer-events: none;
+        }
+        .folio-page-gap-end,
+        .folio-page-gap-start {
+          background: #ffffff;
+        }
+        .folio-page-gap-desk {
+          height: 28px;
+          background: var(--folio-bg);
         }
         .folio-prose .ProseMirror p {
           margin-bottom: 0.8em;

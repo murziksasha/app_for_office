@@ -14,7 +14,9 @@ import {
 import { RibbonGroup } from './ribbon/RibbonGroup';
 import { RibbonButton, ribbonFieldStyle } from './ribbon/RibbonButton';
 import { LanguageButton } from './LanguageButton';
-import { t } from '../i18n/instance';
+import { i18n, t } from '../i18n/instance';
+import type { JSONContent } from '@tiptap/core';
+import { formatMargin, marginUnit, pageSetupFromDoc, parseMargin, type PageSetup } from '../document/pageSetup';
 import {
   Save,
   Printer,
@@ -68,8 +70,6 @@ const SLIDE_FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 44, 54, 72];
 interface RibbonProps {
   editorState: EditorState;
   documentEditor: any;
-  pageSize: 'letter' | 'a4';
-  onPageSizeChange: (size: 'letter' | 'a4') => void;
   zoom: number;
   onZoomChange: (zoom: number) => void;
   onSave: () => void;
@@ -193,8 +193,8 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
         {activeTab === 'insert' && editorState.kind === 'document' && <DocumentInsert editor={props.documentEditor} />}
         {activeTab === 'layout' && editorState.kind === 'document' && (
           <DocumentLayout
-            pageSize={props.pageSize}
-            onPageSizeChange={props.onPageSizeChange}
+            editor={props.documentEditor}
+            documentContent={props.editorState.documentContent}
             zoom={props.zoom}
             onZoomChange={props.onZoomChange}
           />
@@ -632,26 +632,74 @@ function DocumentInsert({ editor }: { editor: any }) {
 }
 
 function DocumentLayout({
-  pageSize,
-  onPageSizeChange,
+  editor,
+  documentContent,
   zoom,
   onZoomChange,
 }: {
-  pageSize: 'letter' | 'a4';
-  onPageSizeChange: (size: 'letter' | 'a4') => void;
+  editor: any;
+  documentContent?: JSONContent;
   zoom: number;
   onZoomChange: (zoom: number) => void;
 }) {
+  const setup = pageSetupFromDoc(documentContent);
+  const commit = (partial: Partial<PageSetup>) => {
+    editor?.commands.setPageSetup(partial);
+  };
   return commandRow(
     <>
       <RibbonGroup label={t('ribbon.page')}>
-        <select aria-label={t('ribbon.pageSize')} value={pageSize} onChange={(e) => onPageSizeChange(e.target.value as 'letter' | 'a4')} style={ribbonFieldStyle}>
+        <select
+          aria-label={t('ribbon.pageSize')}
+          value={setup.size}
+          onChange={(e) => commit({ size: e.target.value as PageSetup['size'] })}
+          style={ribbonFieldStyle}
+        >
           <option value="letter">{t('ribbon.letter')}</option>
           <option value="a4">{t('ribbon.a4')}</option>
         </select>
       </RibbonGroup>
+      <RibbonGroup label={t('ribbon.margins')}>
+        <MarginField label={t('ribbon.marginTop')} mm={setup.marginTop} onCommit={(marginTop) => commit({ marginTop })} />
+        <MarginField label={t('ribbon.marginBottom')} mm={setup.marginBottom} onCommit={(marginBottom) => commit({ marginBottom })} />
+        <MarginField label={t('ribbon.marginLeft')} mm={setup.marginLeft} onCommit={(marginLeft) => commit({ marginLeft })} />
+        <MarginField label={t('ribbon.marginRight')} mm={setup.marginRight} onCommit={(marginRight) => commit({ marginRight })} />
+      </RibbonGroup>
       <ZoomGroup zoom={zoom} onZoomChange={onZoomChange} />
     </>,
+  );
+}
+
+function MarginField({ label, mm, onCommit }: { label: string; mm: number; onCommit: (mm: number) => void }) {
+  const lang = i18n.language;
+  const [text, setText] = useState(formatMargin(mm, lang));
+  useEffect(() => {
+    setText(formatMargin(mm, lang));
+  }, [mm, lang]);
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 11, color: 'var(--folio-ink-muted)' }}>
+      {label}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input
+          aria-label={label}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const parsed = parseMargin(text, i18n.language);
+            if (parsed == null || formatMargin(parsed, i18n.language) === formatMargin(mm, i18n.language)) {
+              setText(formatMargin(mm, i18n.language));
+              return;
+            }
+            onCommit(parsed);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          style={{ ...ribbonFieldStyle, width: 64 }}
+        />
+        <span>{marginUnit(lang) === 'cm' ? t('ribbon.unitCm') : t('ribbon.unitIn')}</span>
+      </span>
+    </label>
   );
 }
 

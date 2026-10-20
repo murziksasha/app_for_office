@@ -7,8 +7,22 @@ export interface DropBox {
 }
 
 export const DROP_TARGET_ATTR = 'data-folio-drop-target';
+export const HOME_DRAG_EVENT = 'folio-home-drag';
 
-/** Physical-pixel point against a CSS-pixel box. Absent or hidden boxes miss. */
+export function pointHitsBox(
+  point: { x: number; y: number } | null | undefined,
+  box: DropBox | null | undefined
+): boolean {
+  if (!point || !box || !box.shown) return false;
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+  return point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom;
+}
+
+/**
+ * Home is visible when the start screen is mounted. Tauri may report the cursor
+ * in logical CSS pixels or in physical pixels, so either reading that lands
+ * inside the box counts.
+ */
 export function dropHitsTarget(
   point: { x: number; y: number } | null | undefined,
   box: DropBox | null | undefined,
@@ -17,11 +31,8 @@ export function dropHitsTarget(
   if (!point || !box || !box.shown) return false;
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
   const scale = devicePixelRatio > 0 && Number.isFinite(devicePixelRatio) ? devicePixelRatio : 1;
-  const left = box.left * scale;
-  const top = box.top * scale;
-  const right = box.right * scale;
-  const bottom = box.bottom * scale;
-  return point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
+  const physical = { x: point.x / scale, y: point.y / scale };
+  return pointHitsBox(point, box) || pointHitsBox(physical, box);
 }
 
 export function clientBoxFromElement(el: Element | null): DropBox | null {
@@ -40,4 +51,9 @@ export function clientBoxFromElement(el: Element | null): DropBox | null {
 
 export function measureHomeDropTarget(doc: Document = document): DropBox | null {
   return clientBoxFromElement(doc.querySelector(`[${DROP_TARGET_ATTR}]`));
+}
+
+export function emitHomeDrag(active: boolean) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(HOME_DRAG_EVENT, { detail: { active } }));
 }

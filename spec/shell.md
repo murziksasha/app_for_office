@@ -6,6 +6,7 @@
 Folio has one top-level window. Each open file is a tab. With no files open, the window shows the full start screen and the tab strip is hidden. While at least one file is open, the file-chip row keeps a **+** pinned to its right edge.
 
 - Clicking **+** opens one Home chip and shows the start screen under that row: New Document, New Spreadsheet, New Presentation, Open, recents, drafts, and drop. Home sits after the file chips, and **+** does not scroll away with the chips.
+- A drop anywhere on the visible Home surface opens those files. The dashed box is the hint and highlights while a drag is over Home. A drop while a file tab is active does not open a file. Folders are ignored.
 - A second click on **+** focuses that same Home chip without adding a second Home tab.
 - Home is not a file. It is never dirty, has no draft, and is skipped by Save, Print, and the window-close pass. The window title is `Folio` while Home is active.
 - Opening or creating a file from Home adds a file tab and switches to it. Home stays in the strip. Because no file tab is active on Home, the first file opened becomes the active tab.
