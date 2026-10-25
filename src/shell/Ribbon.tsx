@@ -296,7 +296,6 @@ function TitleBar(props: RibbonProps) {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <LanguageButton />
         <button
           type="button"
           onClick={onSave}
@@ -331,6 +330,7 @@ function TitleBar(props: RibbonProps) {
         >
           <SaveAll size={14} /> {t('ribbon.saveAs')}
         </button>
+        <LanguageButton />
         <button type="button" onClick={onPrint} title={t('ribbon.printDocument')} style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
           <Printer size={14} />
         </button>
