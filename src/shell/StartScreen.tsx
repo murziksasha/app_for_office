@@ -154,9 +154,9 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--folio-ink-muted)', fontSize: '12px' }}>
-          <LanguageButton />
           <Shield size={14} color="var(--folio-teal)" />
           <span>{t('start.private')}</span>
+          <LanguageButton />
         </div>
       </header>
 
