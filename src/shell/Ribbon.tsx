@@ -61,6 +61,7 @@ import {
   WrapText,
   Eraser,
   Plus,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 
 type RibbonTab = 'file' | 'home' | 'insert' | 'layout';
@@ -83,6 +84,7 @@ interface RibbonProps {
   onSavePdf?: () => void;
   onEditAsDocument?: () => void;
   onOpenReport?: () => void;
+  onOpenSettings?: () => void;
   onFind?: () => void;
   recentFiles?: RecentItem[];
   drafts?: DraftItem[];
@@ -347,7 +349,7 @@ function commandRow(children: React.ReactNode) {
 }
 
 function FilePane(props: RibbonProps) {
-  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument } = props;
+  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument, onOpenSettings } = props;
   const recentFiles = props.recentFiles || [];
   const drafts = props.drafts || [];
   return (
@@ -373,6 +375,9 @@ function FilePane(props: RibbonProps) {
           </RibbonGroup>
           <RibbonGroup label={t('ribbon.print')}>
             <RibbonButton title={t('ribbon.print')} label={t('ribbon.print')} icon={<Printer size={16} />} onClick={onPrint} />
+          </RibbonGroup>
+          <RibbonGroup label={t('ribbon.settings')}>
+            <RibbonButton title={t('ribbon.settings')} label={t('ribbon.settings')} icon={<SettingsIcon size={16} />} onClick={onOpenSettings} />
           </RibbonGroup>
         </>,
       )}

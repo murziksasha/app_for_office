@@ -30,6 +30,7 @@
     "openFile": "Відкрити файл...",
     "saveAsEllipsis": "Зберегти як...",
     "savePdf": "Зберегти як PDF",
+    "settings": "Налаштування",
     "editAsDocument": "Редагувати як документ",
     "recoveredDrafts": "Відновлені чернетки",
     "recent": "Останні",
@@ -291,5 +292,12 @@
     "skipTables": "Таблиці",
     "skipImages": "Зображення",
     "skipHeaders": "Колонтитули"
+  },
+  "settings": {
+    "title": "Налаштування",
+    "about": "Про програму",
+    "general": "Загальні",
+    "language": "Мова",
+    "close": "Закрити"
   }
 }

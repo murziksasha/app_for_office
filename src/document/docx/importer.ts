@@ -676,10 +676,27 @@ export async function importDocx(
       // Style attributes
       const styles: string[] = [];
 
-      if (rPr.b) styles.push('font-weight: bold;');
-      if (rPr.i) styles.push('font-style: italic;');
-      if (rPr.u) styles.push('text-decoration: underline;');
-      if (rPr.strike) styles.push('text-decoration: line-through;');
+      const isBold = rPr.b !== undefined && rPr.b?.['@_val'] !== '0' && rPr.b?.['@_val'] !== 'false';
+      const isItalic = rPr.i !== undefined && rPr.i?.['@_val'] !== '0' && rPr.i?.['@_val'] !== 'false';
+      const isUnderline = rPr.u !== undefined && rPr.u?.['@_val'] !== '0' && rPr.u?.['@_val'] !== 'false' && rPr.u?.['@_val'] !== 'none';
+      const isStrike = rPr.strike !== undefined && rPr.strike?.['@_val'] !== '0' && rPr.strike?.['@_val'] !== 'false';
+
+      if (isBold) {
+        styles.push('font-weight: bold;');
+        html = `<strong>${html}</strong>`;
+      }
+      if (isItalic) {
+        styles.push('font-style: italic;');
+        html = `<em>${html}</em>`;
+      }
+      if (isUnderline) {
+        styles.push('text-decoration: underline;');
+        html = `<u>${html}</u>`;
+      }
+      if (isStrike) {
+        styles.push('text-decoration: line-through;');
+        html = `<s>${html}</s>`;
+      }
 
       if (rPr.sz) {
         const halfPt = typeof rPr.sz === 'object' ? rPr.sz['@_val'] : rPr.sz;

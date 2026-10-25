@@ -14,6 +14,7 @@ import {
   Trash2,
   Upload,
   Shield,
+  Settings,
 } from 'lucide-react';
 
 interface StartScreenProps {
@@ -23,6 +24,7 @@ interface StartScreenProps {
   onRestoreDraft: (draft: DraftItem) => void;
   onDismissDraft: (draft: DraftItem) => void;
   onFileDrop: (files: File[]) => void;
+  onOpenSettings?: () => void;
   listsRevision?: number;
 }
 
@@ -33,6 +35,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   onRestoreDraft,
   onDismissDraft,
   onFileDrop,
+  onOpenSettings,
   listsRevision = 0,
 }) => {
   const [recentFiles, setRecentFiles] = useState<RecentItem[]>([]);
@@ -156,6 +159,29 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--folio-ink-muted)', fontSize: '12px' }}>
           <Shield size={14} color="var(--folio-teal)" />
           <span>{t('start.private')}</span>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            data-testid="start-settings-button"
+            title={t('settings.title')}
+            aria-label={t('settings.title')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '4px 8px',
+              borderRadius: 4,
+              border: '1px solid var(--folio-border)',
+              background: 'var(--folio-bg)',
+              color: 'var(--folio-ink)',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            <Settings size={14} />
+            <span>{t('settings.title')}</span>
+          </button>
           <LanguageButton />
         </div>
       </header>

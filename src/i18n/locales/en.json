@@ -30,6 +30,7 @@
     "openFile": "Open File...",
     "saveAsEllipsis": "Save As...",
     "savePdf": "Save as PDF",
+    "settings": "Settings",
     "editAsDocument": "Edit as Document",
     "recoveredDrafts": "Recovered drafts",
     "recent": "Recent",
@@ -291,5 +292,12 @@
     "skipTables": "Tables",
     "skipImages": "Images",
     "skipHeaders": "Headers and footers"
+  },
+  "settings": {
+    "title": "Settings",
+    "about": "About",
+    "general": "General",
+    "language": "Language",
+    "close": "Close"
   }
 }

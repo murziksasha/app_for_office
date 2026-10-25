@@ -47,7 +47,7 @@ Tabs follow the open file:
 - Presentation: File, Home, Insert. Slide, text, picture, video, and shape commands live here. The thumbnail rail stays beside the canvas.
 - PDF: File only. Page navigation stays on the viewer.
 
-File groups are New, Open, Save, and Print. Save as PDF is absent on a PDF tab. Edit as Document is present on a PDF tab. Drafts and recent files stay listed under the File groups.
+File groups are New, Open, Save, Print, and Settings. Save as PDF is absent on a PDF tab. Edit as Document is present on a PDF tab. Drafts and recent files stay listed under the File groups.
 
 A chevron at the right of the tab row collapses the tool strip. Tab names stay. Clicking the active tab also collapses it. Clicking any tab while the strip is hidden selects that tab and shows its tools. PDF’s only tab is File, so collapsing hides the File pane until File is clicked again. The choice is stored on this machine as `folio_ribbon_collapsed` (`1` or `0`) and restored the next time the ribbon mounts.
 
@@ -62,3 +62,30 @@ People expect writing tools in one place, grouped the way the rest of an office 
 
 ### The Check
 `e2e/smoke.spec.ts` expects the document captions Clipboard, Font, Paragraph, and Styles, a presentation New slide control that adds a thumbnail, and a spreadsheet ribbon that shows Font and Number with FortuneSheet’s toolbar absent. It also collapses the ribbon, reloads, and checks that the tools stay hidden, then switches the language control to Ukrainian and expects `Основне` while the typed document text stays unchanged. Those smoke tests set `folio_ui_lang=en` before they look for English labels.
+
+---
+
+## 4. Settings and About
+
+### The Rule
+Settings is a dialog rendered with the warm paper theme and a single section list:
+1. **About**: Displays identity lines as selectable plain text:
+   - App title (`Folio`) and app version constant (`1.0.0`).
+   - One line summary: `Local-first office suite for documents, spreadsheets, and presentations`.
+   - Author name: `Oleksandr Hryhoriev` (same Latin spelling in English and Ukrainian).
+   - Author email: `1versuses1@gmail.com` (presented as plain text and a `mailto:` link, without network requests).
+   - Author phone: `063 556 70 90` (plain text).
+   - Author place: `Ukraine, Chornomorsk` in English, `Україна, Чорноморськ` in Ukrainian.
+2. **General**: Repeats the existing language switch (`EN` / `UA`). The choice updates UI strings immediately and is stored in `folio_ui_lang`. The title-bar and start-screen language buttons stay.
+
+Settings is reachable from:
+- The start screen header, beside the language button.
+- The File ribbon pane, under the new **Settings** group and **Settings** button, on Document, Spreadsheet, Presentation, and PDF.
+
+Escape and a Close button dismiss the dialog. Settings is not a file tab, not dirty, and not printed.
+
+### The Reason
+Settings and About information must be accessible both before opening any document (from the start screen) and while editing any file type (from the File ribbon), without creating tabs, modifying dirty state, or invoking network activity.
+
+### The Check
+`tests/about.test.ts` asserts that `src/shell/about.ts` exports the four identity lines, that none of the identity or about strings mention third-party office brands, and that place localization works. `e2e/smoke.spec.ts` opens Settings from the start screen, verifies the identity lines, switches language to Ukrainian, verifies `Україна, Чорноморськ` while the author name stays `Oleksandr Hryhoriev`, opens a document, opens Settings from the File ribbon, and dismisses it with Escape to verify document text remains unchanged.
