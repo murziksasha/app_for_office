@@ -299,4 +299,56 @@ test.describe('Folio Smoke Test Suite', () => {
     await expect.poll(async () => prose.evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft))).toBeLessThan(before + 1);
     await expect(page.getByRole('textbox', { name: 'Left margin' })).toHaveValue('1.00');
   });
+
+  test('Settings and About dialog opens from start screen and File ribbon, switches language, and preserves document text', async ({ page }) => {
+    await page.goto('/');
+
+    // 1. From the start screen, open Settings and see name, email, phone, Chornomorsk
+    const startSettings = page.getByRole('button', { name: /settings|налаштування/i });
+    await expect(startSettings).toBeVisible();
+    await startSettings.click();
+
+    const dialog = page.getByTestId('settings-dialog');
+    await expect(dialog).toBeVisible();
+
+    await expect(dialog.getByText('Oleksandr Hryhoriev')).toBeVisible();
+    await expect(dialog.getByText('1versuses1@gmail.com')).toBeVisible();
+    await expect(dialog.getByText('063 556 70 90')).toBeVisible();
+    await expect(dialog.getByText(/Chornomorsk/)).toBeVisible();
+
+    const mailLink = dialog.locator('a[href="mailto:1versuses1@gmail.com"]');
+    await expect(mailLink).toBeVisible();
+
+    // 2. Switch to Ukrainian and see Україна, Чорноморськ while name stays Oleksandr Hryhoriev
+    const langBtn = dialog.getByRole('button', { name: 'Українська' });
+    await langBtn.click();
+
+    await expect(dialog.getByText('Україна, Чорноморськ')).toBeVisible();
+    await expect(dialog.getByText('Oleksandr Hryhoriev')).toBeVisible();
+
+    // Close Settings
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    // 3. Open a document, open Settings from the File ribbon, close it with Escape. The document text is unchanged.
+    await page.getByRole('heading', { name: /new document|новий документ/i }).click();
+
+    const editor = page.locator('.folio-prose .ProseMirror');
+    await expect(editor).toBeVisible();
+    await editor.click();
+    await page.keyboard.type('Preserved document text across Settings open');
+    await expect(editor).toContainText('Preserved document text across Settings open');
+
+    const ribbon = page.locator('.folio-ribbon');
+    await ribbon.getByRole('button', { name: /^(file|файл)$/i }).click();
+    await ribbon.getByRole('button', { name: /^(settings|налаштування)$/i }).click();
+
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Oleksandr Hryhoriev')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    await expect(editor).toContainText('Preserved document text across Settings open');
+  });
 });

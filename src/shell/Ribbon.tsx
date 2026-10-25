@@ -17,6 +17,8 @@ import { LanguageButton } from './LanguageButton';
 import { i18n, t } from '../i18n/instance';
 import type { JSONContent } from '@tiptap/core';
 import { formatMargin, marginUnit, pageSetupFromDoc, parseMargin, type PageSetup } from '../document/pageSetup';
+import { bandState, type ActiveBandFocus } from '../document/bandState';
+import { chromeFromDoc } from '../document/chrome';
 import {
   Save,
   Printer,
@@ -59,6 +61,7 @@ import {
   WrapText,
   Eraser,
   Plus,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 
 type RibbonTab = 'file' | 'home' | 'insert' | 'layout';
@@ -81,6 +84,7 @@ interface RibbonProps {
   onSavePdf?: () => void;
   onEditAsDocument?: () => void;
   onOpenReport?: () => void;
+  onOpenSettings?: () => void;
   onFind?: () => void;
   recentFiles?: RecentItem[];
   drafts?: DraftItem[];
@@ -294,7 +298,6 @@ function TitleBar(props: RibbonProps) {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <LanguageButton />
         <button
           type="button"
           onClick={onSave}
@@ -329,6 +332,7 @@ function TitleBar(props: RibbonProps) {
         >
           <SaveAll size={14} /> {t('ribbon.saveAs')}
         </button>
+        <LanguageButton />
         <button type="button" onClick={onPrint} title={t('ribbon.printDocument')} style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
           <Printer size={14} />
         </button>
@@ -345,7 +349,7 @@ function commandRow(children: React.ReactNode) {
 }
 
 function FilePane(props: RibbonProps) {
-  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument } = props;
+  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument, onOpenSettings } = props;
   const recentFiles = props.recentFiles || [];
   const drafts = props.drafts || [];
   return (
@@ -371,6 +375,9 @@ function FilePane(props: RibbonProps) {
           </RibbonGroup>
           <RibbonGroup label={t('ribbon.print')}>
             <RibbonButton title={t('ribbon.print')} label={t('ribbon.print')} icon={<Printer size={16} />} onClick={onPrint} />
+          </RibbonGroup>
+          <RibbonGroup label={t('ribbon.settings')}>
+            <RibbonButton title={t('ribbon.settings')} label={t('ribbon.settings')} icon={<SettingsIcon size={16} />} onClick={onOpenSettings} />
           </RibbonGroup>
         </>,
       )}
@@ -429,10 +436,40 @@ function clip(editor: any, command: 'cut' | 'copy' | 'paste') {
 
 function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) {
   useEditorTick(editor);
-  const markOn = (name: string, attrs?: Record<string, unknown>) => Boolean(editor?.isActive?.(name, attrs));
-  const alignOn = (align: string) => Boolean(editor?.isActive?.({ textAlign: align }));
-  const fontSize = editor?.getAttributes('textStyle')?.fontSize || '11pt';
-  const fontFamily = editor?.getAttributes('textStyle')?.fontFamily || 'Georgia, serif';
+  const [bandFocus, setBandFocus] = useState<ActiveBandFocus | null>(() => bandState.getFocus());
+
+  useEffect(() => {
+    return bandState.subscribe((focus) => {
+      setBandFocus(focus ? { ...focus } : null);
+    });
+  }, []);
+
+  const inBand = Boolean(bandFocus);
+  const markOn = (name: string, attrs?: Record<string, unknown>) => {
+    if (inBand && bandFocus) {
+      if (name === 'bold') return Boolean(bandFocus.marks.bold);
+      if (name === 'italic') return Boolean(bandFocus.marks.italic);
+      if (name === 'underline') return Boolean(bandFocus.marks.underline);
+      return false;
+    }
+    return Boolean(editor?.isActive?.(name, attrs));
+  };
+
+  const alignOn = (align: string) => {
+    if (inBand && bandFocus) {
+      return bandFocus.align === align;
+    }
+    return Boolean(editor?.isActive?.({ textAlign: align }));
+  };
+
+  const fontSize = inBand && bandFocus?.marks.fontSize
+    ? `${bandFocus.marks.fontSize}pt`
+    : editor?.getAttributes('textStyle')?.fontSize || '11pt';
+
+  const fontFamily = inBand && bandFocus?.marks.fontFamily
+    ? bandFocus.marks.fontFamily
+    : editor?.getAttributes('textStyle')?.fontFamily || 'Georgia, serif';
+
   const families: Array<[string, string]> = [
     ['Georgia, serif', 'Georgia'],
     ['system-ui, sans-serif', 'Segoe UI'],
@@ -464,8 +501,11 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
         <select
           aria-label={t('ribbon.font')}
           value={fontFamily}
-          disabled={!editor}
-          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+          disabled={!editor && !inBand}
+          onChange={(e) => {
+            if (inBand) bandState.setFontFamily(e.target.value);
+            else editor.chain().focus().setFontFamily(e.target.value).run();
+          }}
           style={{ ...ribbonFieldStyle, maxWidth: 140 }}
         >
           {families.map(([value, label]) => (
@@ -478,8 +518,12 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
           aria-label={t('ribbon.fontSize')}
           title={t('ribbon.fontSize')}
           value={DOC_FONT_SIZES.includes(fontSize) ? fontSize : '11pt'}
-          disabled={!editor}
-          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
+          disabled={!editor && !inBand}
+          onChange={(e) => {
+            const pt = parseInt(e.target.value, 10);
+            if (inBand) bandState.setFontSize(pt);
+            else editor.chain().focus().setFontSize(e.target.value).run();
+          }}
           style={{ ...ribbonFieldStyle, width: 72 }}
         >
           {DOC_FONT_SIZES.map((size) => (
@@ -488,29 +532,86 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
             </option>
           ))}
         </select>
-        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={markOn('bold')} disabled={!editor} onClick={() => editor.chain().focus().toggleBold().run()} />
-        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={markOn('italic')} disabled={!editor} onClick={() => editor.chain().focus().toggleItalic().run()} />
-        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={markOn('underline')} disabled={!editor} onClick={() => editor.chain().focus().toggleUnderline().run()} />
-        <RibbonButton title={t('ribbon.strike')} icon={<Strikethrough size={16} />} pressed={markOn('strike')} disabled={!editor} onClick={() => editor.chain().focus().toggleStrike().run()} />
+        <RibbonButton
+          title={t('ribbon.bold')}
+          icon={<Bold size={16} />}
+          pressed={markOn('bold')}
+          disabled={!editor && !inBand}
+          onClick={() => {
+            if (inBand) bandState.toggleMark('bold');
+            else editor.chain().focus().toggleBold().run();
+          }}
+        />
+        <RibbonButton
+          title={t('ribbon.italic')}
+          icon={<Italic size={16} />}
+          pressed={markOn('italic')}
+          disabled={!editor && !inBand}
+          onClick={() => {
+            if (inBand) bandState.toggleMark('italic');
+            else editor.chain().focus().toggleItalic().run();
+          }}
+        />
+        <RibbonButton
+          title={t('ribbon.underline')}
+          icon={<Underline size={16} />}
+          pressed={markOn('underline')}
+          disabled={!editor && !inBand}
+          onClick={() => {
+            if (inBand) bandState.toggleMark('underline');
+            else editor.chain().focus().toggleUnderline().run();
+          }}
+        />
+        <RibbonButton title={t('ribbon.strike')} icon={<Strikethrough size={16} />} pressed={markOn('strike')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleStrike().run()} />
         <input
           type="color"
           title={t('ribbon.textColor')}
           aria-label={t('ribbon.textColor')}
-          disabled={!editor}
-          onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
+          disabled={!editor && !inBand}
+          onChange={(e) => {
+            if (inBand) bandState.setColor(e.target.value);
+            else editor.chain().focus().setColor(e.target.value).run();
+          }}
           style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
-        <RibbonButton title={t('ribbon.highlight')} icon={<Highlighter size={16} />} pressed={markOn('highlight')} disabled={!editor} onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()} />
+        <RibbonButton title={t('ribbon.highlight')} icon={<Highlighter size={16} />} pressed={markOn('highlight')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.paragraph')}>
-        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={alignOn('left')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('left').run()} />
-        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={alignOn('center')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('center').run()} />
-        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={alignOn('right')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('right').run()} />
-        <RibbonButton title={t('ribbon.alignJustify')} icon={<AlignJustify size={16} />} pressed={alignOn('justify')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
-        <RibbonButton title={t('ribbon.bullets')} icon={<List size={16} />} pressed={markOn('bulletList')} disabled={!editor} onClick={() => editor.chain().focus().toggleBulletList().run()} />
-        <RibbonButton title={t('ribbon.numbered')} icon={<ListOrdered size={16} />} pressed={markOn('orderedList')} disabled={!editor} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
-        <RibbonButton title={t('ribbon.outdent')} icon={<OutdentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().outdent().run()} />
-        <RibbonButton title={t('ribbon.indent')} icon={<IndentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().indent().run()} />
+        <RibbonButton
+          title={t('ribbon.alignLeft')}
+          icon={<AlignLeft size={16} />}
+          pressed={alignOn('left')}
+          disabled={!editor && !inBand}
+          onClick={() => {
+            if (inBand) bandState.setAlign('left');
+            else editor.chain().focus().setTextAlign('left').run();
+          }}
+        />
+        <RibbonButton
+          title={t('ribbon.alignCenter')}
+          icon={<AlignCenter size={16} />}
+          pressed={alignOn('center')}
+          disabled={!editor && !inBand}
+          onClick={() => {
+            if (inBand) bandState.setAlign('center');
+            else editor.chain().focus().setTextAlign('center').run();
+          }}
+        />
+        <RibbonButton
+          title={t('ribbon.alignRight')}
+          icon={<AlignRight size={16} />}
+          pressed={alignOn('right')}
+          disabled={!editor && !inBand}
+          onClick={() => {
+            if (inBand) bandState.setAlign('right');
+            else editor.chain().focus().setTextAlign('right').run();
+          }}
+        />
+        <RibbonButton title={t('ribbon.alignJustify')} icon={<AlignJustify size={16} />} pressed={alignOn('justify')} disabled={!editor || inBand} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
+        <RibbonButton title={t('ribbon.bullets')} icon={<List size={16} />} pressed={markOn('bulletList')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleBulletList().run()} />
+        <RibbonButton title={t('ribbon.numbered')} icon={<ListOrdered size={16} />} pressed={markOn('orderedList')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+        <RibbonButton title={t('ribbon.outdent')} icon={<OutdentIcon size={16} />} disabled={!editor || inBand} onClick={() => editor.chain().focus().outdent().run()} />
+        <RibbonButton title={t('ribbon.indent')} icon={<IndentIcon size={16} />} disabled={!editor || inBand} onClick={() => editor.chain().focus().indent().run()} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.styles')}>
         <StyleChip name="Paragraph" active={styleName === 'Paragraph'} onClick={() => editor?.chain().focus().setParagraph().run()} />
@@ -643,9 +744,16 @@ function DocumentLayout({
   onZoomChange: (zoom: number) => void;
 }) {
   const setup = pageSetupFromDoc(documentContent);
+  const chrome = chromeFromDoc(documentContent);
+
   const commit = (partial: Partial<PageSetup>) => {
     editor?.commands.setPageSetup(partial);
   };
+
+  const toggleDiffFirst = () => {
+    editor?.commands.setDocumentChrome({ differentFirstPage: !chrome.differentFirstPage });
+  };
+
   return commandRow(
     <>
       <RibbonGroup label={t('ribbon.page')}>
@@ -664,6 +772,40 @@ function DocumentLayout({
         <MarginField label={t('ribbon.marginBottom')} mm={setup.marginBottom} onCommit={(marginBottom) => commit({ marginBottom })} />
         <MarginField label={t('ribbon.marginLeft')} mm={setup.marginLeft} onCommit={(marginLeft) => commit({ marginLeft })} />
         <MarginField label={t('ribbon.marginRight')} mm={setup.marginRight} onCommit={(marginRight) => commit({ marginRight })} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.headerFooterGroup')}>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12,
+            color: 'var(--folio-ink)',
+            cursor: 'pointer',
+            padding: '2px 4px',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={Boolean(chrome.differentFirstPage)}
+            onChange={toggleDiffFirst}
+            style={{ cursor: 'pointer' }}
+          />
+          {t('ribbon.differentFirstPage')}
+        </label>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <RibbonButton
+            title={t('ribbon.pageNumber')}
+            label={t('ribbon.pageNumberDigit')}
+            onClick={() => bandState.insertPageNumber('page')}
+          />
+          <RibbonButton
+            title={t('ribbon.pageNumber')}
+            label={t('ribbon.pageNumberOfTotal')}
+            onClick={() => bandState.insertPageNumber('pageOfTotal')}
+          />
+        </div>
       </RibbonGroup>
       <ZoomGroup zoom={zoom} onZoomChange={onZoomChange} />
     </>,

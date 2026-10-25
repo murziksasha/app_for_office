@@ -21,7 +21,7 @@
     "pptx",
     "editor"
   ],
-  "author": "",
+  "author": "Oleksandr Hryhoriev <1versuses1@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@fortune-sheet/react": "^1.0.4",

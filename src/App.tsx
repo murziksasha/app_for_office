@@ -56,6 +56,7 @@ import { applyEdit, blankTab, draftContent, newTabId, stampClean, tabFromDraft }
 import { exportPdf } from './pdf/exportPdf';
 import { extractTextFromPdf } from './pdf/extractText';
 import { StartScreen } from './shell/StartScreen';
+import { SettingsDialog } from './shell/SettingsDialog';
 import { Ribbon } from './shell/Ribbon';
 import { StatusBar } from './shell/StatusBar';
 import { ImportReportDialog } from './shell/ImportReportDialog';
@@ -92,6 +93,7 @@ export const App: React.FC = () => {
   const [zoom, setZoom] = useState<number>(100);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [showImportReport, setShowImportReport] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentItem[]>([]);
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [listsRevision, setListsRevision] = useState(0);
@@ -902,9 +904,7 @@ export const App: React.FC = () => {
         scope = selected;
       }
       if (tab.kind === 'document') {
-        document.body.dataset.folioPrint = 'document';
-        window.print();
-        delete document.body.dataset.folioPrint;
+        setPrintJob({ tab, scope: 'all' });
         return;
       }
       setPrintJob({ tab, scope });
@@ -1147,6 +1147,7 @@ export const App: React.FC = () => {
           onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
           onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
           onFileDrop={(files) => void onBrowserDrop(files)}
+          onOpenSettings={() => setSettingsOpen(true)}
           listsRevision={listsRevision}
         />
       ) : (
@@ -1171,6 +1172,7 @@ export const App: React.FC = () => {
             onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
             onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
             onFind={() => setFindSignal((n) => n + 1)}
+            onOpenSettings={() => setSettingsOpen(true)}
             slideCommands={slideCommands}
             slideState={slideState}
             sheetApi={sheetApi}
@@ -1239,6 +1241,7 @@ export const App: React.FC = () => {
         />
       )}
       {choice && <ChoiceDialog title={choice.title} message={choice.message} buttons={choice.buttons} onChoose={resolveChoice} />}
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {printJob && (
         <PrintView
           tab={printJob.tab}

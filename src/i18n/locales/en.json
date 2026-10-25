@@ -30,6 +30,7 @@
     "openFile": "Open File...",
     "saveAsEllipsis": "Save As...",
     "savePdf": "Save as PDF",
+    "settings": "Settings",
     "editAsDocument": "Edit as Document",
     "recoveredDrafts": "Recovered drafts",
     "recent": "Recent",
@@ -121,7 +122,14 @@
     "text": "Text",
     "textBox": "Text box",
     "video": "Video",
-    "rectangle": "Rectangle"
+    "rectangle": "Rectangle",
+    "headerFooterGroup": "Header & Footer",
+    "headerHint": "Header",
+    "footerHint": "Footer",
+    "differentFirstPage": "Different first page",
+    "pageNumber": "Page number",
+    "pageNumberDigit": "1",
+    "pageNumberOfTotal": "Page 1 of 8"
   },
   "start": {
     "tagline": "Local-first office suite",
@@ -284,5 +292,12 @@
     "skipTables": "Tables",
     "skipImages": "Images",
     "skipHeaders": "Headers and footers"
+  },
+  "settings": {
+    "title": "Settings",
+    "about": "About",
+    "general": "General",
+    "language": "Language",
+    "close": "Close"
   }
 }

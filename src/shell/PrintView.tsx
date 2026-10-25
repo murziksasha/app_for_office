@@ -2,6 +2,16 @@ import React, { useEffect, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { EditorState, PresentationModel, Slide } from '../types';
 import { FortuneSheetData } from '../spreadsheet/adapters';
+import { mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from '../document/pageSetup';
+import { documentToHtml } from '../document/model';
+import {
+  chromeFromDoc,
+  formatFieldRun,
+  isStoryEmpty,
+  resolveStoryForPage,
+  type ChromeRun,
+  type ChromeStory,
+} from '../document/chrome';
 
 interface PrintViewProps {
   tab: EditorState;
@@ -93,6 +103,193 @@ function SlidePage({ slide }: { slide: Slide }) {
   );
 }
 
+function PrintBandView({
+  story,
+  pageNumber,
+  totalPages,
+  heightMm,
+  paddingLeftMm,
+  paddingRightMm,
+}: {
+  story: ChromeStory;
+  pageNumber: number;
+  totalPages: number;
+  heightMm: number;
+  paddingLeftMm: number;
+  paddingRightMm: number;
+}) {
+  if (isStoryEmpty(story)) {
+    return <div style={{ height: `${heightMm}mm` }} />;
+  }
+  const l0 = story.line0;
+  const renderRuns = (runs: ChromeRun[]) =>
+    runs.map((r, i) => {
+      if (r.type === 'image') {
+        return (
+          <img
+            key={i}
+            src={r.src}
+            alt=""
+            style={{ maxHeight: '20px', verticalAlign: 'middle', marginRight: 4 }}
+          />
+        );
+      }
+      const text = r.type === 'field' ? formatFieldRun(r.field, pageNumber, totalPages) : r.text;
+      return (
+        <span
+          key={i}
+          style={{
+            fontWeight: r.bold ? 700 : 400,
+            fontStyle: r.italic ? 'italic' : 'normal',
+            textDecoration: r.underline ? 'underline' : 'none',
+            color: r.color || 'inherit',
+            fontSize: r.fontSize ? `${r.fontSize}pt` : '10pt',
+            fontFamily: r.fontFamily || 'inherit',
+          }}
+        >
+          {text}
+        </span>
+      );
+    });
+
+  return (
+    <div
+      style={{
+        height: `${heightMm}mm`,
+        paddingLeft: `${paddingLeftMm}mm`,
+        paddingRight: `${paddingRightMm}mm`,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        fontSize: '10pt',
+      }}
+    >
+      <div style={{ display: 'flex', width: '100%', alignItems: 'center' }}>
+        <div style={{ flex: 1, textAlign: l0.left.align || 'left' }}>{renderRuns(l0.left.runs)}</div>
+        <div style={{ flex: 1, textAlign: l0.center.align || 'center' }}>{renderRuns(l0.center.runs)}</div>
+        <div style={{ flex: 1, textAlign: l0.right.align || 'right' }}>{renderRuns(l0.right.runs)}</div>
+      </div>
+      {story.lines.map((l, li) => (
+        <div key={li} style={{ width: '100%', textAlign: l.align || 'left' }}>
+          {renderRuns(l.runs)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function paginateDocumentNodes(nodes: any[], setup: PageSetup, pageH: number): any[][] {
+  const innerPx = mmToPx(pageH - setup.marginTop - setup.marginBottom);
+  const pages: any[][] = [[]];
+  let used = 0;
+
+  for (const node of nodes) {
+    if (node.type === 'pageBreak') {
+      pages.push([]);
+      used = 0;
+      continue;
+    }
+
+    let estHeight = 24;
+    if (node.type === 'heading') {
+      const lvl = node.attrs?.level || 1;
+      estHeight = lvl === 1 ? 48 : lvl === 2 ? 36 : 28;
+    } else if (node.type === 'table') {
+      const rowCount = (node.content || []).length;
+      estHeight = Math.max(30, rowCount * 28);
+    } else if (node.type === 'image') {
+      estHeight = 150;
+    } else if (node.type === 'paragraph') {
+      const textLen = (node.content || []).reduce(
+        (sum: number, c: any) => sum + (c.text?.length || 0),
+        0
+      );
+      const lines = Math.max(1, Math.ceil(textLen / 70));
+      estHeight = lines * 22;
+    }
+
+    if (used > 0 && used + estHeight > innerPx) {
+      pages.push([node]);
+      used = estHeight;
+    } else {
+      pages[pages.length - 1].push(node);
+      used += estHeight;
+    }
+  }
+
+  return pages.length > 0 ? pages : [[]];
+}
+
+function DocumentPrintStack({ tab }: { tab: EditorState }) {
+  const content = tab.documentContent;
+  const setup = pageSetupFromDoc(content);
+  const page = PAGE_MM[setup.size];
+  const chrome = chromeFromDoc(content);
+  const nodes = content?.content || [];
+  const pages = paginateDocumentNodes(nodes, setup, page.height);
+  const totalPages = pages.length;
+
+  return (
+    <div className="folio-print-doc-stack">
+      {pages.map((pageNodes, pIdx) => {
+        const pageNumber = pIdx + 1;
+        const headerStory = resolveStoryForPage(chrome, 'header', pageNumber);
+        const footerStory = resolveStoryForPage(chrome, 'footer', pageNumber);
+        const html = documentToHtml({ type: 'doc', content: pageNodes });
+
+        return (
+          <div
+            key={pageNumber}
+            className="folio-print-page"
+            style={{
+              width: `${page.width}mm`,
+              minHeight: `${page.height}mm`,
+              maxHeight: `${page.height}mm`,
+              overflow: 'hidden',
+              pageBreakAfter: pageNumber === totalPages ? 'auto' : 'always',
+              breakAfter: pageNumber === totalPages ? 'auto' : 'page',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              background: '#ffffff',
+            }}
+          >
+            <PrintBandView
+              story={headerStory}
+              pageNumber={pageNumber}
+              totalPages={totalPages}
+              heightMm={setup.marginTop}
+              paddingLeftMm={setup.marginLeft}
+              paddingRightMm={setup.marginRight}
+            />
+            <div
+              className="folio-print-page-body"
+              style={{
+                flex: 1,
+                paddingLeft: `${setup.marginLeft}mm`,
+                paddingRight: `${setup.marginRight}mm`,
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+              }}
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+            <PrintBandView
+              story={footerStory}
+              pageNumber={pageNumber}
+              totalPages={totalPages}
+              heightMm={setup.marginBottom}
+              paddingLeftMm={setup.marginLeft}
+              paddingRightMm={setup.marginRight}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export const PrintView: React.FC<PrintViewProps> = ({ tab, scope, slideIndex, pdfPage, onDone }) => {
   const [pdfUrls, setPdfUrls] = useState<string[]>([]);
 
@@ -142,6 +339,14 @@ export const PrintView: React.FC<PrintViewProps> = ({ tab, scope, slideIndex, pd
       cancelled = true;
     };
   }, [tab, scope, pdfPage, onDone]);
+
+  if (tab.kind === 'document') {
+    return (
+      <div className="folio-print-root">
+        <DocumentPrintStack tab={tab} />
+      </div>
+    );
+  }
 
   if (tab.kind === 'spreadsheet') {
     const sheets = (tab.spreadsheetData || []) as FortuneSheetData[];

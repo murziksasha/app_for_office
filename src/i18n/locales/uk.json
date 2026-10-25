@@ -30,6 +30,7 @@
     "openFile": "Відкрити файл...",
     "saveAsEllipsis": "Зберегти як...",
     "savePdf": "Зберегти як PDF",
+    "settings": "Налаштування",
     "editAsDocument": "Редагувати як документ",
     "recoveredDrafts": "Відновлені чернетки",
     "recent": "Останні",
@@ -121,7 +122,14 @@
     "text": "Текст",
     "textBox": "Напис",
     "video": "Відео",
-    "rectangle": "Прямокутник"
+    "rectangle": "Прямокутник",
+    "headerFooterGroup": "Колонтитули",
+    "headerHint": "Верхній колонтитул",
+    "footerHint": "Нижній колонтитул",
+    "differentFirstPage": "Перша сторінка особлива",
+    "pageNumber": "Номер сторінки",
+    "pageNumberDigit": "1",
+    "pageNumberOfTotal": "Сторінка 1 з 8"
   },
   "start": {
     "tagline": "Локальний офісний набір",
@@ -284,5 +292,12 @@
     "skipTables": "Таблиці",
     "skipImages": "Зображення",
     "skipHeaders": "Колонтитули"
+  },
+  "settings": {
+    "title": "Налаштування",
+    "about": "Про програму",
+    "general": "Загальні",
+    "language": "Мова",
+    "close": "Закрити"
   }
 }
