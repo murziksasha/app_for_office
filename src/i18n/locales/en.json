@@ -121,7 +121,14 @@
     "text": "Text",
     "textBox": "Text box",
     "video": "Video",
-    "rectangle": "Rectangle"
+    "rectangle": "Rectangle",
+    "headerFooterGroup": "Header & Footer",
+    "headerHint": "Header",
+    "footerHint": "Footer",
+    "differentFirstPage": "Different first page",
+    "pageNumber": "Page number",
+    "pageNumberDigit": "1",
+    "pageNumberOfTotal": "Page 1 of 8"
   },
   "start": {
     "tagline": "Local-first office suite",

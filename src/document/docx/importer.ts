@@ -4,13 +4,23 @@ import mammoth from 'mammoth';
 import { ImportReport, ImportWarning } from '../../types';
 import { sanitizeHtml } from '../sanitize';
 import { pageSizeLabel, readDocxSection, type PageSetup } from '../pageSetup';
+import {
+  createEmptyChrome,
+  createEmptyStory,
+  hasChromeContent,
+  type ChromeMarks,
+  type ChromeParagraph,
+  type ChromeRun,
+  type ChromeStory,
+  type DocumentChrome,
+} from '../chrome';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
   isArray: (name) => {
-    return ['p', 'r', 'tbl', 'tr', 'tc', 'Relationship', 'lvl', 'num', 'abstractNum'].includes(name);
+    return ['p', 'r', 'tbl', 'tr', 'tc', 'Relationship', 'lvl', 'num', 'abstractNum', 'headerReference', 'footerReference', 'fldSimple'].includes(name);
   },
 });
 
@@ -27,10 +37,10 @@ interface NumberingMap {
 }
 
 /**
- * Extracts relationship mappings from word/_rels/document.xml.rels
+ * Extracts relationship mappings from a .rels file (default: word/_rels/document.xml.rels)
  */
-async function loadRelationships(zip: JSZip): Promise<RelMap> {
-  const relFile = zip.file('word/_rels/document.xml.rels');
+async function loadRelationships(zip: JSZip, relsPath = 'word/_rels/document.xml.rels'): Promise<RelMap> {
+  const relFile = zip.file(relsPath);
   if (!relFile) return {};
 
   try {
@@ -51,7 +61,7 @@ async function loadRelationships(zip: JSZip): Promise<RelMap> {
     }
     return map;
   } catch (err) {
-    console.warn('Could not parse document.xml.rels:', err);
+    console.warn(`Could not parse ${relsPath}:`, err);
     return {};
   }
 }
@@ -111,30 +121,371 @@ async function loadNumbering(zip: JSZip): Promise<NumberingMap> {
 /**
  * Resolves an image target from zip and returns a base64 data URL
  */
-async function extractImageDataUrl(zip: JSZip, target: string): Promise<string | null> {
-  // Target in rels may be relative, like 'media/image1.png' or '../media/image1.png'
-  const normalizedPath = target.startsWith('word/')
-    ? target
-    : target.startsWith('/')
-    ? target.slice(1)
-    : `word/${target.replace(/^(\.\.\/)+/, '')}`;
+async function extractImageDataUrl(
+  zip: JSZip,
+  target: string,
+  baseFolder = 'word'
+): Promise<{ dataUrl: string | null; isUndrawable?: boolean }> {
+  const lower = target.toLowerCase();
+  if (lower.endsWith('.emf') || lower.endsWith('.wmf')) {
+    return { dataUrl: null, isUndrawable: true };
+  }
+
+  let normalizedPath = target;
+  if (!target.startsWith('/')) {
+    normalizedPath = `${baseFolder}/${target.replace(/^(\.\.\/)+/, '')}`;
+  } else {
+    normalizedPath = target.slice(1);
+  }
 
   const imageFile = zip.file(normalizedPath);
-  if (!imageFile) return null;
+  if (!imageFile) return { dataUrl: null };
 
   try {
     const base64 = await imageFile.async('base64');
     let mime = 'image/png';
-    const lower = target.toLowerCase();
     if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mime = 'image/jpeg';
     else if (lower.endsWith('.gif')) mime = 'image/gif';
     else if (lower.endsWith('.svg')) mime = 'image/svg+xml';
     else if (lower.endsWith('.webp')) mime = 'image/webp';
 
-    return `data:${mime};base64,${base64}`;
+    return { dataUrl: `data:${mime};base64,${base64}` };
   } catch {
-    return null;
+    return { dataUrl: null };
   }
+}
+
+function extractMarks(rPr: any): ChromeMarks {
+  if (!rPr || typeof rPr !== 'object') return {};
+  const marks: ChromeMarks = {};
+  if (rPr.b !== undefined && rPr.b?.['@_val'] !== '0' && rPr.b?.['@_val'] !== 'false') marks.bold = true;
+  if (rPr.i !== undefined && rPr.i?.['@_val'] !== '0' && rPr.i?.['@_val'] !== 'false') marks.italic = true;
+  if (rPr.u !== undefined && rPr.u?.['@_val'] !== 'none') marks.underline = true;
+  if (rPr.color?.['@_val']) {
+    const c = String(rPr.color['@_val']).replace('#', '');
+    if (/^[0-9a-fA-F]{6}$/.test(c)) marks.color = `#${c}`;
+  }
+  if (rPr.sz?.['@_val']) {
+    const halfPt = Number(rPr.sz['@_val']);
+    if (Number.isFinite(halfPt) && halfPt > 0) marks.fontSize = Math.round(halfPt / 2);
+  }
+  if (rPr.rFonts?.['@_ascii']) {
+    marks.fontFamily = String(rPr.rFonts['@_ascii']);
+  }
+  return marks;
+}
+
+type RawParagraphRun =
+  | { type: 'text'; text: string; marks: ChromeMarks }
+  | { type: 'field'; field: 'page' | 'pageOfTotal'; marks: ChromeMarks }
+  | { type: 'image'; src: string }
+  | { type: 'tab' };
+
+async function parseParagraphItems(
+  pNode: any,
+  zip: JSZip,
+  rels: RelMap,
+  warnings: ImportWarning[]
+): Promise<RawParagraphRun[]> {
+  const items: RawParagraphRun[] = [];
+  if (!pNode || typeof pNode !== 'object') return items;
+
+  // Process simple fields in paragraph
+  if (pNode.fldSimple) {
+    const fields = Array.isArray(pNode.fldSimple) ? pNode.fldSimple : [pNode.fldSimple];
+    for (const f of fields) {
+      const instr = String(f['@_instr'] || '').trim().toUpperCase();
+      const marks = extractMarks(f.r?.rPr);
+      if (instr.startsWith('PAGE')) {
+        items.push({ type: 'field', field: 'page', marks });
+      } else if (instr.startsWith('NUMPAGES')) {
+        // Will be merged if adjacent
+        items.push({ type: 'field', field: 'pageOfTotal', marks });
+      } else {
+        warnings.push({
+          item: 'Unsupported Field',
+          reason: `Field "${instr}" in header/footer is not supported and was omitted.`,
+        });
+      }
+    }
+  }
+
+  const runs = Array.isArray(pNode.r) ? pNode.r : pNode.r ? [pNode.r] : [];
+  let inComplexField = false;
+  let complexFieldInstr = '';
+  let complexFieldMarks: ChromeMarks = {};
+
+  for (const r of runs) {
+    const marks = extractMarks(r.rPr);
+
+    // Tab character
+    if (r.tab !== undefined) {
+      items.push({ type: 'tab' });
+      continue;
+    }
+
+    // Complex field handling
+    if (r.fldChar) {
+      const fldType = r.fldChar['@_fldCharType'];
+      if (fldType === 'begin') {
+        inComplexField = true;
+        complexFieldInstr = '';
+        complexFieldMarks = marks;
+        continue;
+      }
+      if (fldType === 'end') {
+        inComplexField = false;
+        const instr = complexFieldInstr.trim().toUpperCase();
+        if (instr.startsWith('PAGE')) {
+          items.push({ type: 'field', field: 'page', marks: complexFieldMarks });
+        } else if (instr.startsWith('NUMPAGES')) {
+          items.push({ type: 'field', field: 'pageOfTotal', marks: complexFieldMarks });
+        } else if (instr) {
+          warnings.push({
+            item: 'Unsupported Field',
+            reason: `Field "${instr}" in header/footer is not supported and was omitted.`,
+          });
+        }
+        complexFieldInstr = '';
+        continue;
+      }
+    }
+
+    if (inComplexField) {
+      if (r.instrText) {
+        const it = typeof r.instrText === 'string' ? r.instrText : r.instrText['#text'] || '';
+        complexFieldInstr += ` ${it}`;
+      }
+      continue;
+    }
+
+    // Drawing / Image inside run
+    if (r.drawing) {
+      const drawingStr = JSON.stringify(r.drawing);
+      const blipMatch = drawingStr.match(/"@_embed":\s*"([^"]+)"/);
+      if (blipMatch && blipMatch[1]) {
+        const rId = blipMatch[1];
+        const rel = rels[rId];
+        if (rel && rel.target) {
+          const res = await extractImageDataUrl(zip, rel.target);
+          if (res.isUndrawable) {
+            warnings.push({
+              item: 'Undrawable Image',
+              reason: 'Image format (EMF/WMF) in header/footer is not supported and was omitted.',
+            });
+          } else if (res.dataUrl) {
+            items.push({ type: 'image', src: res.dataUrl });
+          }
+        }
+      }
+    }
+
+    // Text run
+    let text = '';
+    if (r.t !== undefined) {
+      if (typeof r.t === 'string') text = r.t;
+      else if (typeof r.t === 'number') text = String(r.t);
+      else if (r.t && r.t['#text']) text = String(r.t['#text']);
+    }
+    if (text) {
+      items.push({ type: 'text', text, marks });
+    }
+  }
+
+  // Combine PAGE and NUMPAGES if they appear as "Page [PAGE] of [NUMPAGES]"
+  const merged: RawParagraphRun[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const nextItem = items[i + 1];
+    const afterNext = items[i + 2];
+    // Check pattern: "Page " + field(page) + " of " + field(pageOfTotal)
+    if (
+      item.type === 'field' &&
+      item.field === 'page' &&
+      nextItem &&
+      nextItem.type === 'text' &&
+      nextItem.text.trim().toLowerCase() === 'of' &&
+      afterNext &&
+      afterNext.type === 'field'
+    ) {
+      const prevItem = merged[merged.length - 1];
+      if (prevItem && prevItem.type === 'text' && prevItem.text.trim().toLowerCase() === 'page') {
+        merged.pop(); // remove "Page "
+      }
+      merged.push({ type: 'field', field: 'pageOfTotal', marks: item.marks });
+      i += 2; // skip "of" and NUMPAGES
+      continue;
+    }
+    merged.push(item);
+  }
+
+  return merged;
+}
+
+function normalizeRuns(raw: RawParagraphRun[]): ChromeRun[] {
+  const result: ChromeRun[] = [];
+  for (const item of raw) {
+    if (item.type === 'tab') continue;
+    if (item.type === 'image') {
+      result.push({ type: 'image', src: item.src });
+    } else if (item.type === 'field') {
+      result.push({ type: 'field', field: item.field, ...item.marks });
+    } else if (item.type === 'text') {
+      result.push({ type: 'text', text: item.text, ...item.marks });
+    }
+  }
+  return result;
+}
+
+async function parseHeaderFooterXml(
+  xmlText: string,
+  zip: JSZip,
+  rels: RelMap,
+  warnings: ImportWarning[]
+): Promise<ChromeStory> {
+  const parsed = xmlParser.parse(xmlText);
+  const root = parsed?.hdr || parsed?.ftr;
+  if (!root) return createEmptyStory();
+
+  const story = createEmptyStory();
+
+  // 1. Detect floating shapes / anchored images in raw XML
+  let floatingLogoSrc: string | null = null;
+  const anchorRegex = /<wp:anchor[\s\S]*?<\/wp:anchor>/g;
+  const anchors = xmlText.match(anchorRegex) || [];
+  for (const anchor of anchors) {
+    const blipMatch = anchor.match(/embed="([^"]+)"/) || anchor.match(/r:id="([^"]+)"/);
+    if (blipMatch && blipMatch[1]) {
+      const rel = rels[blipMatch[1]];
+      if (rel && rel.target) {
+        const res = await extractImageDataUrl(zip, rel.target);
+        if (res.isUndrawable) {
+          warnings.push({
+            item: 'Undrawable Image',
+            reason: 'Image format (EMF/WMF) in header/footer is not supported and was omitted.',
+          });
+        } else if (res.dataUrl) {
+          if (!floatingLogoSrc) {
+            floatingLogoSrc = res.dataUrl;
+          } else {
+            warnings.push({
+              item: 'Extra Floating Shapes',
+              reason: 'Additional floating shapes or images in header/footer were omitted.',
+            });
+          }
+        }
+      }
+    } else {
+      warnings.push({
+        item: 'Extra Floating Shapes',
+        reason: 'Floating shapes in header/footer are not supported and were omitted.',
+      });
+    }
+  }
+
+  // 2. Check for Table
+  const tables = Array.isArray(root.tbl) ? root.tbl : root.tbl ? [root.tbl] : [];
+  const paragraphs = Array.isArray(root.p) ? root.p : root.p ? [root.p] : [];
+
+  let line0Mapped = false;
+
+  if (tables.length > 0) {
+    const tbl = tables[0];
+    const rows = Array.isArray(tbl.tr) ? tbl.tr : tbl.tr ? [tbl.tr] : [];
+    if (rows.length > 1) {
+      warnings.push({
+        item: 'Multi-row Table',
+        reason: 'Multi-row header and footer tables are not supported and were omitted.',
+      });
+    }
+    if (rows.length >= 1) {
+      const cells = Array.isArray(rows[0].tc) ? rows[0].tc : rows[0].tc ? [rows[0].tc] : [];
+      if (cells.length === 3) {
+        // Map 3 cells into left, center, right
+        const [c0, c1, c2] = cells;
+        const runs0 = await parseCellRuns(c0, zip, rels, warnings);
+        const runs1 = await parseCellRuns(c1, zip, rels, warnings);
+        const runs2 = await parseCellRuns(c2, zip, rels, warnings);
+
+        story.line0.left.runs = runs0;
+        story.line0.center.runs = runs1;
+        story.line0.right.runs = runs2;
+        line0Mapped = true;
+      }
+    }
+  }
+
+  // If line0 was not mapped from a 3-cell table, map from first paragraph's tabs
+  let startParaIdx = 0;
+  if (!line0Mapped && paragraphs.length > 0) {
+    const firstP = paragraphs[0];
+    startParaIdx = 1;
+    const rawRuns = await parseParagraphItems(firstP, zip, rels, warnings);
+
+    // Split runs by tab
+    const zones: RawParagraphRun[][] = [[]];
+    for (const r of rawRuns) {
+      if (r.type === 'tab') {
+        zones.push([]);
+      } else {
+        zones[zones.length - 1].push(r);
+      }
+    }
+
+    if (zones.length >= 3) {
+      story.line0.left.runs = normalizeRuns(zones[0]);
+      story.line0.center.runs = normalizeRuns(zones[1]);
+      story.line0.right.runs = normalizeRuns(zones.slice(2).flat());
+    } else if (zones.length === 2) {
+      story.line0.left.runs = normalizeRuns(zones[0]);
+      story.line0.right.runs = normalizeRuns(zones[1]);
+    } else {
+      // 0 tabs - align by paragraph alignment if available
+      const alignVal = firstP.pPr?.jc?.['@_val'];
+      const align = alignVal === 'center' ? 'center' : alignVal === 'right' ? 'right' : 'left';
+      if (align === 'center') {
+        story.line0.center.runs = normalizeRuns(zones[0]);
+      } else if (align === 'right') {
+        story.line0.right.runs = normalizeRuns(zones[0]);
+      } else {
+        story.line0.left.runs = normalizeRuns(zones[0]);
+      }
+    }
+    line0Mapped = true;
+  }
+
+  // Prepend floating logo to left zone if found
+  if (floatingLogoSrc) {
+    story.line0.left.runs.unshift({ type: 'image', src: floatingLogoSrc });
+  }
+
+  // Later paragraphs become full-width lines
+  for (let idx = startParaIdx; idx < paragraphs.length; idx++) {
+    const p = paragraphs[idx];
+    const rawRuns = await parseParagraphItems(p, zip, rels, warnings);
+    const runs = normalizeRuns(rawRuns);
+    const alignVal = p.pPr?.jc?.['@_val'];
+    const align = alignVal === 'center' ? 'center' : alignVal === 'right' ? 'right' : 'left';
+    story.lines.push({ align, runs });
+  }
+
+  return story;
+}
+
+async function parseCellRuns(
+  tcNode: any,
+  zip: JSZip,
+  rels: RelMap,
+  warnings: ImportWarning[]
+): Promise<ChromeRun[]> {
+  const runs: ChromeRun[] = [];
+  if (!tcNode || typeof tcNode !== 'object') return runs;
+  const paragraphs = Array.isArray(tcNode.p) ? tcNode.p : tcNode.p ? [tcNode.p] : [];
+  for (const p of paragraphs) {
+    const raw = await parseParagraphItems(p, zip, rels, warnings);
+    runs.push(...normalizeRuns(raw));
+  }
+  return runs;
 }
 
 /**
@@ -143,7 +494,12 @@ async function extractImageDataUrl(zip: JSZip, target: string): Promise<string |
 export async function importDocx(
   buffer: ArrayBuffer,
   fileName: string
-): Promise<{ html: string; report: ImportReport; pageSetup?: PageSetup | null }> {
+): Promise<{
+  html: string;
+  report: ImportReport;
+  pageSetup?: PageSetup | null;
+  chrome?: DocumentChrome | null;
+}> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
 
@@ -162,7 +518,7 @@ export async function importDocx(
       throw new Error('Invalid document body in word/document.xml');
     }
 
-    const relMap = await loadRelationships(zip);
+    const relMap = await loadRelationships(zip, 'word/_rels/document.xml.rels');
     const numMap = await loadNumbering(zip);
 
     // Detect skipped features in raw XML
@@ -182,9 +538,99 @@ export async function importDocx(
       skippedFeatures.push('Equations');
       warnings.push({ item: 'Math Equations', reason: 'Equations were omitted' });
     }
-    if (xmlText.includes('headerReference') || xmlText.includes('footerReference')) {
-      skippedFeatures.push('Headers & Footers');
-      warnings.push({ item: 'Headers & Footers', reason: 'Document headers and footers were omitted' });
+
+    // Read section properties and headers/footers
+    const allSectPrMatches = xmlText.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/g) || [];
+    if (allSectPrMatches.length > 1) {
+      warnings.push({
+        item: 'Extra Sections',
+        reason: 'Multiple sections are not supported; headers and footers from additional sections were omitted.',
+      });
+    }
+
+    const chrome = createEmptyChrome();
+    const rawSectPr = body.sectPr;
+    const sectPr = Array.isArray(rawSectPr) ? rawSectPr[rawSectPr.length - 1] : rawSectPr;
+
+    if (sectPr) {
+      const headerRefs = Array.isArray(sectPr.headerReference)
+        ? sectPr.headerReference
+        : sectPr.headerReference
+        ? [sectPr.headerReference]
+        : [];
+      const footerRefs = Array.isArray(sectPr.footerReference)
+        ? sectPr.footerReference
+        : sectPr.footerReference
+        ? [sectPr.footerReference]
+        : [];
+
+      // Check Different First Page
+      if (
+        (sectPr.titlePg !== undefined && sectPr.titlePg?.['@_val'] !== '0' && sectPr.titlePg?.['@_val'] !== 'false') ||
+        headerRefs.some((r: any) => r['@_type'] === 'first') ||
+        footerRefs.some((r: any) => r['@_type'] === 'first')
+      ) {
+        chrome.differentFirstPage = true;
+      }
+
+      // Check odd/even headers
+      const hasEven = [...headerRefs, ...footerRefs].some((r) => r['@_type'] === 'even');
+      if (hasEven) {
+        warnings.push({
+          item: 'Odd/Even Headers',
+          reason: 'Different odd and even page headers and footers are not supported and were omitted.',
+        });
+      }
+
+      for (const hr of headerRefs) {
+        const type = hr['@_type'] || 'default';
+        const rId = hr['@_id'];
+        const rel = rId ? relMap[rId] : null;
+        if (!rel || !rel.target) continue;
+
+        const headerPath = rel.target.startsWith('word/')
+          ? rel.target
+          : `word/${rel.target.replace(/^(\.\.\/)+/, '')}`;
+        const headerFile = zip.file(headerPath);
+        if (!headerFile) continue;
+
+        const headerBaseName = headerPath.split('/').pop() || '';
+        const headerRelsPath = `word/_rels/${headerBaseName}.rels`;
+        const headerRels = await loadRelationships(zip, headerRelsPath);
+        const headerXml = await headerFile.async('text');
+        const story = await parseHeaderFooterXml(headerXml, zip, headerRels, warnings);
+
+        if (type === 'first') {
+          chrome.firstHeader = story;
+        } else if (type === 'default') {
+          chrome.header = story;
+        }
+      }
+
+      for (const fr of footerRefs) {
+        const type = fr['@_type'] || 'default';
+        const rId = fr['@_id'];
+        const rel = rId ? relMap[rId] : null;
+        if (!rel || !rel.target) continue;
+
+        const footerPath = rel.target.startsWith('word/')
+          ? rel.target
+          : `word/${rel.target.replace(/^(\.\.\/)+/, '')}`;
+        const footerFile = zip.file(footerPath);
+        if (!footerFile) continue;
+
+        const footerBaseName = footerPath.split('/').pop() || '';
+        const footerRelsPath = `word/_rels/${footerBaseName}.rels`;
+        const footerRels = await loadRelationships(zip, footerRelsPath);
+        const footerXml = await footerFile.async('text');
+        const story = await parseHeaderFooterXml(footerXml, zip, footerRels, warnings);
+
+        if (type === 'first') {
+          chrome.firstFooter = story;
+        } else if (type === 'default') {
+          chrome.footer = story;
+        }
+      }
     }
 
     // Helper to render text runs
@@ -211,9 +657,9 @@ export async function importDocx(
           const rId = blipMatch[1];
           const rel = relMap[rId];
           if (rel && rel.target) {
-            const dataUrl = await extractImageDataUrl(zip, rel.target);
-            if (dataUrl) {
-              return `<img src="${dataUrl}" alt="Imported document image" style="max-width: 100%; height: auto;" />`;
+            const res = await extractImageDataUrl(zip, rel.target);
+            if (res.dataUrl) {
+              return `<img src="${res.dataUrl}" alt="Imported document image" style="max-width: 100%; height: auto;" />`;
             }
           }
         }
@@ -229,41 +675,37 @@ export async function importDocx(
 
       // Style attributes
       const styles: string[] = [];
-      if (rPr.color && rPr.color['@_val']) {
-        const c = rPr.color['@_val'];
-        if (c !== 'auto') styles.push(`color: #${c}`);
+
+      if (rPr.b) styles.push('font-weight: bold;');
+      if (rPr.i) styles.push('font-style: italic;');
+      if (rPr.u) styles.push('text-decoration: underline;');
+      if (rPr.strike) styles.push('text-decoration: line-through;');
+
+      if (rPr.sz) {
+        const halfPt = typeof rPr.sz === 'object' ? rPr.sz['@_val'] : rPr.sz;
+        if (halfPt) {
+          const pt = parseFloat(halfPt) / 2;
+          styles.push(`font-size: ${pt}pt;`);
+        }
       }
-      if (rPr.sz && rPr.sz['@_val']) {
-        const pt = parseInt(rPr.sz['@_val'], 10) / 2;
-        if (!isNaN(pt)) styles.push(`font-size: ${pt}pt`);
+
+      if (rPr.color) {
+        const colorVal = typeof rPr.color === 'object' ? rPr.color['@_val'] : rPr.color;
+        if (colorVal && colorVal !== 'auto') {
+          styles.push(`color: #${colorVal};`);
+        }
       }
-      if (rPr.rFonts && (rPr.rFonts['@_ascii'] || rPr.rFonts['@_hAnsi'])) {
+
+      if (rPr.rFonts) {
         const font = rPr.rFonts['@_ascii'] || rPr.rFonts['@_hAnsi'];
-        styles.push(`font-family: '${font}', sans-serif`);
-      }
-      if (rPr.highlight && rPr.highlight['@_val']) {
-        const hColor = rPr.highlight['@_val'];
-        styles.push(`background-color: ${hColor}`);
+        if (font) {
+          styles.push(`font-family: '${font}', sans-serif;`);
+        }
       }
 
       if (styles.length > 0) {
-        html = `<span style="${styles.join('; ')}">${html}</span>`;
+        return `<span style="${styles.join(' ')}">${html}</span>`;
       }
-
-      // Formatting marks
-      if (rPr.b !== undefined && rPr.b['@_val'] !== '0' && rPr.b['@_val'] !== 'false') {
-        html = `<strong>${html}</strong>`;
-      }
-      if (rPr.i !== undefined && rPr.i['@_val'] !== '0' && rPr.i['@_val'] !== 'false') {
-        html = `<em>${html}</em>`;
-      }
-      if (rPr.u !== undefined && rPr.u['@_val'] !== 'none') {
-        html = `<u>${html}</u>`;
-      }
-      if (rPr.strike !== undefined && rPr.strike['@_val'] !== '0') {
-        html = `<s>${html}</s>`;
-      }
-
       return html;
     };
 
@@ -271,34 +713,47 @@ export async function importDocx(
     const renderParagraph = async (p: any): Promise<string> => {
       const pPr = p.pPr || {};
       const pStyle = pPr.pStyle?.['@_val'] || '';
-      const jc = pPr.jc?.['@_val'];
 
-      // Check alignment
-      const alignStyle = jc ? ` style="text-align: ${jc === 'both' ? 'justify' : jc}"` : '';
+      let alignStyle = '';
+      if (pPr.jc) {
+        const jcVal = pPr.jc['@_val'];
+        if (jcVal === 'center') alignStyle = ' style="text-align: center;"';
+        else if (jcVal === 'right') alignStyle = ' style="text-align: right;"';
+        else if (jcVal === 'both') alignStyle = ' style="text-align: justify;"';
+      }
 
-      // Runs inside paragraph
-      let innerContent = '';
-
-      // Direct children might be runs, hyperlinks, etc.
-      // Collect all child elements in order
+      // Check page break inside paragraph
+      let hasPageBreak = false;
       const runs = Array.isArray(p.r) ? p.r : p.r ? [p.r] : [];
+      for (const r of runs) {
+        if (r.br && (r.br['@_type'] === 'page' || r.br['@_clear'])) {
+          hasPageBreak = true;
+          break;
+        }
+      }
+
+      let innerContent = '';
       for (const r of runs) {
         innerContent += await renderRun(r);
       }
 
-      // Check hyperlinks
+      // Handle hyperlinks
       if (p.hyperlink) {
-        const links = Array.isArray(p.hyperlink) ? p.hyperlink : [p.hyperlink];
-        for (const link of links) {
-          const rId = link['@_id'];
+        const hLinks = Array.isArray(p.hyperlink) ? p.hyperlink : [p.hyperlink];
+        for (const hl of hLinks) {
+          const rId = hl['@_id'];
           const target = relMap[rId]?.target || '#';
           let linkText = '';
-          const lRuns = Array.isArray(link.r) ? link.r : link.r ? [link.r] : [];
-          for (const lr of lRuns) {
-            linkText += await renderRun(lr);
+          const hlRuns = Array.isArray(hl.r) ? hl.r : hl.r ? [hl.r] : [];
+          for (const hr of hlRuns) {
+            linkText += await renderRun(hr);
           }
           innerContent += `<a href="${target}">${linkText || target}</a>`;
         }
+      }
+
+      if (hasPageBreak) {
+        innerContent += '<hr data-page-break="true">';
       }
 
       if (!innerContent.trim()) {
@@ -413,6 +868,7 @@ export async function importDocx(
     return {
       html: sanitized,
       pageSetup: section?.setup ?? null,
+      chrome: hasChromeContent(chrome) ? chrome : null,
       report: {
         fileName,
         format: 'docx',
@@ -441,6 +897,7 @@ export async function importDocx(
 
       return {
         html: sanitized,
+        chrome: null,
         report: {
           fileName,
           format: 'docx',

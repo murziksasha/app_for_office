@@ -20,13 +20,17 @@ import { PageBreak } from './extensions/pageBreak';
 import { FolioDocument } from './extensions/folioDocument';
 import { PageGaps } from './extensions/pageGaps';
 import { applyPageSetup, DEFAULT_PAGE_SETUP } from './pageSetup';
+import { applyDocChrome, createEmptyChrome } from './chrome';
 import { sanitizeHtml } from './sanitize';
 
 export type DocumentModel = JSONContent;
 
 export const defaultDocumentModel: DocumentModel = {
   type: 'doc',
-  attrs: { pageSetup: { ...DEFAULT_PAGE_SETUP } },
+  attrs: {
+    pageSetup: { ...DEFAULT_PAGE_SETUP },
+    chrome: { ...createEmptyChrome() },
+  },
   content: [{ type: 'paragraph' }],
 };
 
@@ -92,7 +96,7 @@ export function htmlToDocument(rawHtml: string): DocumentModel {
     if (!json || !json.content || json.content.length === 0) {
       return defaultDocumentModel;
     }
-    return applyPageSetup(json);
+    return applyDocChrome(applyPageSetup(json));
   } catch (err) {
     console.warn('Failed to parse HTML to document JSON, returning default model:', err);
     return defaultDocumentModel;
@@ -115,4 +119,3 @@ export function documentToHtml(doc: DocumentModel): string {
     return '<p></p>';
   }
 }
-

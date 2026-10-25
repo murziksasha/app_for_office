@@ -4,6 +4,7 @@ import type { JSONContent } from '@tiptap/core';
 import { documentExtensions, defaultDocumentModel } from './model';
 import { MarginRuler } from './MarginRuler';
 import { formatMargin, mergePageSetup, mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from './pageSetup';
+import { bandState } from './bandState';
 import { X } from 'lucide-react';
 import { i18n, t } from '../i18n/instance';
 
@@ -36,11 +37,17 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     onUpdate: ({ editor }) => {
       onChange(editor.getJSON());
     },
+    onSelectionUpdate: () => {
+      bandState.setFocus(null);
+    },
   });
 
   useEffect(() => {
-    if (editor && onEditorReady) {
-      onEditorReady(editor);
+    if (editor) {
+      bandState.setView(editor.view);
+      if (onEditorReady) {
+        onEditorReady(editor);
+      }
     }
   }, [editor, onEditorReady]);
 
@@ -289,6 +296,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
       <style>{`
         .folio-prose .ProseMirror {
+          position: relative;
           outline: none;
           min-height: var(--folio-page-height, 1056px);
           padding: var(--folio-margin-top, 96px) var(--folio-margin-right, 96px) var(--folio-margin-bottom, 96px) var(--folio-margin-left, 96px);
@@ -301,19 +309,52 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           font-size: 11pt;
           line-height: 1.6;
         }
+        .folio-header-top-band {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          padding-left: var(--folio-margin-left, 96px);
+          padding-right: var(--folio-margin-right, 96px);
+          box-sizing: border-box;
+          pointer-events: auto;
+          user-select: text;
+          z-index: 2;
+        }
+        .folio-footer-bottom-band {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding-left: var(--folio-margin-left, 96px);
+          padding-right: var(--folio-margin-right, 96px);
+          box-sizing: border-box;
+          pointer-events: auto;
+          user-select: text;
+          z-index: 2;
+        }
         .folio-page-gap {
           margin-left: calc(-1 * var(--folio-margin-left, 96px));
           margin-right: calc(-1 * var(--folio-margin-right, 96px));
           user-select: none;
-          pointer-events: none;
         }
         .folio-page-gap-end,
         .folio-page-gap-start {
           background: #ffffff;
+          padding-left: var(--folio-margin-left, 96px);
+          padding-right: var(--folio-margin-right, 96px);
+          box-sizing: border-box;
+          pointer-events: auto;
+          user-select: text;
         }
         .folio-page-gap-desk {
           height: 28px;
           background: var(--folio-bg);
+          pointer-events: none;
+        }
+        .folio-band-container {
+          pointer-events: auto !important;
+          user-select: text !important;
         }
         .folio-prose .ProseMirror p {
           margin-bottom: 0.8em;

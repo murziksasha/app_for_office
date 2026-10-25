@@ -121,7 +121,14 @@
     "text": "Текст",
     "textBox": "Напис",
     "video": "Відео",
-    "rectangle": "Прямокутник"
+    "rectangle": "Прямокутник",
+    "headerFooterGroup": "Колонтитули",
+    "headerHint": "Верхній колонтитул",
+    "footerHint": "Нижній колонтитул",
+    "differentFirstPage": "Перша сторінка особлива",
+    "pageNumber": "Номер сторінки",
+    "pageNumberDigit": "1",
+    "pageNumberOfTotal": "Сторінка 1 з 8"
   },
   "start": {
     "tagline": "Локальний офісний набір",

@@ -7,14 +7,21 @@ import { importRtf } from '../document/rtf/importer';
 import { plainTextToHtml, markdownToHtml } from '../document/textMdHtml';
 import { htmlToDocument } from '../document/model';
 import { applyPageSetup, type PageSetup } from '../document/pageSetup';
+import { applyDocChrome, type DocumentChrome } from '../document/chrome';
 import { importXlsx, importCsvTsv } from '../spreadsheet/adapters';
 import { importPptx } from '../slides/pptxAdapter';
 import { t } from '../i18n/instance';
 import { stampClean } from './tabs';
 
-function documentWithSetup(html: string, pageSetup?: PageSetup | null) {
-  const doc = htmlToDocument(html);
-  return pageSetup ? applyPageSetup(doc, pageSetup) : doc;
+function documentWithSetup(
+  html: string,
+  pageSetup?: PageSetup | null,
+  chrome?: DocumentChrome | null
+) {
+  let doc = htmlToDocument(html);
+  if (pageSetup) doc = applyPageSetup(doc, pageSetup);
+  if (chrome) doc = applyDocChrome(doc, chrome);
+  return doc;
 }
 
 export function legacySoftMakerFormat(fileName: string): 'tmdx' | 'pmdx' | 'prdx' | null {
@@ -80,8 +87,8 @@ export async function loadFileToEditor(
   switch (detection.kind) {
     case 'document': {
       if (detection.format === 'docx' || detection.format === 'tmdx') {
-        const { html, report, pageSetup } = await importDocx(buffer, fileName);
-        editorState.documentContent = documentWithSetup(html, pageSetup);
+        const { html, report, pageSetup, chrome } = await importDocx(buffer, fileName);
+        editorState.documentContent = documentWithSetup(html, pageSetup, chrome);
         editorState.importReport = report;
       } else if (detection.format === 'odt') {
         const { html, report, pageSetup } = await importOdt(buffer, fileName);
@@ -168,4 +175,3 @@ export async function loadFileToEditor(
 
   return presentLegacyPackage(editorState, fileName);
 }
-

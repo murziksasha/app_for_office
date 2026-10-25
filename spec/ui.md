@@ -55,11 +55,10 @@ The Home header and the editor title bar, before Save, share a language control.
 
 The ribbon does not include dictation, designer assistance, add-ins, sharing, ink drawing, transitions, animations, a presenter view, mailings, or comments.
 
-On a document, the Layout tab sets the page size and the four margins as numbers. The same margins are sliders on the page: a horizontal ruler above the sheet for the left and right margins, and a vertical ruler beside the first page for the top and bottom margins. English shows inches. Ukrainian shows centimeters. The stored unit is millimeters. Print uses those margins as the page margin. RTF, plain text, Markdown, and HTML keep the setup for the session and for drafts; their file bytes do not store a page box.
+On a document, the Layout tab sets the page size and the four margins as numbers. The same margins are sliders on the page: a horizontal ruler above the sheet for the left and right margins, and a vertical ruler beside the first page for the top and bottom margins. English shows inches. Ukrainian shows centimeters. The stored unit is millimeters. Print uses those margins as the page margin. RTF, plain text, Markdown, and HTML keep the setup for the session and for drafts; their file bytes do not store a page box. The Layout tab also controls headers and footers with a "Different first page" switch and "Page number" insertion (digit `1` or `Page 1 of 8`). On-screen page margins paint the resolved header and footer stories with a quiet localized hint when empty; clicking a band allows inline editing outside the body editor while Home font and paragraph alignment controls follow the caret.
 
 ### The Reason
 People expect writing tools in one place, grouped the way the rest of an office app groups them. A second toolbar inside the sheet or above the slide duplicates that and hides commands that already exist.
 
 ### The Check
 `e2e/smoke.spec.ts` expects the document captions Clipboard, Font, Paragraph, and Styles, a presentation New slide control that adds a thumbnail, and a spreadsheet ribbon that shows Font and Number with FortuneSheet’s toolbar absent. It also collapses the ribbon, reloads, and checks that the tools stay hidden, then switches the language control to Ukrainian and expects `Основне` while the typed document text stays unchanged. Those smoke tests set `folio_ui_lang=en` before they look for English labels.
-

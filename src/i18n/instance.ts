@@ -10,7 +10,6 @@ void i18n.use(initReactI18next).init({
   },
   lng: 'en',
   fallbackLng: 'en',
-  initImmediate: false,
   interpolation: { escapeValue: false },
   returnNull: false,
 });

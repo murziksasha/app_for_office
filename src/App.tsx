@@ -902,9 +902,7 @@ export const App: React.FC = () => {
         scope = selected;
       }
       if (tab.kind === 'document') {
-        document.body.dataset.folioPrint = 'document';
-        window.print();
-        delete document.body.dataset.folioPrint;
+        setPrintJob({ tab, scope: 'all' });
         return;
       }
       setPrintJob({ tab, scope });

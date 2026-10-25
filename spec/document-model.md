@@ -4,16 +4,16 @@
 
 ### The Rule
 The stored representation of text documents is Tiptap JSON (`JSONContent`), defined in `src/document/model.ts`:
-- **In-App Model**: A tree of structured ProseMirror nodes and marks (headings, paragraphs, lists, tables, bold, italic, underline, font size, indent, page breaks). The doc node stores `pageSetup`: portrait `letter` or `a4`, and top, right, bottom, and left margins in millimeters. The default is Letter with 25.4 mm on every side. A margin change is one undo step and is part of the document hash.
-- **Import Boundary**: All incoming content (DOCX, ODT, RTF, Markdown, HTML, Plain Text) must be converted into sanitized HTML and passed through `htmlToDocument(html)` exactly once.
-- **Export Boundary**: Conversion to HTML via `documentToHtml(doc)` occurs only at save time within export adapters.
+- **In-App Model**: A tree of structured ProseMirror nodes and marks (headings, paragraphs, lists, tables, bold, italic, underline, font size, indent, page breaks). The doc node stores `pageSetup`: portrait `letter` or `a4`, and top, right, bottom, and left margins in millimeters. The default is Letter with 25.4 mm on every side. Beside `pageSetup`, the doc node stores `chrome` (`DocumentChrome`): headers and footers for the document, including a `differentFirstPage` boolean and stories for `header`, `footer`, `firstHeader`, and `firstFooter`. Each story models line 0 as three zones (`left`, `center`, `right`) and further lines as full-width paragraphs. A margin or chrome change is one undo step and is part of the document hash.
+- **Import Boundary**: All incoming content (DOCX, ODT, RTF, Markdown, HTML, Plain Text) must be converted into sanitized HTML and passed through `htmlToDocument(html)` exactly once. Chrome extracted from format packages (DOCX/TMDX) is attached to the document node attributes via `applyDocChrome(doc, chrome)`.
+- **Export Boundary**: Conversion to HTML via `documentToHtml(doc)` occurs only at save time within export adapters, keeping header and footer text strictly outside the body HTML. Exporters receive `chrome` beside `pageSetup` and serialize stories into native format structures.
 - **Component Interface**: `DocumentEditor` receives `content: JSONContent` and emits `onChange: (doc: JSONContent) => void`.
 
 ### The Reason
-Storing Tiptap JSON guarantees consistent document semantics, eliminates HTML parsing quirks across editor re-renders, and ensures that drafts stored in IndexedDB can be reconstituted faithfully without loss of structural node attributes.
+Storing Tiptap JSON guarantees consistent document semantics, eliminates HTML parsing quirks across editor re-renders, and ensures that drafts stored in IndexedDB can be reconstituted faithfully without loss of structural node attributes or document chrome.
 
 ### The Check
-`tests/open_save.test.ts` verifies that `loadFileToEditor` populates `state.documentContent` as a valid Tiptap JSON object with `type: 'doc'`.
+`tests/open_save.test.ts` verifies that `loadFileToEditor` populates `state.documentContent` as a valid Tiptap JSON object with `type: 'doc'` and preserves doc attributes.
 
 ---
 
@@ -45,4 +45,3 @@ A normalized slide element schema decouples PowerPoint Open XML packaging from t
 
 ### The Check
 `tests/slides.test.ts` asserts that `importPptx` creates slides with valid geometric coordinates and text elements, and `exportPptx` produces a valid presentation package.
-
