@@ -196,7 +196,11 @@ export function pageSetupFromTwips(input: TwipSection): { setup: PageSetup; adju
 
 export function readDocxSection(body: unknown): { setup: PageSetup; adjusted: boolean } | null {
   if (!body || typeof body !== 'object') return null;
-  const sect = (body as { sectPr?: Record<string, unknown> }).sectPr;
+  const rawSect = (body as { sectPr?: unknown }).sectPr;
+  if (!rawSect || typeof rawSect !== 'object') return null;
+  const sect = Array.isArray(rawSect)
+    ? (rawSect[rawSect.length - 1] as Record<string, unknown>)
+    : (rawSect as Record<string, unknown>);
   if (!sect || typeof sect !== 'object') return null;
   const pgSz = (sect.pgSz || {}) as Record<string, unknown>;
   const pgMar = (sect.pgMar || {}) as Record<string, unknown>;

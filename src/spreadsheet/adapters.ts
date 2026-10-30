@@ -7,6 +7,8 @@ export interface FortuneCell {
   f?: string;
   bl?: number; // 1 for bold
   it?: number; // 1 for italic
+  un?: number; // 1 for underline
+  tb?: string; // '1' when text wraps
   fc?: string; // font color
   bg?: string; // bg color
   fs?: number; // font size
@@ -14,7 +16,38 @@ export interface FortuneCell {
   ht?: number; // 0 center, 1 left, 2 right
   vt?: number; // 0 middle, 1 top, 2 bottom
   ct?: { fa: string; t: string };
+  mc?: { r: number; c: number; rs?: number; cs?: number };
 }
+
+export interface FortuneMerge {
+  r: number;
+  c: number;
+  rs: number;
+  cs: number;
+}
+
+export interface FortuneBorderSide {
+  style: number;
+  color: string;
+}
+
+export interface FortuneBorder {
+  rangeType: 'range' | 'cell';
+  borderType?: string;
+  color?: string;
+  style?: string;
+  range?: { row: number[]; column: number[] }[];
+  value?: {
+    row_index: number;
+    col_index: number;
+    l?: FortuneBorderSide;
+    r?: FortuneBorderSide;
+    t?: FortuneBorderSide;
+    b?: FortuneBorderSide;
+  };
+}
+
+export type FortuneFreezeType = 'row' | 'column' | 'both' | 'rangeRow' | 'rangeColumn' | 'rangeBoth';
 
 export interface FortuneSheetData {
   name: string;
@@ -24,10 +57,17 @@ export interface FortuneSheetData {
   row: number;
   column: number;
   data: (FortuneCell | null)[][];
+  frozen?: {
+    type: FortuneFreezeType;
+    range?: { row_focus: number; column_focus: number };
+  };
+  filter_select?: { row: number[]; column: number[] };
   config?: {
     columnlen?: Record<string, number>;
     rowlen?: Record<string, number>;
-    merge?: Record<string, any>;
+    merge?: Record<string, FortuneMerge>;
+    borderInfo?: FortuneBorder[];
+    rowhidden?: Record<string, number>;
   };
 }
 
@@ -53,6 +93,163 @@ function hexToArgb(hex?: string): string | undefined {
   return clean.toUpperCase();
 }
 
+function columnName(index: number): string {
+  let n = index + 1;
+  let name = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    name = String.fromCharCode(65 + rem) + name;
+    n = Math.floor((n - 1) / 26);
+  }
+  return name;
+}
+
+function columnIndex(letters: string): number {
+  let n = 0;
+  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
+function parseA1Range(ref: string): { r1: number; c1: number; r2: number; c2: number } | null {
+  const clean = ref.replace(/\$/g, '').split('!').pop() || '';
+  const match = clean.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+  if (!match) return null;
+  return {
+    c1: columnIndex(match[1]),
+    r1: Number(match[2]) - 1,
+    c2: columnIndex(match[3]),
+    r2: Number(match[4]) - 1,
+  };
+}
+
+function ensureGrid(data: (FortuneCell | null)[][], rows: number, cols: number) {
+  const width = Math.max(cols, data[0]?.length || 0, 1);
+  while (data.length < rows) {
+    data.push(Array.from({ length: width }, () => null));
+  }
+  for (const row of data) {
+    while (row.length < cols) row.push(null);
+  }
+}
+
+const EXCEL_BORDER_STYLE: Record<string, number> = {
+  thin: 1,
+  hair: 2,
+  dotted: 3,
+  dashed: 4,
+  dashDot: 5,
+  dashDotDot: 6,
+  double: 7,
+  medium: 8,
+  mediumDashed: 9,
+  mediumDashDot: 10,
+  mediumDashDotDot: 11,
+  slantDashDot: 12,
+  thick: 13,
+};
+
+const FORTUNE_BORDER_STYLE: Record<number, ExcelJS.BorderStyle> = {
+  1: 'thin',
+  2: 'hair',
+  3: 'dotted',
+  4: 'dashed',
+  5: 'dashDot',
+  6: 'dashDotDot',
+  7: 'double',
+  8: 'medium',
+  9: 'mediumDashed',
+  10: 'mediumDashDot',
+  11: 'mediumDashDotDot',
+  12: 'slantDashDot',
+  13: 'thick',
+};
+
+function borderSide(side?: Partial<ExcelJS.Border>): FortuneBorderSide | undefined {
+  if (!side?.style) return undefined;
+  return {
+    style: EXCEL_BORDER_STYLE[side.style] || 1,
+    color: argbToHex(side.color?.argb) || '#000000',
+  };
+}
+
+function excelSide(side?: FortuneBorderSide): Partial<ExcelJS.Border> | undefined {
+  if (!side) return undefined;
+  return {
+    style: FORTUNE_BORDER_STYLE[side.style] || 'thin',
+    color: { argb: hexToArgb(side.color) || 'FF000000' },
+  };
+}
+
+function freezeFromView(view: Partial<ExcelJS.WorksheetView> | undefined): FortuneSheetData['frozen'] | undefined {
+  if (!view || view.state !== 'frozen') return undefined;
+  const x = view.xSplit || 0;
+  const y = view.ySplit || 0;
+  if (x > 0 && y > 0) {
+    return { type: 'rangeBoth', range: { row_focus: y - 1, column_focus: x - 1 } };
+  }
+  if (y > 0) return { type: 'rangeRow', range: { row_focus: y - 1, column_focus: 0 } };
+  if (x > 0) return { type: 'rangeColumn', range: { row_focus: 0, column_focus: x - 1 } };
+  return undefined;
+}
+
+function freezeSplits(frozen?: FortuneSheetData['frozen']): { x: number; y: number } | null {
+  if (!frozen) return null;
+  const rowFocus = frozen.range?.row_focus ?? 0;
+  const colFocus = frozen.range?.column_focus ?? 0;
+  if (frozen.type === 'row' || frozen.type === 'rangeRow') return { x: 0, y: rowFocus + 1 };
+  if (frozen.type === 'column' || frozen.type === 'rangeColumn') return { x: colFocus + 1, y: 0 };
+  if (frozen.type === 'both' || frozen.type === 'rangeBoth') return { x: colFocus + 1, y: rowFocus + 1 };
+  return null;
+}
+
+function readAutoFilter(worksheet: ExcelJS.Worksheet): FortuneSheetData['filter_select'] | undefined {
+  const filter = worksheet.autoFilter;
+  if (!filter) return undefined;
+  if (typeof filter === 'string') {
+    const parsed = parseA1Range(filter);
+    if (!parsed) return undefined;
+    return { row: [parsed.r1, parsed.r2], column: [parsed.c1, parsed.c2] };
+  }
+  const from = filter.from;
+  const to = filter.to;
+  if (!from || !to) return undefined;
+  if (typeof from === 'string' || typeof to === 'string') {
+    const parsed = parseA1Range(`${typeof from === 'string' ? from : ''}:${typeof to === 'string' ? to : ''}`);
+    return parsed ? { row: [parsed.r1, parsed.r2], column: [parsed.c1, parsed.c2] } : undefined;
+  }
+  return {
+    row: [from.row - 1, to.row - 1],
+    column: [from.column - 1, to.column - 1],
+  };
+}
+
+let knownFunctions: Set<string> | null = null;
+
+async function formulaNames(): Promise<Set<string>> {
+  if (knownFunctions) return knownFunctions;
+  const mod = await import('@formulajs/formulajs');
+  const bag = (mod.default && typeof mod.default === 'object' ? mod.default : mod) as Record<string, unknown>;
+  knownFunctions = new Set(Object.keys(bag).filter((name) => name !== 'default').map((name) => name.toUpperCase()));
+  return knownFunctions;
+}
+
+function unknownFormulaNames(formula: string, known: Set<string>): string[] {
+  const found: string[] = [];
+  const pattern = /([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(formula))) {
+    const name = match[1].toUpperCase();
+    if (!known.has(name) && !found.includes(name)) found.push(name);
+  }
+  return found;
+}
+
+function noteSkipped(skippedFeatures: string[], warnings: ImportWarning[], item: string, reason: string) {
+  if (skippedFeatures.includes(item)) return;
+  skippedFeatures.push(item);
+  warnings.push({ item, reason });
+}
+
 /**
  * Imports an XLSX buffer into FortuneSheet data format.
  */
@@ -62,6 +259,9 @@ export async function importXlsx(
 ): Promise<{ sheets: FortuneSheetData[]; report: ImportReport }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
+  const packed = new TextDecoder('latin1').decode(buffer);
+  const known = await formulaNames();
+  const unknownFns = new Set<string>();
 
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -84,6 +284,8 @@ export async function importXlsx(
     }
 
     const columnlen: Record<string, number> = {};
+    const rowlen: Record<string, number> = {};
+    const borderInfo: FortuneBorder[] = [];
 
     // Capture column widths
     (worksheet.columns || []).forEach((col, idx) => {
@@ -97,7 +299,9 @@ export async function importXlsx(
       const rIdx = rowNum - 1;
       if (rIdx >= rowCount) return;
 
-      row.eachCell({ includeEmpty: false }, (cell, colNum) => {
+      if (row.height) rowlen[String(rIdx)] = Math.round(row.height * (96 / 72));
+
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
         const cIdx = colNum - 1;
         if (cIdx >= colCount) return;
 
@@ -126,10 +330,15 @@ export async function importXlsx(
           }
         }
 
+        if (fortuneCell.f) {
+          for (const name of unknownFormulaNames(fortuneCell.f, known)) unknownFns.add(name);
+        }
+
         // Font styling
         if (cell.font) {
           if (cell.font.bold) fortuneCell.bl = 1;
           if (cell.font.italic) fortuneCell.it = 1;
+          if (cell.font.underline && cell.font.underline !== 'none') fortuneCell.un = 1;
           if (cell.font.size) fortuneCell.fs = cell.font.size;
           if (cell.font.color && cell.font.color.argb) {
             fortuneCell.fc = argbToHex(cell.font.color.argb);
@@ -151,26 +360,76 @@ export async function importXlsx(
           if (cell.alignment.vertical === 'middle') fortuneCell.vt = 0;
           else if (cell.alignment.vertical === 'top') fortuneCell.vt = 1;
           else if (cell.alignment.vertical === 'bottom') fortuneCell.vt = 2;
+          if (cell.alignment.wrapText) fortuneCell.tb = '1';
+        }
+
+        const left = borderSide(cell.border?.left);
+        const right = borderSide(cell.border?.right);
+        const top = borderSide(cell.border?.top);
+        const bottom = borderSide(cell.border?.bottom);
+        if (left || right || top || bottom) {
+          borderInfo.push({
+            rangeType: 'cell',
+            value: {
+              row_index: rIdx,
+              col_index: cIdx,
+              l: left,
+              r: right,
+              t: top,
+              b: bottom,
+            },
+          });
         }
 
         if (cell.numFmt) {
           fortuneCell.ct = { fa: cell.numFmt, t: typeof fortuneCell.v === 'number' ? 'n' : 's' };
         }
 
-        data[rIdx][cIdx] = fortuneCell;
+        const hasCell = Object.keys(fortuneCell).length > 0;
+        if (hasCell) data[rIdx][cIdx] = fortuneCell;
       });
     });
+
+    const merge: Record<string, FortuneMerge> = {};
+    for (const range of worksheet.model.merges || []) {
+      const parsed = parseA1Range(range);
+      if (!parsed) continue;
+      const rs = parsed.r2 - parsed.r1 + 1;
+      const cs = parsed.c2 - parsed.c1 + 1;
+      if (rs < 1 || cs < 1 || (rs === 1 && cs === 1)) continue;
+      ensureGrid(data, parsed.r2 + 1, parsed.c2 + 1);
+      const master = data[parsed.r1][parsed.c1] || {};
+      master.mc = { r: parsed.r1, c: parsed.c1, rs, cs };
+      data[parsed.r1][parsed.c1] = master;
+      for (let r = parsed.r1; r <= parsed.r2; r += 1) {
+        for (let c = parsed.c1; c <= parsed.c2; c += 1) {
+          if (r === parsed.r1 && c === parsed.c1) continue;
+          data[r][c] = { mc: { r: parsed.r1, c: parsed.c1 } };
+        }
+      }
+      merge[`${parsed.r1}_${parsed.c1}`] = { r: parsed.r1, c: parsed.c1, rs, cs };
+    }
+
+    const filterSelect = readAutoFilter(worksheet);
+    if (filterSelect) {
+      ensureGrid(data, filterSelect.row[1] + 1, filterSelect.column[1] + 1);
+    }
 
     sheets.push({
       name: worksheet.name || `Sheet${sheetIndex + 1}`,
       id: `sheet_${id || sheetIndex + 1}`,
       status: sheetIndex === 0 ? 1 : 0,
       order: sheetIndex,
-      row: rowCount,
-      column: colCount,
+      row: Math.max(rowCount, data.length),
+      column: Math.max(colCount, data[0]?.length || 0),
       data,
+      frozen: freezeFromView(worksheet.views?.[0]),
+      filter_select: filterSelect,
       config: {
         columnlen,
+        rowlen: Object.keys(rowlen).length ? rowlen : undefined,
+        merge: Object.keys(merge).length ? merge : undefined,
+        borderInfo: borderInfo.length ? borderInfo : undefined,
       },
     });
 
@@ -182,11 +441,20 @@ export async function importXlsx(
     sheets.push(createEmptySheet('Sheet1'));
   }
 
+  for (const name of unknownFns) {
+    warnings.push({ item: name, reason: 'This formula function is not calculated' });
+  }
+
   // Detect skipped features in workbook
   const rawXmls = (workbook as any).model;
-  if (rawXmls?.pivotTables?.length) {
-    skippedFeatures.push('Pivot Tables');
-    warnings.push({ item: 'Pivot Tables', reason: 'Pivot tables are not interactive in this version' });
+  if (rawXmls?.pivotTables?.length || packed.includes('xl/pivotTables/')) {
+    noteSkipped(skippedFeatures, warnings, 'Pivot Tables', 'Pivot tables are not interactive in this version');
+  }
+  if (packed.includes('xl/charts/')) {
+    noteSkipped(skippedFeatures, warnings, 'Charts', 'Charts are not shown in this version');
+  }
+  if (packed.includes('vbaProject.bin')) {
+    noteSkipped(skippedFeatures, warnings, 'Macros', 'Macros are not run. The sheet body is imported without them.');
   }
 
   return {
@@ -199,6 +467,59 @@ export async function importXlsx(
       skippedFeatures,
     },
   };
+}
+
+type ExcelSides = Partial<Pick<ExcelJS.Borders, 'top' | 'left' | 'bottom' | 'right'>>;
+
+function styleNumber(style?: string): number {
+  const n = Number(style);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function collectBorders(info: FortuneBorder[] | undefined): Map<string, ExcelSides> {
+  const painted = new Map<string, ExcelSides>();
+  for (const item of info || []) {
+    const ranges = item.rangeType === 'cell' && item.value
+      ? [{ r0: item.value.row_index, r1: item.value.row_index, c0: item.value.col_index, c1: item.value.col_index }]
+      : (item.range || []).map((range) => ({
+        r0: Math.min(...range.row),
+        r1: Math.max(...range.row),
+        c0: Math.min(...range.column),
+        c1: Math.max(...range.column),
+      }));
+    for (const range of ranges) {
+      for (let r = range.r0; r <= range.r1; r += 1) {
+        for (let c = range.c0; c <= range.c1; c += 1) {
+          const key = `${r}_${c}`;
+          const current = painted.get(key) || {};
+          if (item.borderType === 'border-none') {
+            painted.set(key, {});
+            continue;
+          }
+          if (item.rangeType === 'cell' && item.value) {
+            const top = excelSide(item.value.t);
+            const left = excelSide(item.value.l);
+            const bottom = excelSide(item.value.b);
+            const right = excelSide(item.value.r);
+            if (top) current.top = top;
+            if (left) current.left = left;
+            if (bottom) current.bottom = bottom;
+            if (right) current.right = right;
+          } else {
+            const side = excelSide({ style: styleNumber(item.style), color: item.color || '#000000' });
+            if (side) {
+              current.top = side;
+              current.left = side;
+              current.bottom = side;
+              current.right = side;
+            }
+          }
+          painted.set(key, current);
+        }
+      }
+    }
+  }
+  return painted;
 }
 
 /**
@@ -218,6 +539,13 @@ export async function exportXlsx(sheets: FortuneSheetData[]): Promise<Blob> {
       });
     }
 
+    if (sheet.config?.rowlen) {
+      Object.entries(sheet.config.rowlen).forEach(([rowIdx, heightPx]) => {
+        ws.getRow(parseInt(rowIdx, 10) + 1).height = Math.max(heightPx * (72 / 96), 1);
+      });
+    }
+
+    const borders = collectBorders(sheet.config?.borderInfo);
     const rowCount = sheet.data?.length || 0;
     for (let r = 0; r < rowCount; r++) {
       const row = sheet.data[r];
@@ -226,33 +554,36 @@ export async function exportXlsx(sheets: FortuneSheetData[]): Promise<Blob> {
 
       for (let c = 0; c < row.length; c++) {
         const cell = row[c];
-        if (!cell) continue;
+        const edge = borders.get(`${r}_${c}`);
+        if (!cell && !edge) continue;
+        if (cell?.mc && cell.mc.rs == null) continue;
 
         const excelCell = excelRow.getCell(c + 1);
 
-        if (cell.f) {
+        if (cell?.f) {
           // Strip leading '=' if present for ExcelJS formula
           const formulaStr = cell.f.startsWith('=') ? cell.f.slice(1) : cell.f;
           excelCell.value = {
             formula: formulaStr,
             result: cell.v !== undefined ? cell.v : undefined,
           };
-        } else if (cell.v !== undefined && cell.v !== null) {
+        } else if (cell?.v !== undefined && cell.v !== null) {
           excelCell.value = cell.v;
         }
 
         // Formatting
-        if (cell.bl || cell.it || cell.fc || cell.fs || cell.ff) {
+        if (cell?.bl || cell?.it || cell?.un || cell?.fc || cell?.fs || cell?.ff) {
           excelCell.font = {
             bold: !!cell.bl,
             italic: !!cell.it,
+            underline: cell.un ? true : undefined,
             size: cell.fs || 11,
             name: cell.ff || 'Calibri',
             color: cell.fc ? { argb: hexToArgb(cell.fc) } : undefined,
           };
         }
 
-        if (cell.bg) {
+        if (cell?.bg) {
           excelCell.fill = {
             type: 'pattern',
             pattern: 'solid',
@@ -260,17 +591,42 @@ export async function exportXlsx(sheets: FortuneSheetData[]): Promise<Blob> {
           };
         }
 
-        if (cell.ht !== undefined || cell.vt !== undefined) {
+        const wrap = cell?.tb === '1';
+        if (cell?.ht !== undefined || cell?.vt !== undefined || wrap) {
           excelCell.alignment = {
-            horizontal: cell.ht === 0 ? 'center' : cell.ht === 1 ? 'left' : cell.ht === 2 ? 'right' : undefined,
-            vertical: cell.vt === 0 ? 'middle' : cell.vt === 1 ? 'top' : cell.vt === 2 ? 'bottom' : undefined,
+            horizontal: cell?.ht === 0 ? 'center' : cell?.ht === 1 ? 'left' : cell?.ht === 2 ? 'right' : undefined,
+            vertical: cell?.vt === 0 ? 'middle' : cell?.vt === 1 ? 'top' : cell?.vt === 2 ? 'bottom' : undefined,
+            wrapText: wrap || undefined,
           };
         }
 
-        if (cell.ct?.fa) {
+        if (cell?.ct?.fa) {
           excelCell.numFmt = cell.ct.fa;
         }
+
+        if (edge && (edge.top || edge.left || edge.bottom || edge.right)) {
+          excelCell.border = edge;
+        }
       }
+    }
+
+    for (const merge of Object.values(sheet.config?.merge || {})) {
+      if (merge.rs < 1 || merge.cs < 1 || (merge.rs === 1 && merge.cs === 1)) continue;
+      ws.mergeCells(merge.r + 1, merge.c + 1, merge.r + merge.rs, merge.c + merge.cs);
+    }
+
+    const splits = freezeSplits(sheet.frozen);
+    if (splits && (splits.x > 0 || splits.y > 0)) {
+      ws.views = [{ state: 'frozen', xSplit: splits.x, ySplit: splits.y }];
+    }
+
+    const filter = sheet.filter_select;
+    if (filter?.row?.length === 2 && filter.column?.length === 2) {
+      const r0 = Math.min(...filter.row);
+      const r1 = Math.max(...filter.row);
+      const c0 = Math.min(...filter.column);
+      const c1 = Math.max(...filter.column);
+      ws.autoFilter = `${columnName(c0)}${r0 + 1}:${columnName(c1)}${r1 + 1}`;
     }
   });
 

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import {
   importXlsx,
   exportXlsx,
@@ -51,6 +53,69 @@ describe('Spreadsheet Adapters (XLSX, CSV, TSV)', () => {
     expect(sheets[0].name).toBe('Budget');
     expect(sheets[0].data[0][0]?.v).toBe('Item');
     expect(sheets[0].data[1][1]?.v).toBe(50);
+  });
+
+  it('round-trips merge, freeze, border, wrap, underline, autofilter, and SUM', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('Budget');
+    ws.getCell('A1').value = 'Item';
+    ws.getCell('A1').font = { bold: true, underline: true };
+    ws.mergeCells('A1:B1');
+    ws.getCell('A2').value = 'Hosting';
+    ws.getCell('A2').alignment = { wrapText: true };
+    ws.getCell('A2').border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' },
+    };
+    ws.getRow(2).height = 30;
+    ws.getCell('B2').value = 50;
+    ws.getCell('B3').value = 12;
+    ws.getCell('B4').value = { formula: 'SUM(B2:B3)', result: 62 };
+    ws.views = [{ state: 'frozen', ySplit: 1, xSplit: 0 }];
+    ws.autoFilter = 'A1:B4';
+
+    const raw = await workbook.xlsx.writeBuffer();
+    const { sheets } = await importXlsx(raw, 'layout.xlsx');
+
+    expect(sheets[0].config?.merge?.['0_0']).toMatchObject({ r: 0, c: 0, rs: 1, cs: 2 });
+    expect(sheets[0].data[0][0]?.un).toBe(1);
+    expect(sheets[0].data[0][1]?.mc).toEqual({ r: 0, c: 0 });
+    expect(sheets[0].data[1][0]?.tb).toBe('1');
+    expect(sheets[0].config?.borderInfo?.[0]?.value?.t?.style).toBe(1);
+    expect(sheets[0].config?.rowlen?.['1']).toBe(40);
+    expect(sheets[0].frozen).toEqual({ type: 'rangeRow', range: { row_focus: 0, column_focus: 0 } });
+    expect(sheets[0].filter_select).toEqual({ row: [0, 3], column: [0, 1] });
+    expect(sheets[0].data[3][1]?.f).toBe('=SUM(B2:B3)');
+
+    const blob = await exportXlsx(sheets);
+    const again = await importXlsx(await blob.arrayBuffer(), 'again.xlsx');
+    expect(again.sheets[0].config?.merge?.['0_0']).toMatchObject({ r: 0, c: 0, rs: 1, cs: 2 });
+    expect(again.sheets[0].frozen?.type).toBe('rangeRow');
+    expect(again.sheets[0].filter_select).toEqual({ row: [0, 3], column: [0, 1] });
+    expect(again.sheets[0].data[1][0]?.tb).toBe('1');
+    expect(again.sheets[0].data[0][0]?.un).toBe(1);
+    expect(again.sheets[0].data[3][1]?.f).toBe('=SUM(B2:B3)');
+    expect(again.sheets[0].config?.borderInfo?.some((border) => border.value?.l)).toBe(true);
+    expect(again.sheets[0].config?.rowlen?.['1']).toBe(40);
+  });
+
+  it('reports charts, macros, and unknown functions', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet('Sheet1');
+    ws.getCell('A1').value = { formula: 'NOTAFUNCTION(A2)', result: 1 };
+    const raw = await workbook.xlsx.writeBuffer();
+    const zip = await JSZip.loadAsync(raw);
+    zip.file('xl/charts/chart1.xml', '<chart/>');
+    zip.file('xl/vbaProject.bin', 'not-a-macro');
+    const packed = await zip.generateAsync({ type: 'arraybuffer' });
+    const { sheets, report } = await importXlsx(packed, 'extras.xlsx');
+
+    expect(report.skippedFeatures).toEqual(expect.arrayContaining(['Charts', 'Macros']));
+    expect(report.warnings.some((warning) => warning.item === 'NOTAFUNCTION')).toBe(true);
+    expect(sheets[0].data[0][0]?.f).toBe('=NOTAFUNCTION(A2)');
+    expect(JSON.stringify(sheets)).not.toContain('vbaProject');
   });
 
   it('correctly parses and serializes CSV with quotes and commas', () => {

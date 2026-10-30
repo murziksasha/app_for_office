@@ -108,6 +108,20 @@
     "deleteColumn": "Delete column",
     "clear": "Clear",
     "wrap": "Wrap text",
+    "merge": "Merge",
+    "unmerge": "Unmerge",
+    "fillColor": "Fill color",
+    "borderAll": "All borders",
+    "borderNone": "No borders",
+    "view": "View",
+    "freezeRow": "Freeze row",
+    "freezeColumn": "Freeze column",
+    "unfreeze": "Unfreeze",
+    "data": "Data",
+    "sortAsc": "Sort A to Z",
+    "sortDesc": "Sort Z to A",
+    "filter": "Filter",
+    "autoSum": "AutoSum",
     "sheets": "Sheets",
     "newSheet": "New sheet",
     "slides": "Slides",
@@ -129,7 +143,13 @@
     "differentFirstPage": "Different first page",
     "pageNumber": "Page number",
     "pageNumberDigit": "1",
-    "pageNumberOfTotal": "Page 1 of 8"
+    "pageNumberOfTotal": "Page 1 of 8",
+    "slideSize": "Slide size",
+    "rounded": "Rounded",
+    "oval": "Oval",
+    "triangle": "Triangle",
+    "line": "Line",
+    "outlineColor": "Outline color"
   },
   "start": {
     "tagline": "Local-first office suite",
@@ -200,7 +220,9 @@
     "blank": "Blank Slide",
     "video": "Video",
     "duplicate": "Duplicate",
-    "delete": "Delete"
+    "delete": "Delete",
+    "notes": "Notes",
+    "notesPlaceholder": "Click to add notes..."
   },
   "saveAs": {
     "title": "Save As",

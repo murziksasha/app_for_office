@@ -14,7 +14,9 @@ In Chromium-based browsers (Chrome, Edge), Folio utilizes the **File System Acce
   - Marks & blocks: bold, italic, underline, strikethrough, font family, font size, text colors, highlight, headings 1–6, alignment, bullets, numbering, links, images, tables, dividers
   - Live word and character count, find & replace floating panel, undo/redo
   - Common shortcuts: <kbd>Ctrl+B</kbd>, <kbd>Ctrl+I</kbd>, <kbd>Ctrl+U</kbd>, <kbd>Ctrl+S</kbd>, <kbd>Ctrl+Z</kbd>, <kbd>Ctrl+Y</kbd>, <kbd>Ctrl+F</kbd>
-  - Import report: Lists any skipped elements (comments, tracked changes, text boxes, equations, headers/footers)
+  - Import report: Lists any skipped elements (comments, tracked changes, text boxes, equations, extra sections)
+  - Style resolution: Resolves document defaults and named styles (Normal, Heading 1–6, Title, Subtitle) from `word/styles.xml`
+  - Zero-byte & empty document support: Opens shell-created stub files and empty packages cleanly with preserved page setup
   - Mammoth safety-net fallback for non-standard `.docx` files
 
 - **Spreadsheets**:

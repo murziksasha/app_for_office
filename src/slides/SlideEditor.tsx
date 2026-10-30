@@ -14,7 +14,13 @@ export interface SlideEditorHandle {
   addText: () => void;
   addImage: () => void;
   addVideo: () => void;
-  addShape: () => void;
+  addShape: (shape?: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line') => void;
+  addTable: () => void;
+  addTableRow: () => void;
+  addTableColumn: () => void;
+  deleteTableRow: () => void;
+  deleteTableColumn: () => void;
+  setSlideSize: (size: '16:9' | '16:10' | '4:3') => void;
   undo: () => void;
   deleteSelected: () => void;
   patchSelected: (updates: Partial<SlideElement>) => void;
@@ -24,7 +30,23 @@ export interface SlideCommandState {
   canUndo: boolean;
   slideCount: number;
   slideIndex: number;
-  element: Pick<SlideElement, 'id' | 'type' | 'bold' | 'italic' | 'underline' | 'fontSize' | 'color' | 'align'> | null;
+  element: Pick<
+    SlideElement,
+    | 'id'
+    | 'type'
+    | 'shape'
+    | 'bold'
+    | 'italic'
+    | 'underline'
+    | 'fontSize'
+    | 'color'
+    | 'align'
+    | 'fill'
+    | 'borderColor'
+    | 'borderWidth'
+    | 'rows'
+  > | null;
+  slideSize?: '16:9' | '16:10' | '4:3';
 }
 
 export const emptySlideCommandState: SlideCommandState = {
@@ -32,6 +54,7 @@ export const emptySlideCommandState: SlideCommandState = {
   slideCount: 0,
   slideIndex: 0,
   element: null,
+  slideSize: '16:9',
 };
 
 interface SlideEditorProps {
@@ -164,6 +187,9 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
 
   const slides = presentation.slides || [];
   const currentSlide = slides[activeSlideIndex] || slides[0];
+  const slideSize = presentation.slideSize || '16:9';
+  const canvasWidth = 960;
+  const canvasHeight = slideSize === '4:3' ? 720 : slideSize === '16:10' ? 600 : 540;
 
   const commit = (nextSlides: Slide[]) => {
     const updated = { ...presentationRef.current, slides: nextSlides };
@@ -255,9 +281,11 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       ...source,
       id: `slide_${Date.now()}`,
       title: `${source.title || 'Slide'} (Copy)`,
+      notes: source.notes,
       elements: source.elements.map((e) => ({
         ...e,
         id: `elem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        ...(e.rows ? { rows: e.rows.map((r) => [...r]) } : {}),
       })),
     };
     const next = [...existing.slice(0, index + 1), dup, ...existing.slice(index + 1)];
@@ -385,22 +413,96 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
     input.click();
   };
 
-  const handleAddShape = () => {
+  const handleAddShape = (shape: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line' = 'rect') => {
     clearUndo();
+    const isLine = shape === 'line';
     const newEl: SlideElement = {
-      id: `rect_${Date.now()}`,
+      id: `shape_${Date.now()}`,
       type: 'rect',
+      shape,
       x: 30,
       y: 30,
-      width: 28,
-      height: 18,
-      fill: '#d6f3ef',
+      width: isLine ? 30 : 28,
+      height: isLine ? 2 : 18,
+      fill: isLine ? 'transparent' : '#d6f3ef',
       borderColor: '#0f766e',
       borderWidth: 2,
     };
     mapActive((elements) => [...elements, newEl]);
     setSelectedElementId(newEl.id);
     setEditingId(null);
+  };
+
+  const handleAddTable = () => {
+    clearUndo();
+    const newEl: SlideElement = {
+      id: `tbl_${Date.now()}`,
+      type: 'table',
+      x: 20,
+      y: 25,
+      width: 60,
+      height: 30,
+      rows: [
+        ['', '', ''],
+        ['', '', ''],
+        ['', '', ''],
+      ],
+    };
+    mapActive((elements) => [...elements, newEl]);
+    setSelectedElementId(newEl.id);
+    setEditingId(null);
+  };
+
+  const handleAddTableRow = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows) return el;
+        const cols = el.rows[0]?.length || 3;
+        const newRow = Array(cols).fill('');
+        return { ...el, rows: [...el.rows, newRow] };
+      })
+    );
+  };
+
+  const handleAddTableColumn = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows) return el;
+        return { ...el, rows: el.rows.map((row) => [...row, '']) };
+      })
+    );
+  };
+
+  const handleDeleteTableRow = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows || el.rows.length <= 1) return el;
+        return { ...el, rows: el.rows.slice(0, -1) };
+      })
+    );
+  };
+
+  const handleDeleteTableColumn = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows || (el.rows[0]?.length || 0) <= 1) return el;
+        return { ...el, rows: el.rows.map((row) => row.slice(0, -1)) };
+      })
+    );
+  };
+
+  const handleSetSlideSize = (size: '16:9' | '16:10' | '4:3') => {
+    const updated = { ...presentationRef.current, slideSize: size };
+    presentationRef.current = updated;
+    onChangeRef.current(updated);
   };
 
   const handleDeleteSelectedElement = () => {
@@ -443,7 +545,9 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
     };
     gesturingRef.current = true;
     setSelectedElementId(elem.id);
-    if (!(elem.type === 'text' && selectedElementId === elem.id)) setEditingId(null);
+    if (!((elem.type === 'text' || elem.type === 'rect') && selectedElementId === elem.id)) {
+      setEditingId(null);
+    }
     focusShell();
 
     const move = (ev: PointerEvent) => {
@@ -480,7 +584,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
         if (moved) setUndoSlot({ slideIndex: indexRef.current, elementId: gesture.id, box: gesture.orig });
         return;
       }
-      if (gesture.mode === 'move' && gesture.elementType === 'text' && gesture.wasSelected) {
+      if (gesture.mode === 'move' && (gesture.elementType === 'text' || gesture.elementType === 'rect') && gesture.wasSelected) {
         pendingEditRef.current = gesture.id;
         setEditingId(gesture.id);
       }
@@ -508,6 +612,12 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       addImage: handleAddImage,
       addVideo: handleAddVideo,
       addShape: handleAddShape,
+      addTable: handleAddTable,
+      addTableRow: handleAddTableRow,
+      addTableColumn: handleAddTableColumn,
+      deleteTableRow: handleDeleteTableRow,
+      deleteTableColumn: handleDeleteTableColumn,
+      setSlideSize: handleSetSlideSize,
       undo: applyUndo,
       deleteSelected: handleDeleteSelectedElement,
       patchSelected: (updates) => {
@@ -530,14 +640,20 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
         ? {
             id: el.id,
             type: el.type,
+            shape: el.shape,
             bold: el.bold,
             italic: el.italic,
             underline: el.underline,
             fontSize: el.fontSize,
             color: el.color,
             align: el.align,
+            fill: el.fill,
+            borderColor: el.borderColor,
+            borderWidth: el.borderWidth,
+            rows: el.rows,
           }
         : null,
+      slideSize: presentationRef.current.slideSize || '16:9',
     });
   }, [selectedElementId, undoSlot, presentation, activeSlideIndex]);
 
@@ -685,7 +801,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
               <div
                 style={{
                   width: '100%',
-                  aspectRatio: '16 / 9',
+                  aspectRatio: slideSize === '4:3' ? '4 / 3' : slideSize === '16:10' ? '16 / 10' : '16 / 9',
                   backgroundColor: '#ffffff',
                   border: '1px solid var(--folio-border-light)',
                   borderRadius: '3px',
@@ -695,7 +811,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                   color: 'var(--folio-ink-muted)',
                 }}
               >
-                {s.elements.find((e) => e.type === 'text')?.text?.slice(0, 50) ||
+                {s.elements.find((e) => e.type === 'text' || (e.type === 'rect' && e.text))?.text?.slice(0, 50) ||
                   (s.elements.some((e) => e.type === 'video') ? t('slides.video') : t('slides.blank'))}
               </div>
             </div>
@@ -718,7 +834,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
             role="status"
             style={{
               marginBottom: '12px',
-              maxWidth: '960px',
+              maxWidth: `${canvasWidth}px`,
               width: '100%',
               background: '#fff8e8',
               border: '1px solid #e6d3a1',
@@ -742,8 +858,8 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           ref={canvasRef}
           className="folio-slide-canvas"
           style={{
-            width: '960px',
-            height: '540px',
+            width: `${canvasWidth}px`,
+            height: `${canvasHeight}px`,
             backgroundColor: currentSlide?.background || '#ffffff',
             borderRadius: '4px',
             boxShadow: 'var(--folio-shadow-paper)',
@@ -767,8 +883,11 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                 key={elem.id}
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
-                  if (target.closest('[data-folio-no-drag]')) return;
-                  if (elem.type === 'text' && isEditing) return;
+                  if (target.closest('[data-folio-no-drag]')) {
+                    setSelectedElementId(elem.id);
+                    return;
+                  }
+                  if ((elem.type === 'text' || elem.type === 'rect' || elem.type === 'table') && isEditing) return;
                   e.stopPropagation();
                   beginGesture(e, elem, 'move');
                 }}
@@ -837,14 +956,205 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
 
                 {elem.type === 'rect' && (
                   <div
+                    onDoubleClick={(e) => {
+                      if (elem.shape !== 'line') {
+                        e.stopPropagation();
+                        setEditingId(elem.id);
+                      }
+                    }}
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {elem.shape === 'line' ? (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                        <div style={{ width: '100%', borderTop: `${elem.borderWidth || 2}px solid ${elem.borderColor || '#0f766e'}` }} />
+                      </div>
+                    ) : elem.shape === 'triangle' ? (
+                      <svg
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, pointerEvents: 'none' }}
+                      >
+                        <polygon
+                          points="50,0 100,100 0,100"
+                          fill={elem.fill || '#d6f3ef'}
+                          stroke={elem.borderColor || 'none'}
+                          strokeWidth={elem.borderColor ? elem.borderWidth || 1 : 0}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    ) : elem.shape === 'ellipse' ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          top: 0,
+                          left: 0,
+                          borderRadius: '50%',
+                          backgroundColor: elem.fill || '#d6f3ef',
+                          border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                          boxSizing: 'border-box',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ) : elem.shape === 'roundRect' ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          top: 0,
+                          left: 0,
+                          borderRadius: '12px',
+                          backgroundColor: elem.fill || '#d6f3ef',
+                          border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                          boxSizing: 'border-box',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          top: 0,
+                          left: 0,
+                          backgroundColor: elem.fill || '#e2ded6',
+                          border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                          boxSizing: 'border-box',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    )}
+
+                    {elem.shape !== 'line' && isEditing && (
+                      <textarea
+                        data-folio-no-drag=""
+                        autoFocus
+                        value={elem.text || ''}
+                        onChange={(e) => {
+                          clearUndo();
+                          patchElement(elem.id, { text: e.target.value });
+                        }}
+                        onBlur={() => setEditingId(null)}
+                        style={{
+                          position: 'relative',
+                          zIndex: 2,
+                          width: '100%',
+                          height: '100%',
+                          background: 'transparent',
+                          border: 'none',
+                          outline: 'none',
+                          resize: 'none',
+                          fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                          fontSize: `${elem.fontSize || 18}px`,
+                          fontWeight: elem.bold ? 700 : 400,
+                          fontStyle: elem.italic ? 'italic' : 'normal',
+                          textDecoration: elem.underline ? 'underline' : 'none',
+                          color: elem.color || '#1e2022',
+                          textAlign: elem.align || 'center',
+                          lineHeight: 1.3,
+                          padding: '8px',
+                          boxSizing: 'border-box',
+                          cursor: 'text',
+                        }}
+                      />
+                    )}
+
+                    {elem.shape !== 'line' && !isEditing && elem.text && (
+                      <div
+                        style={{
+                          position: 'relative',
+                          zIndex: 2,
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
+                          textAlign: elem.align || 'center',
+                          fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                          fontSize: `${elem.fontSize || 18}px`,
+                          fontWeight: elem.bold ? 700 : 400,
+                          fontStyle: elem.italic ? 'italic' : 'normal',
+                          textDecoration: elem.underline ? 'underline' : 'none',
+                          color: elem.color || '#1e2022',
+                          padding: '8px',
+                          boxSizing: 'border-box',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {elem.text}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {elem.type === 'table' && elem.rows && (
+                  <table
                     style={{
                       width: '100%',
                       height: '100%',
-                      background: elem.fill || '#e2ded6',
-                      border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
-                      pointerEvents: 'none',
+                      borderCollapse: 'collapse',
+                      tableLayout: 'fixed',
+                      backgroundColor: '#ffffff',
                     }}
-                  />
+                  >
+                    <tbody>
+                      {elem.rows.map((row, rIdx) => (
+                        <tr key={rIdx}>
+                          {row.map((cellText, cIdx) => (
+                            <td
+                              key={cIdx}
+                              style={{
+                                border: '1px solid #1e2022',
+                                padding: '2px',
+                                verticalAlign: 'top',
+                              }}
+                            >
+                              <textarea
+                                data-folio-no-drag=""
+                                value={cellText}
+                                onChange={(e) => {
+                                  clearUndo();
+                                  const newText = e.target.value;
+                                  mapActive((elements) =>
+                                    elements.map((el) => {
+                                      if (el.id !== elem.id || !el.rows) return el;
+                                      const nextRows = el.rows.map((r, rI) =>
+                                        rI === rIdx ? r.map((c, cI) => (cI === cIdx ? newText : c)) : r
+                                      );
+                                      return { ...el, rows: nextRows };
+                                    })
+                                  );
+                                }}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  border: 'none',
+                                  outline: 'none',
+                                  resize: 'none',
+                                  background: 'transparent',
+                                  fontSize: '13px',
+                                  fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                                  color: elem.color || '#1e2022',
+                                  padding: '2px 4px',
+                                  boxSizing: 'border-box',
+                                }}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
 
                 {elem.type === 'video' && elem.src && (
@@ -872,6 +1182,57 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
               </div>
             );
           })}
+        </div>
+
+        {/* Notes field */}
+        <div
+          style={{
+            width: `${canvasWidth}px`,
+            marginTop: '16px',
+            backgroundColor: '#ffffff',
+            borderRadius: '4px',
+            boxShadow: 'var(--folio-shadow-sm)',
+            border: '1px solid var(--folio-border)',
+            padding: '8px 12px',
+            boxSizing: 'border-box',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'var(--folio-ink-muted)',
+              marginBottom: '4px',
+            }}
+          >
+            {t('slides.notes')}
+          </div>
+          <textarea
+            value={currentSlide?.notes || ''}
+            placeholder={t('slides.notesPlaceholder')}
+            onChange={(e) => {
+              clearUndo();
+              const val = e.target.value;
+              const next = (presentationRef.current.slides || []).map((slide, i) =>
+                i === indexRef.current ? { ...slide, notes: val } : slide
+              );
+              commit(next);
+            }}
+            rows={3}
+            style={{
+              width: '100%',
+              border: '1px solid var(--folio-border-light)',
+              borderRadius: '3px',
+              padding: '6px 8px',
+              fontSize: '13px',
+              color: 'var(--folio-ink)',
+              resize: 'vertical',
+              outline: 'none',
+              boxSizing: 'border-box',
+              fontFamily: 'inherit',
+            }}
+          />
         </div>
       </div>
     </div>

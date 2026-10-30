@@ -57,7 +57,8 @@ export interface DraftItem {
 // Slide model
 export interface SlideElement {
   id: string;
-  type: 'text' | 'image' | 'rect' | 'video';
+  type: 'text' | 'image' | 'rect' | 'video' | 'table';
+  shape?: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line';
   x: number; // percentage or pt (0-100% or px)
   y: number;
   width: number;
@@ -77,6 +78,8 @@ export interface SlideElement {
   fill?: string;
   borderColor?: string;
   borderWidth?: number;
+  // table properties
+  rows?: string[][];
 }
 
 export interface Slide {
@@ -84,11 +87,13 @@ export interface Slide {
   title?: string;
   background?: string;
   elements: SlideElement[];
+  notes?: string;
 }
 
 export interface PresentationModel {
   title: string;
   slides: Slide[];
+  slideSize?: '16:9' | '16:10' | '4:3';
 }
 
 export interface EditorState {
@@ -111,4 +116,3 @@ export interface EditorState {
   presentationData?: PresentationModel;
   pdfData?: Uint8Array;
 }
-

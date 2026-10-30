@@ -142,5 +142,124 @@ describe('Slides / PPTX Importer and Exporter', () => {
     expect(imported.report.warnings.some((warning) => warning.reason === VIDEO_MSG.extraOnSlide)).toBe(true);
     expect(imported.report.warnings.some((warning) => warning.reason === VIDEO_MSG.skippedNonMp4)).toBe(true);
   });
-});
+  it('builds a package with PptxGenJS that is 4:3 and contains an oval, a 2x2 table, and notes; asserts import and a second round-trip', async () => {
+    const pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_4x3';
+    const slide = pptx.addSlide();
+    slide.addNotes('Speaker notes for slide 1');
+    slide.addShape(pptx.ShapeType.ellipse, {
+      x: 1,
+      y: 1,
+      w: 3,
+      h: 2,
+      fill: { color: 'FF0000' },
+      line: { color: '00FF00', width: 2 },
+    });
+    slide.addTable([[{ text: 'Header 1' }, { text: 'Header 2' }], [{ text: 'Cell 1' }, { text: 'Cell 2' }]], {
+      x: 1,
+      y: 3.5,
+      w: 5,
+      h: 2,
+      autoPage: false,
+    });
 
+    const buffer = (await pptx.write({ outputType: 'arraybuffer' })) as ArrayBuffer;
+    const { presentation, report } = await importPptx(buffer, 'test_4x3.pptx');
+
+    expect(presentation.slideSize).toBe('4:3');
+    expect(presentation.slides.length).toBe(1);
+    const slide1 = presentation.slides[0];
+    expect(slide1.notes).toBe('Speaker notes for slide 1');
+
+    const oval = slide1.elements.find((el) => el.type === 'rect' && el.shape === 'ellipse');
+    expect(oval).toBeDefined();
+    expect(oval?.fill?.toLowerCase()).toBe('#ff0000');
+    expect(oval?.borderColor?.toLowerCase()).toBe('#00ff00');
+
+    const table = slide1.elements.find((el) => el.type === 'table');
+    expect(table).toBeDefined();
+    expect(table?.rows).toEqual([['Header 1', 'Header 2'], ['Cell 1', 'Cell 2']]);
+
+    // Second round-trip
+    const blob2 = await exportPptx(presentation);
+    const buffer2 = await blob2.arrayBuffer();
+    const { presentation: pres2 } = await importPptx(buffer2, 'roundtrip.pptx');
+
+    expect(pres2.slideSize).toBe('4:3');
+    expect(pres2.slides[0].notes).toBe('Speaker notes for slide 1');
+
+    const oval2 = pres2.slides[0].elements.find((el) => el.type === 'rect' && el.shape === 'ellipse');
+    expect(oval2).toBeDefined();
+    expect(oval2?.fill?.toLowerCase()).toBe('#ff0000');
+    expect(oval2?.borderColor?.toLowerCase()).toBe('#00ff00');
+
+    const table2 = pres2.slides[0].elements.find((el) => el.type === 'table');
+    expect(table2).toBeDefined();
+    expect(table2?.rows).toEqual([['Header 1', 'Header 2'], ['Cell 1', 'Cell 2']]);
+  });
+
+  it('imports shapes with text, roundRect, triangle, and line presets', async () => {
+    const testPres: PresentationModel = {
+      title: 'Shapes Deck',
+      slideSize: '16:10',
+      slides: [
+        {
+          id: 'slide_1',
+          background: '#ffffff',
+          elements: [
+            {
+              id: 'sh_1',
+              type: 'rect',
+              shape: 'roundRect',
+              x: 10,
+              y: 10,
+              width: 25,
+              height: 20,
+              fill: '#d6f3ef',
+              borderColor: '#0f766e',
+              borderWidth: 2,
+              text: 'Rounded Box',
+              bold: true,
+            },
+            {
+              id: 'sh_2',
+              type: 'rect',
+              shape: 'triangle',
+              x: 40,
+              y: 10,
+              width: 20,
+              height: 20,
+              fill: '#ffeedd',
+            },
+            {
+              id: 'sh_3',
+              type: 'rect',
+              shape: 'line',
+              x: 10,
+              y: 40,
+              width: 50,
+              height: 2,
+              borderColor: '#0f766e',
+            },
+          ],
+        },
+      ],
+    };
+
+    const blob = await exportPptx(testPres);
+    const { presentation } = await importPptx(await blob.arrayBuffer(), 'shapes.pptx');
+
+    expect(presentation.slideSize).toBe('16:10');
+    const elements = presentation.slides[0].elements;
+    const round = elements.find((e) => e.type === 'rect' && e.shape === 'roundRect');
+    expect(round).toBeDefined();
+    expect(round?.text).toBe('Rounded Box');
+    expect(round?.bold).toBe(true);
+
+    const tri = elements.find((e) => e.type === 'rect' && e.shape === 'triangle');
+    expect(tri).toBeDefined();
+
+    const line = elements.find((e) => e.type === 'rect' && e.shape === 'line');
+    expect(line).toBeDefined();
+  });
+});
