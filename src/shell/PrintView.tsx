@@ -46,14 +46,15 @@ function sheetCells(sheet: FortuneSheetData): string[][] {
   return grid.length ? grid : [['']];
 }
 
-function SlidePage({ slide }: { slide: Slide }) {
+function SlidePage({ slide, slideSize }: { slide: Slide; slideSize?: '16:9' | '16:10' | '4:3' }) {
+  const height = slideSize === '4:3' ? 720 : slideSize === '16:10' ? 600 : 540;
   return (
     <div
       className="folio-print-slide"
       style={{
         position: 'relative',
         width: '960px',
-        height: '540px',
+        height: `${height}px`,
         background: slide.background || '#fff',
         breakAfter: 'page',
         overflow: 'hidden',
@@ -75,6 +76,151 @@ function SlidePage({ slide }: { slide: Slide }) {
               }}
             />
           );
+        }
+        if (elem.type === 'table' && elem.rows) {
+          return (
+            <table
+              key={elem.id}
+              style={{
+                position: 'absolute',
+                left: `${elem.x}%`,
+                top: `${elem.y}%`,
+                width: `${elem.width}%`,
+                height: `${elem.height}%`,
+                borderCollapse: 'collapse',
+                tableLayout: 'fixed',
+                backgroundColor: '#ffffff',
+              }}
+            >
+              <tbody>
+                {elem.rows.map((row, rIdx) => (
+                  <tr key={rIdx}>
+                    {row.map((cellText, cIdx) => (
+                      <td
+                        key={cIdx}
+                        style={{
+                          border: '1px solid #000000',
+                          padding: '4px',
+                          fontSize: '12px',
+                          verticalAlign: 'top',
+                          overflow: 'hidden',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {cellText}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        }
+        if (elem.type === 'rect') {
+          const isLine = elem.shape === 'line';
+          return (
+            <div
+              key={elem.id}
+              style={{
+                position: 'absolute',
+                left: `${elem.x}%`,
+                top: `${elem.y}%`,
+                width: `${elem.width}%`,
+                height: `${elem.height}%`,
+                boxSizing: 'border-box',
+              }}
+            >
+              {isLine ? (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center' }}>
+                  <div style={{ width: '100%', borderTop: `${elem.borderWidth || 2}px solid ${elem.borderColor || '#0f766e'}` }} />
+                </div>
+              ) : elem.shape === 'triangle' ? (
+                <svg
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 }}
+                >
+                  <polygon
+                    points="50,0 100,100 0,100"
+                    fill={elem.fill || '#d6f3ef'}
+                    stroke={elem.borderColor || 'none'}
+                    strokeWidth={elem.borderColor ? elem.borderWidth || 1 : 0}
+                  />
+                </svg>
+              ) : elem.shape === 'ellipse' ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    top: 0,
+                    left: 0,
+                    borderRadius: '50%',
+                    backgroundColor: elem.fill || '#d6f3ef',
+                    border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              ) : elem.shape === 'roundRect' ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    top: 0,
+                    left: 0,
+                    borderRadius: '12px',
+                    backgroundColor: elem.fill || '#d6f3ef',
+                    border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    top: 0,
+                    left: 0,
+                    backgroundColor: elem.fill || '#e2ded6',
+                    border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              )}
+              {elem.text && !isLine && (
+                <div
+                  style={{
+                    position: 'relative',
+                    zIndex: 2,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
+                    textAlign: elem.align || 'center',
+                    fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                    fontSize: `${elem.fontSize || 18}px`,
+                    fontWeight: elem.bold ? 700 : 400,
+                    fontStyle: elem.italic ? 'italic' : 'normal',
+                    textDecoration: elem.underline ? 'underline' : 'none',
+                    color: elem.color || '#1e2022',
+                    padding: '8px',
+                    boxSizing: 'border-box',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {elem.text}
+                </div>
+              )}
+            </div>
+          );
+        }
+        if (elem.type === 'video') {
+          return null;
         }
         return (
           <div
@@ -380,7 +526,7 @@ export const PrintView: React.FC<PrintViewProps> = ({ tab, scope, slideIndex, pd
     return (
       <div className="folio-print-root">
         {slides.map((slide) => (
-          <SlidePage key={slide.id} slide={slide} />
+          <SlidePage key={slide.id} slide={slide} slideSize={presentation.slideSize} />
         ))}
       </div>
     );

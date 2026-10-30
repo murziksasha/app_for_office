@@ -868,9 +868,9 @@ async function exportPresentation(
       ? slides
       : [{ id: 'slide1', elements: [] }];
 
-  // 16:9 slide frame centered uniformly onto the landscape page
+  const slideSize = state.presentationData?.slideSize || '16:9';
   const frameWidth = 720;
-  const frameHeight = 405;
+  const frameHeight = slideSize === '4:3' ? 540 : slideSize === '16:10' ? 450 : 405;
   const frameX = (PAGE_WIDTH - frameWidth) / 2;
   const frameY = (PAGE_HEIGHT - frameHeight) / 2;
 
@@ -895,18 +895,190 @@ async function exportPresentation(
       const elemY = frameY + frameHeight - (elem.y / 100) * frameHeight - elemH;
 
       if (elem.type === 'rect') {
+        const shape = elem.shape || 'rect';
         const fill = elem.fill ? parseColor(elem.fill) : undefined;
         const borderColor = elem.borderColor ? parseColor(elem.borderColor) : undefined;
         const borderWidth = elem.borderWidth || (borderColor ? 1 : 0);
-        page.drawRectangle({
-          x: elemX,
-          y: elemY,
-          width: elemW,
-          height: elemH,
-          color: fill,
-          borderColor,
-          borderWidth,
-        });
+
+        if (shape === 'line') {
+          page.drawLine({
+            start: { x: elemX, y: elemY + elemH / 2 },
+            end: { x: elemX + elemW, y: elemY + elemH / 2 },
+            thickness: borderWidth || 2,
+            color: borderColor || fill || rgb(0, 0, 0),
+          });
+        } else if (shape === 'ellipse') {
+          page.drawEllipse({
+            x: elemX + elemW / 2,
+            y: elemY + elemH / 2,
+            xScale: elemW / 2,
+            yScale: elemH / 2,
+            color: fill,
+            borderColor,
+            borderWidth,
+          });
+        } else if (shape === 'triangle') {
+          let drawnTriangle = false;
+          if (typeof page.drawSvgPath === 'function') {
+            try {
+              const path = `M 0 0 L ${elemW / 2} ${elemH} L ${elemW} 0 Z`;
+              page.drawSvgPath(path, {
+                x: elemX,
+                y: elemY,
+                color: fill,
+                borderColor,
+                borderWidth,
+              });
+              drawnTriangle = true;
+            } catch {
+              drawnTriangle = false;
+            }
+          }
+          if (!drawnTriangle) {
+            page.drawRectangle({
+              x: elemX,
+              y: elemY,
+              width: elemW,
+              height: elemH,
+              color: fill,
+              borderColor,
+              borderWidth,
+            });
+            recordOmission('A triangle shape was simplified to a rectangle in the PDF.');
+          }
+        } else if (shape === 'roundRect') {
+          let drawnRoundRect = false;
+          if (typeof page.drawSvgPath === 'function') {
+            try {
+              const r = Math.min(8, elemW / 4, elemH / 4);
+              const path = `M ${r} 0 L ${elemW - r} 0 Q ${elemW} 0 ${elemW} ${r} L ${elemW} ${elemH - r} Q ${elemW} ${elemH} ${elemW - r} ${elemH} L ${r} ${elemH} Q 0 ${elemH} 0 ${elemH - r} L 0 ${r} Q 0 0 ${r} 0 Z`;
+              page.drawSvgPath(path, {
+                x: elemX,
+                y: elemY,
+                color: fill,
+                borderColor,
+                borderWidth,
+              });
+              drawnRoundRect = true;
+            } catch {
+              drawnRoundRect = false;
+            }
+          }
+          if (!drawnRoundRect) {
+            page.drawRectangle({
+              x: elemX,
+              y: elemY,
+              width: elemW,
+              height: elemH,
+              color: fill,
+              borderColor,
+              borderWidth,
+            });
+          }
+        } else {
+          page.drawRectangle({
+            x: elemX,
+            y: elemY,
+            width: elemW,
+            height: elemH,
+            color: fill,
+            borderColor,
+            borderWidth,
+          });
+        }
+
+        if (elem.text && shape !== 'line') {
+          const isBold = Boolean(elem.bold);
+          const isItalic = Boolean(elem.italic);
+          const font = selectFont(isBold, isItalic, fonts);
+          const textColor = elem.color ? parseColor(elem.color) : rgb(0, 0, 0);
+          const baseSize = elem.fontSize || 18;
+          const fontSize = Math.max(6, (baseSize * frameWidth) / 960);
+          const lineHeight = fontSize * 1.25;
+
+          let cleanText = '';
+          for (const ch of elem.text) {
+            const cp = ch.codePointAt(0)!;
+            if (fonts.hasGlyph(cp)) {
+              cleanText += ch;
+            } else {
+              recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
+            }
+          }
+
+          const rawLines = cleanText.split('\n');
+          const totalTextHeight = rawLines.length * lineHeight;
+          let textY = elemY + (elemH + totalTextHeight) / 2 - fontSize;
+
+          for (const rawLine of rawLines) {
+            const w = font.widthOfTextAtSize(rawLine, fontSize);
+            let lineX = elemX + (elemW - w) / 2;
+            if (elem.align === 'left') lineX = elemX + 8;
+            else if (elem.align === 'right') lineX = elemX + elemW - w - 8;
+            page.drawText(rawLine, {
+              x: Math.max(elemX, lineX),
+              y: textY,
+              size: fontSize,
+              font,
+              color: textColor,
+            });
+            textY -= lineHeight;
+          }
+        }
+        continue;
+      }
+
+      if (elem.type === 'table' && elem.rows && elem.rows.length > 0) {
+        const numRows = elem.rows.length;
+        const numCols = elem.rows[0]?.length || 1;
+        const cellW = elemW / numCols;
+        const cellH = elemH / numRows;
+
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < numCols; c++) {
+            const cellX = elemX + c * cellW;
+            const cellY = elemY + elemH - (r + 1) * cellH;
+
+            page.drawRectangle({
+              x: cellX,
+              y: cellY,
+              width: cellW,
+              height: cellH,
+              borderColor: rgb(0, 0, 0),
+              borderWidth: 0.5,
+            });
+
+            const rawText = elem.rows[r]?.[c] || '';
+            if (rawText) {
+              let cleanText = '';
+              for (const ch of rawText) {
+                const cp = ch.codePointAt(0)!;
+                if (fonts.hasGlyph(cp)) {
+                  cleanText += ch;
+                } else {
+                  recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
+                }
+              }
+
+              if (cleanText) {
+                let fontSize = Math.max(6, (12 * frameWidth) / 960);
+                const textW = fonts.regular.widthOfTextAtSize(cleanText, fontSize);
+                const maxW = Math.max(1, cellW - 4);
+                if (textW > maxW) {
+                  fontSize = Math.max(4, fontSize * (maxW / textW));
+                }
+                page.drawText(cleanText, {
+                  x: cellX + 2,
+                  y: cellY + (cellH - fontSize) / 2,
+                  size: fontSize,
+                  font: fonts.regular,
+                  color: rgb(0, 0, 0),
+                  maxWidth: maxW,
+                });
+              }
+            }
+          }
+        }
         continue;
       }
 

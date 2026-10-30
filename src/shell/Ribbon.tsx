@@ -80,6 +80,8 @@ import {
   ArrowDownZA,
   ListFilter,
   Sigma,
+  Circle,
+  Triangle,
 } from 'lucide-react';
 
 type RibbonTab = 'file' | 'home' | 'insert' | 'layout';
@@ -987,10 +989,6 @@ function SheetInsert({ api }: { api?: React.RefObject<WorkbookInstance | null> }
   );
 }
 
-function slideText(state?: SlideCommandState) {
-  return state?.element?.type === 'text' ? state.element : null;
-}
-
 function SlideHome({
   commands,
   state,
@@ -999,12 +997,18 @@ function SlideHome({
   state?: SlideCommandState;
 }) {
   const api = commands?.current;
-  const text = slideText(state);
+  const elem = state?.element;
+  const isText = elem?.type === 'text';
+  const isShape = elem?.type === 'rect';
+  const isTable = elem?.type === 'table';
+  const isLine = isShape && elem?.shape === 'line';
+  const hasTextFormatting = isText || (isShape && !isLine);
   const count = state?.slideCount || 0;
   const index = state?.slideIndex || 0;
   const patch = (updates: Partial<SlideElement>) => {
     commands?.current?.patchSelected(updates);
   };
+
   return commandRow(
     <>
       <RibbonGroup label={t('ribbon.slides')}>
@@ -1013,13 +1017,25 @@ function SlideHome({
         <RibbonButton title={t('ribbon.deleteSlide')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!api || count <= 1} onClick={() => commands?.current?.deleteSlide()} />
         <RibbonButton title={t('ribbon.moveEarlier')} icon={<ChevronUp size={16} />} disabled={!api || index <= 0} onClick={() => commands?.current?.moveSlide('up')} />
         <RibbonButton title={t('ribbon.moveLater')} icon={<ChevronDown size={16} />} disabled={!api || index >= count - 1} onClick={() => commands?.current?.moveSlide('down')} />
+        <select
+          aria-label={t('ribbon.slideSize')}
+          title={t('ribbon.slideSize')}
+          value={state?.slideSize || '16:9'}
+          disabled={!api}
+          onChange={(e) => commands?.current?.setSlideSize(e.target.value as '16:9' | '16:10' | '4:3')}
+          style={{ ...ribbonFieldStyle, width: 68 }}
+        >
+          <option value="16:9">16:9</option>
+          <option value="16:10">16:10</option>
+          <option value="4:3">4:3</option>
+        </select>
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.font')}>
         <select
           aria-label={t('ribbon.fontSize')}
           title={t('ribbon.fontSize')}
-          value={text?.fontSize || 18}
-          disabled={!text}
+          value={elem?.fontSize || 18}
+          disabled={!hasTextFormatting}
           onChange={(e) => patch({ fontSize: parseInt(e.target.value, 10) })}
           style={{ ...ribbonFieldStyle, width: 68 }}
         >
@@ -1029,24 +1045,76 @@ function SlideHome({
             </option>
           ))}
         </select>
-        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={Boolean(text?.bold)} disabled={!text} onClick={() => text && patch({ bold: !text.bold })} />
-        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={Boolean(text?.italic)} disabled={!text} onClick={() => text && patch({ italic: !text.italic })} />
-        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={Boolean(text?.underline)} disabled={!text} onClick={() => text && patch({ underline: !text.underline })} />
+        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={Boolean(elem?.bold)} disabled={!hasTextFormatting} onClick={() => elem && patch({ bold: !elem.bold })} />
+        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={Boolean(elem?.italic)} disabled={!hasTextFormatting} onClick={() => elem && patch({ italic: !elem.italic })} />
+        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={Boolean(elem?.underline)} disabled={!hasTextFormatting} onClick={() => elem && patch({ underline: !elem.underline })} />
         <input
           type="color"
           title={t('ribbon.textColor')}
           aria-label={t('ribbon.textColor')}
-          value={text?.color || '#1e2022'}
-          disabled={!text}
+          value={elem?.color || '#1e2022'}
+          disabled={!hasTextFormatting}
           onChange={(e) => patch({ color: e.target.value })}
-          style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+          style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: hasTextFormatting ? 'pointer' : 'default', opacity: hasTextFormatting ? 1 : 0.4 }}
         />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.paragraph')}>
-        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={text?.align === 'left'} disabled={!text} onClick={() => patch({ align: 'left' })} />
-        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={text?.align === 'center'} disabled={!text} onClick={() => patch({ align: 'center' })} />
-        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={text?.align === 'right'} disabled={!text} onClick={() => patch({ align: 'right' })} />
+        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={elem?.align === 'left'} disabled={!hasTextFormatting} onClick={() => patch({ align: 'left' })} />
+        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={elem?.align === 'center'} disabled={!hasTextFormatting} onClick={() => patch({ align: 'center' })} />
+        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={elem?.align === 'right'} disabled={!hasTextFormatting} onClick={() => patch({ align: 'right' })} />
       </RibbonGroup>
+      {isShape && (
+        <RibbonGroup label={t('ribbon.illustrations')}>
+          {!isLine && (
+            <input
+              type="color"
+              title={t('ribbon.fillColor')}
+              aria-label={t('ribbon.fillColor')}
+              value={elem?.fill || '#d6f3ef'}
+              onChange={(e) => patch({ fill: e.target.value })}
+              style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            />
+          )}
+          <input
+            type="color"
+            title={t('ribbon.outlineColor')}
+            aria-label={t('ribbon.outlineColor')}
+            value={elem?.borderColor || '#0f766e'}
+            onChange={(e) => patch({ borderColor: e.target.value })}
+            style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+          />
+        </RibbonGroup>
+      )}
+      {isTable && (
+        <RibbonGroup label={t('ribbon.tables')}>
+          <RibbonButton
+            title={t('ribbon.addRow')}
+            label={t('ribbon.row')}
+            icon={<Plus size={14} />}
+            onClick={() => commands?.current?.addTableRow()}
+          />
+          <RibbonButton
+            title={t('ribbon.addColumn')}
+            label={t('ribbon.column')}
+            icon={<Plus size={14} />}
+            onClick={() => commands?.current?.addTableColumn()}
+          />
+          <RibbonButton
+            title={t('ribbon.deleteRow')}
+            label={t('ribbon.deleteRow')}
+            icon={<Trash2 size={14} />}
+            disabled={(elem?.rows?.length || 0) <= 1}
+            onClick={() => commands?.current?.deleteTableRow()}
+          />
+          <RibbonButton
+            title={t('ribbon.deleteColumn')}
+            label={t('ribbon.deleteColumn')}
+            icon={<Trash2 size={14} />}
+            disabled={(elem?.rows?.[0]?.length || 0) <= 1}
+            onClick={() => commands?.current?.deleteTableColumn()}
+          />
+        </RibbonGroup>
+      )}
       <RibbonGroup label={t('ribbon.arrange')}>
         <RibbonButton title={t('ribbon.undoMove')} label={t('ribbon.undoShort')} icon={<Undo2 size={14} />} disabled={!state?.canUndo} onClick={() => commands?.current?.undo()} />
         <RibbonButton title={t('ribbon.delete')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!state?.element} onClick={() => commands?.current?.deleteSelected()} />
@@ -1062,10 +1130,17 @@ function SlideInsert({ commands }: { commands?: React.RefObject<SlideEditorHandl
       <RibbonGroup label={t('ribbon.text')}>
         <RibbonButton large title={t('ribbon.textBox')} label={t('ribbon.textBox')} icon={<Type size={22} />} disabled={!ready} onClick={() => commands?.current?.addText()} />
       </RibbonGroup>
+      <RibbonGroup label={t('ribbon.tables')}>
+        <RibbonButton large title={t('ribbon.tableHint')} label={t('ribbon.table')} icon={<TableIcon size={22} />} disabled={!ready} onClick={() => commands?.current?.addTable()} />
+      </RibbonGroup>
       <RibbonGroup label={t('ribbon.illustrations')}>
         <RibbonButton title={t('ribbon.picture')} label={t('ribbon.picture')} icon={<ImageIcon size={16} />} disabled={!ready} onClick={() => commands?.current?.addImage()} />
         <RibbonButton title={t('ribbon.video')} label={t('ribbon.video')} icon={<Video size={16} />} disabled={!ready} onClick={() => commands?.current?.addVideo()} />
-        <RibbonButton title={t('ribbon.rectangle')} label={t('ribbon.rectangle')} icon={<Square size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape()} />
+        <RibbonButton title={t('ribbon.rectangle')} label={t('ribbon.rectangle')} icon={<Square size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('rect')} />
+        <RibbonButton title={t('ribbon.rounded')} label={t('ribbon.rounded')} icon={<Square size={16} style={{ borderRadius: 4 }} />} disabled={!ready} onClick={() => commands?.current?.addShape('roundRect')} />
+        <RibbonButton title={t('ribbon.oval')} label={t('ribbon.oval')} icon={<Circle size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('ellipse')} />
+        <RibbonButton title={t('ribbon.triangle')} label={t('ribbon.triangle')} icon={<Triangle size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('triangle')} />
+        <RibbonButton title={t('ribbon.line')} label={t('ribbon.line')} icon={<Minus size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('line')} />
       </RibbonGroup>
     </>,
   );

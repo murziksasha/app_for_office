@@ -80,9 +80,9 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 9. PowerPoint Presentations (`.pptx`)
 
-- **Read Pipeline**: Decompressed via `JSZip`, parsing `ppt/slides/slide{N}.xml` and relationship files into `PresentationModel`. The first mp4 on each slide is kept. Further videos, videos that are not mp4, and audio that is not inside a video are reported and left out.
-- **Write Pipeline**: Generated using `PptxGenJS` into valid Open XML presentation packages, including one mp4 per slide. Bytes are written aside and then replace the previous file, so a failed write leaves that file in place.
-- **Skipped Features**: 3D animations, transition audio effects, speaker notes narration, extra videos, non-mp4 video, standalone audio.
+- **Read Pipeline**: Decompressed via `JSZip`, parsing `ppt/slides/slide{N}.xml` and relationship files into `PresentationModel`. Slide size is mapped by aspect ratio to `16:9`, `16:10`, or `4:3` (with a warning for non-standard aspect ratios). Preset geometries map to rect, roundRect, ellipse, triangle, and line (including straight connectors); other presets convert to rectangle with an import warning. Text speaker notes are read from body placeholders in `ppt/notesSlides/`, skipping thumbnail placeholders. Tables (`p:graphicFrame` / `a:tbl`) are read into uniform `rows: string[][]` with merged cells simplified to empty cells (warning once per slide) and cell styles/borders dropped (warning once). The first mp4 on each slide is kept. Further videos, videos that are not mp4, and audio that is not inside a video are reported and left out.
+- **Write Pipeline**: Generated using `PptxGenJS` into valid Open XML presentation packages, matching slide layout (`LAYOUT_16x9`, `LAYOUT_16x10`, or `LAYOUT_4x3`), shapes, tables, and notes via `addNotes`. One mp4 per slide is preserved. Bytes are written aside and then replace the previous file, so a failed write leaves that file in place.
+- **Skipped Features**: 3D animations, transition audio effects, speaker notes recorded narration audio, extra videos, non-mp4 video, standalone audio, table cell fills/borders/nested graphics.
 - **Fixture**: `fixtures/sample.pptx`.
 
 ---
@@ -102,7 +102,7 @@ This document details the import, export, fallback behavior, and fixture require
 - **Write Pipeline**: Built entirely in memory using `pdf-lib` with subset embedded Noto Sans fonts (Regular, Bold, Italic, Bold Italic covering Latin, Greek, and Cyrillic). The caller writes the file to the chosen path via platform I/O only after complete byte generation succeeds. The active tab's path, format, name, and clean/dirty state remain unchanged.
 - **Document Export**: The document `pageSetup` chooses Letter or A4 portrait and the four margins, converted to points. Flowing text. Headings, paragraphs, bullet/numbered lists, tables (shrunk to content width), images (JPEG/PNG), bold, italic, underline, and page breaks are rendered. Header and footer bands are rendered into the page margins matching the in-app document chrome. Link URLs, strikethrough, text color, highlight, font family, font size, alignment, and indentation are omitted.
 - **Spreadsheet Export**: US Letter portrait, used cell range, displayed text (`m` or `v`), one line per cell, uniform shrink-to-fit width, rows flowing to subsequent pages. Sheet bold and italic are preserved; formula strings and colors are omitted.
-- **Presentation Export**: US Letter landscape (one slide per page, scaled uniformly). Slide text runs, images, and rectangles are placed from percentages with background, fill, and font colors preserved. Videos are omitted and recorded.
+- **Presentation Export**: US Letter landscape with centered slide frame matching aspect ratio (16:9, 16:10, or 4:3). Slide text runs, images, tables (even grid with hairlines and shrink-to-fit text), and shapes (rectangle, rounded rectangle, ellipse, line, and triangle via filled path or rectangle fallback) are placed with background, fill, border, and font colors preserved. Videos and speaker notes are omitted.
 - **Omissions & Fallback**: Characters not covered by the font are dropped and recorded as omissions. Non-JPEG/PNG images that cannot be embedded are omitted and recorded. Folio displays a notice summarizing any omissions after writing. Export or write failures leave no file on disk.
 
 ---

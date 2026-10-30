@@ -37,9 +37,9 @@ Maintaining sheet models as structured cell matrices separates raw mathematical 
 
 ### The Rule
 Presentations are modeled as a structured `PresentationModel`:
-- Composed of a `title: string` and an array of `Slide` objects.
-- Each `Slide` contains an `id`, optional `title`, optional `background`, and an array of `SlideElement` objects.
-- `SlideElement` defines layout coordinates (`x`, `y`, `width`, `height`) and element properties (type `'text'`, `'image'`, or `'rect'`, text styles, colors, alignments).
+- Composed of a `title: string`, an array of `Slide` objects, and optional `slideSize: '16:9' | '16:10' | '4:3'` (missing values default to `'16:9'`).
+- Each `Slide` contains an `id`, optional `title`, optional `background`, an array of `SlideElement` objects, and optional `notes: string` for speaker notes.
+- `SlideElement` defines layout coordinates (`x`, `y`, `width`, `height`) and element properties (type `'text'`, `'image'`, `'rect'`, `'video'`, or `'table'`). Shapes use `type: 'rect'` and support `shape?: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line'` (defaulting to rectangle), `fill`, `borderColor`, `borderWidth`, and optional text with formatting. Tables store uniform `rows: string[][]`.
 
 ### The Reason
 A normalized slide element schema decouples PowerPoint Open XML packaging from the canvas layout renderer and export generation.

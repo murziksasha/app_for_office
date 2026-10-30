@@ -9,7 +9,7 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
   isArray: (name) => {
-    return ['sldId', 'Relationship', 'sp', 'pic', 'p', 'r'].includes(name);
+    return ['sldId', 'Relationship', 'sp', 'pic', 'p', 'r', 'graphicFrame', 'tr', 'tc'].includes(name);
   },
 });
 
@@ -97,6 +97,7 @@ export async function importPptx(
 ): Promise<{ presentation: PresentationModel; report: ImportReport }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
+  let warnedTableStyles = false;
 
   const zip = await JSZip.loadAsync(buffer);
   const presFile = zip.file('ppt/presentation.xml');
@@ -124,6 +125,34 @@ export async function importPptx(
   const sldSz = parsedPres?.presentation?.sldSz;
   const slideWidthEmu = parseInt(sldSz?.['@_cx'] || '9144000', 10);
   const slideHeightEmu = parseInt(sldSz?.['@_cy'] || '5143500', 10);
+  const ratio = slideWidthEmu / slideHeightEmu;
+
+  let slideSize: '16:9' | '16:10' | '4:3' = '16:9';
+  if (Math.abs(ratio - 16 / 9) < 0.05) {
+    slideSize = '16:9';
+  } else if (Math.abs(ratio - 1.6) < 0.05) {
+    slideSize = '16:10';
+  } else if (Math.abs(ratio - 4 / 3) < 0.05) {
+    slideSize = '4:3';
+  } else {
+    const d169 = Math.abs(ratio - 16 / 9);
+    const d1610 = Math.abs(ratio - 1.6);
+    const d43 = Math.abs(ratio - 4 / 3);
+    if (d1610 < d169 && d1610 < d43) {
+      slideSize = '16:10';
+    } else if (d43 < d169 && d43 < d1610) {
+      slideSize = '4:3';
+    } else {
+      slideSize = '16:9';
+    }
+    warnings.push({
+      item: 'Slide size',
+      reason: 'Non-standard slide size was mapped to nearest aspect ratio',
+    });
+    if (!skippedFeatures.includes('Custom slide dimensions')) {
+      skippedFeatures.push('Custom slide dimensions');
+    }
+  }
 
   // Load presentation rels to find slide files
   const presRelMap = await loadSlideRels(zip, 'ppt/_rels/presentation.xml.rels');
@@ -167,6 +196,61 @@ export async function importPptx(
     const slideRelPath = slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
     const slideRels = await loadSlideRels(zip, slideRelPath);
 
+    // Read notes slide if available
+    let slideNotes: string | undefined;
+    let notesTarget: string | null = null;
+    for (const r of Object.values(slideRels)) {
+      if (r.type?.includes('notesSlide') || r.target?.includes('notesSlide')) {
+        notesTarget = r.target;
+        break;
+      }
+    }
+    if (notesTarget) {
+      const cleanNotesPath = zipMediaPath(notesTarget);
+      const nFile = zip.file(cleanNotesPath);
+      if (nFile) {
+        try {
+          const nXml = await nFile.async('text');
+          if (nXml.includes('audioFile')) {
+            warnings.push({
+              item: `Slide ${sIdx + 1}`,
+              reason: VIDEO_MSG.skippedAudio,
+            });
+            if (!skippedFeatures.includes('Standalone audio')) skippedFeatures.push('Standalone audio');
+          }
+          const nParsed = xmlParser.parse(nXml);
+          const notesShapes = nParsed?.notes?.cSld?.spTree?.sp;
+          const nShapeList = notesShapes ? (Array.isArray(notesShapes) ? notesShapes : [notesShapes]) : [];
+          for (const sp of nShapeList) {
+            const ph = sp.nvSpPr?.nvPr?.ph;
+            const phType = ph?.['@_type'];
+            // Skip slide thumbnail placeholder
+            if (phType === 'sldImg') continue;
+            // Body placeholder contains speaker notes
+            if (phType === 'body' || ph?.['@_idx'] === '1' || (!ph && sp.txBody)) {
+              const paragraphs = sp.txBody?.p ? (Array.isArray(sp.txBody.p) ? sp.txBody.p : [sp.txBody.p]) : [];
+              let text = '';
+              paragraphs.forEach((p: any, pIndex: number) => {
+                if (pIndex > 0) text += '\n';
+                const runs = p.r ? (Array.isArray(p.r) ? p.r : [p.r]) : [];
+                runs.forEach((r: any) => {
+                  if (r.t) {
+                    const runTxt = typeof r.t === 'string' ? r.t : r.t['#text'] ? String(r.t['#text']) : '';
+                    text += runTxt;
+                  }
+                });
+              });
+              if (text.trim()) {
+                slideNotes = text;
+              }
+            }
+          }
+        } catch {
+          // Ignore notes parse errors
+        }
+      }
+    }
+
     const elements: SlideElement[] = [];
 
     // Helper to calculate percentage positions
@@ -179,7 +263,7 @@ export async function importPptx(
       const x = Math.max(0, Math.min(100, Math.round((offX / slideWidthEmu) * 100)));
       const y = Math.max(0, Math.min(100, Math.round((offY / slideHeightEmu) * 100)));
       const width = Math.max(5, Math.min(100, Math.round((extX / slideWidthEmu) * 100)));
-      const height = Math.max(3, Math.min(100, Math.round((extY / slideHeightEmu) * 100)));
+      const height = Math.max(2, Math.min(100, Math.round((extY / slideHeightEmu) * 100)));
 
       return { x, y, width, height };
     };
@@ -189,18 +273,61 @@ export async function importPptx(
     for (let shIdx = 0; shIdx < shapes.length; shIdx++) {
       const sp = shapes[shIdx];
       const bounds = getPercentBounds(sp.spPr?.xfrm);
+      const prst = sp.spPr?.prstGeom?.['@_prst'];
+
+      let shape: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line' | undefined;
+      if (prst === 'roundRect') {
+        shape = 'roundRect';
+      } else if (prst === 'ellipse') {
+        shape = 'ellipse';
+      } else if (prst === 'triangle') {
+        shape = 'triangle';
+      } else if (prst === 'line' || (typeof prst === 'string' && prst.startsWith('straightConnector'))) {
+        shape = 'line';
+      } else if (prst === 'rect') {
+        shape = 'rect';
+      } else if (prst) {
+        shape = 'rect';
+        warnings.push({
+          item: 'Shape preset',
+          reason: `Shape preset '${prst}' was converted to rectangle`,
+        });
+        if (!skippedFeatures.includes('Custom shape presets')) {
+          skippedFeatures.push('Custom shape presets');
+        }
+      }
+
+      let fill: string | undefined;
+      if (sp.spPr?.solidFill?.srgbClr?.['@_val']) {
+        fill = `#${sp.spPr.solidFill.srgbClr['@_val']}`;
+      }
+
+      let borderColor: string | undefined;
+      let borderWidth: number | undefined;
+      if (sp.spPr?.ln) {
+        if (sp.spPr.ln.solidFill?.srgbClr?.['@_val']) {
+          borderColor = `#${sp.spPr.ln.solidFill.srgbClr['@_val']}`;
+        }
+        if (sp.spPr.ln['@_w']) {
+          borderWidth = Math.max(1, Math.round(parseInt(sp.spPr.ln['@_w'], 10) / 12700));
+        }
+      }
+      if (shape === 'line') {
+        borderColor = borderColor || fill || '#0f766e';
+        borderWidth = borderWidth || 2;
+      }
 
       const txBody = sp.txBody;
+      let fullText = '';
+      let fontSize = 18;
+      let bold = false;
+      let italic = false;
+      let underline = false;
+      let color = '#1e2022';
+      let align: 'left' | 'center' | 'right' = 'left';
+
       if (txBody) {
         const paragraphs = txBody.p ? (Array.isArray(txBody.p) ? txBody.p : [txBody.p]) : [];
-        let fullText = '';
-        let fontSize = 18;
-        let bold = false;
-        let italic = false;
-        let underline = false;
-        let color = '#1e2022';
-        let align: 'left' | 'center' | 'right' = 'left';
-
         paragraphs.forEach((p: any, pIndex: number) => {
           if (pIndex > 0) fullText += '\n';
 
@@ -229,22 +356,135 @@ export async function importPptx(
             }
           });
         });
+      }
 
-        if (fullText.trim()) {
-          elements.push({
-            id: `elem_txt_${sIdx}_${shIdx}`,
-            type: 'text',
-            ...bounds,
-            text: fullText,
-            fontSize,
-            bold,
-            italic,
-            underline,
-            color,
-            align,
-          });
+      const hasText = Boolean(fullText.trim());
+
+      if (shape && shape !== 'rect') {
+        elements.push({
+          id: `elem_shp_${sIdx}_${shIdx}`,
+          type: 'rect',
+          shape,
+          ...bounds,
+          fill,
+          borderColor,
+          borderWidth,
+          ...(hasText ? { text: fullText, fontSize, bold, italic, underline, color, align } : {}),
+        });
+      } else if (hasText && !fill && !borderColor) {
+        elements.push({
+          id: `elem_txt_${sIdx}_${shIdx}`,
+          type: 'text',
+          ...bounds,
+          text: fullText,
+          fontSize,
+          bold,
+          italic,
+          underline,
+          color,
+          align,
+        });
+      } else {
+        // Rectangle shape (with or without fill, and optional text)
+        elements.push({
+          id: `elem_shp_${sIdx}_${shIdx}`,
+          type: 'rect',
+          shape: 'rect',
+          ...bounds,
+          fill: fill || (hasText ? undefined : '#e2ded6'),
+          borderColor,
+          borderWidth,
+          ...(hasText ? { text: fullText, fontSize, bold, italic, underline, color, align } : {}),
+        });
+      }
+    }
+
+    // Parse tables (graphicFrame / tbl)
+    const graphicFrames = spTree?.graphicFrame ? (Array.isArray(spTree.graphicFrame) ? spTree.graphicFrame : [spTree.graphicFrame]) : [];
+    let slideHadMergedCells = false;
+
+    for (let gfIdx = 0; gfIdx < graphicFrames.length; gfIdx++) {
+      const gf = graphicFrames[gfIdx];
+      const tbl = gf.graphic?.graphicData?.tbl;
+      if (!tbl) continue;
+
+      const bounds = getPercentBounds(gf.xfrm);
+      const trList = tbl.tr ? (Array.isArray(tbl.tr) ? tbl.tr : [tbl.tr]) : [];
+      const rows: string[][] = [];
+      let hadDroppedStyles = false;
+
+      for (const tr of trList) {
+        const tcList = tr.tc ? (Array.isArray(tr.tc) ? tr.tc : [tr.tc]) : [];
+        const rowCells: string[] = [];
+
+        for (const tc of tcList) {
+          if (tc.tcPr?.solidFill || tc.tcPr?.lnL || tc.tcPr?.lnR || tc.tcPr?.lnT || tc.tcPr?.lnB || tc.pic || tc.blipFill) {
+            hadDroppedStyles = true;
+          }
+
+          const isHMerge = tc['@_hMerge'] === '1' || tc['@_hMerge'] === 'true';
+          const isVMerge = tc['@_vMerge'] === '1' || tc['@_vMerge'] === 'true';
+          const gridSpan = parseInt(tc['@_gridSpan'] || '1', 10);
+          const rowSpan = parseInt(tc['@_rowSpan'] || '1', 10);
+
+          if (isHMerge || isVMerge || gridSpan > 1 || rowSpan > 1) {
+            slideHadMergedCells = true;
+          }
+
+          if (isHMerge || isVMerge) {
+            rowCells.push('');
+          } else {
+            let cellText = '';
+            const pList = tc.txBody?.p ? (Array.isArray(tc.txBody.p) ? tc.txBody.p : [tc.txBody.p]) : [];
+            pList.forEach((p: any, pIndex: number) => {
+              if (pIndex > 0) cellText += '\n';
+              const rList = p.r ? (Array.isArray(p.r) ? p.r : [p.r]) : [];
+              rList.forEach((r: any) => {
+                if (r.t) {
+                  const txt = typeof r.t === 'string' ? r.t : r.t['#text'] ? String(r.t['#text']) : '';
+                  cellText += txt;
+                }
+              });
+            });
+            rowCells.push(cellText);
+
+            for (let g = 1; g < gridSpan; g++) {
+              rowCells.push('');
+            }
+          }
+        }
+        rows.push(rowCells);
+      }
+
+      if (hadDroppedStyles && !warnedTableStyles) {
+        warnedTableStyles = true;
+        warnings.push({
+          item: 'Tables',
+          reason: 'Table cell fills, borders, and nested pictures were dropped',
+        });
+        if (!skippedFeatures.includes('Table styles and graphics')) {
+          skippedFeatures.push('Table styles and graphics');
         }
       }
+
+      const maxCols = Math.max(...rows.map((r) => r.length), 1);
+      for (const r of rows) {
+        while (r.length < maxCols) r.push('');
+      }
+
+      elements.push({
+        id: `elem_tbl_${sIdx}_${gfIdx}`,
+        type: 'table',
+        ...bounds,
+        rows: rows.length ? rows : [['', '', ''], ['', '', ''], ['', '', '']],
+      });
+    }
+
+    if (slideHadMergedCells) {
+      warnings.push({
+        item: `Slide ${sIdx + 1}`,
+        reason: 'Merged table cells were simplified to separate empty cells',
+      });
     }
 
     if (sXml.includes('audioFile')) {
@@ -312,6 +552,7 @@ export async function importPptx(
       title: elements.find((e) => e.type === 'text')?.text?.slice(0, 30) || `Slide ${sIdx + 1}`,
       background: '#ffffff',
       elements,
+      ...(slideNotes ? { notes: slideNotes } : {}),
     });
   }
 
@@ -323,6 +564,7 @@ export async function importPptx(
     presentation: {
       title: fileName.replace(/\.[^/.]+$/, '') || 'Presentation',
       slides,
+      slideSize,
     },
     report: {
       fileName,
@@ -380,19 +622,32 @@ export function createEmptySlide(slideNumber = 1): Slide {
  */
 export async function exportPptx(presentation: PresentationModel): Promise<Blob> {
   const pres = new PptxGenJS();
-  pres.layout = 'LAYOUT_16x9';
+  const slideSize = presentation.slideSize || '16:9';
+  if (slideSize === '4:3') {
+    pres.layout = 'LAYOUT_4x3';
+  } else if (slideSize === '16:10') {
+    pres.layout = 'LAYOUT_16x10';
+  } else {
+    pres.layout = 'LAYOUT_16x9';
+  }
+
+  const slideWidthInches = 10;
+  const slideHeightInches = slideSize === '4:3' ? 7.5 : slideSize === '16:10' ? 6.25 : 5.625;
 
   presentation.slides.forEach((slide) => {
     const s = pres.addSlide();
     if (slide.background) {
       s.background = { color: slide.background.replace('#', '') };
     }
+    if (slide.notes) {
+      s.addNotes(slide.notes);
+    }
 
     slide.elements.forEach((elem) => {
-      const xInch = (elem.x / 100) * 10;
-      const yInch = (elem.y / 100) * 5.625;
-      const wInch = (elem.width / 100) * 10;
-      const hInch = (elem.height / 100) * 5.625;
+      const xInch = (elem.x / 100) * slideWidthInches;
+      const yInch = (elem.y / 100) * slideHeightInches;
+      const wInch = (elem.width / 100) * slideWidthInches;
+      const hInch = (elem.height / 100) * slideHeightInches;
 
       if (elem.type === 'text') {
         s.addText(elem.text || '', {
@@ -427,12 +682,55 @@ export async function exportPptx(presentation: PresentationModel): Promise<Blob>
           h: hInch,
         });
       } else if (elem.type === 'rect') {
-        s.addShape(pres.ShapeType.rect, {
+        const shapeType = elem.shape || 'rect';
+        const pptxShape = (pres.ShapeType as any)[shapeType] || pres.ShapeType.rect;
+        if (shapeType === 'line') {
+          s.addShape(pres.ShapeType.line, {
+            x: xInch,
+            y: yInch,
+            w: wInch,
+            h: hInch,
+            line: {
+              color: (elem.borderColor || '#0f766e').replace('#', ''),
+              width: elem.borderWidth || 2,
+            },
+          });
+        } else if (elem.text) {
+          s.addText(elem.text, {
+            shape: pptxShape,
+            x: xInch,
+            y: yInch,
+            w: wInch,
+            h: hInch,
+            fill: elem.fill ? { color: elem.fill.replace('#', '') } : undefined,
+            line: elem.borderColor ? { color: elem.borderColor.replace('#', ''), width: elem.borderWidth || 1 } : undefined,
+            fontSize: elem.fontSize || 18,
+            color: (elem.color || '#1e2022').replace('#', ''),
+            bold: !!elem.bold,
+            italic: !!elem.italic,
+            underline: elem.underline ? { style: 'sng' } : undefined,
+            align: elem.align || 'center',
+            valign: 'middle',
+          });
+        } else {
+          s.addShape(pptxShape, {
+            x: xInch,
+            y: yInch,
+            w: wInch,
+            h: hInch,
+            fill: elem.fill ? { color: elem.fill.replace('#', '') } : undefined,
+            line: elem.borderColor ? { color: elem.borderColor.replace('#', ''), width: elem.borderWidth || 1 } : undefined,
+          });
+        }
+      } else if (elem.type === 'table' && elem.rows && elem.rows.length > 0) {
+        const tableRows = elem.rows.map((row) => row.map((cell) => ({ text: cell })));
+        s.addTable(tableRows, {
           x: xInch,
           y: yInch,
           w: wInch,
           h: hInch,
-          fill: { color: (elem.fill || '#e2ded6').replace('#', '') },
+          border: { type: 'solid', pt: 1, color: '000000' },
+          autoPage: false,
         });
       }
     });

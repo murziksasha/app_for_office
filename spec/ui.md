@@ -44,7 +44,7 @@ Tabs follow the open file:
 
 - Document: File, Home, Insert, Layout.
 - Spreadsheet: File, Home, Insert. FortuneSheet’s own toolbar stays hidden. The formula bar and sheet tabs stay.
-- Presentation: File, Home, Insert. Slide, text, picture, video, and shape commands live here. The thumbnail rail stays beside the canvas.
+- Presentation: File, Home, Insert. Slide, text, picture, video, shape, and table commands live here. Home's Slides group includes a slide size selector (16:9, 16:10, 4:3). Home also offers shape fill and outline colors, and table row and column commands when selected. Insert offers text box, table (3x3), picture, video, and five shapes: Rectangle, Rounded, Oval, Triangle, and Line. Double-clicking a shape edits optional text. A Notes field below the canvas allows typing speaker notes. The thumbnail rail stays beside the canvas and reflects the slide aspect ratio.
 - PDF: File only. Page navigation stays on the viewer.
 
 File groups are New, Open, Save, Print, and Settings. Save as PDF is absent on a PDF tab. Edit as Document is present on a PDF tab. Drafts and recent files stay listed under the File groups.
