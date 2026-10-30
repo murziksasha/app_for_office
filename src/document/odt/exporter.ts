@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { clampPageSetup, PAGE_MM, readPageSetup, type PageSetup } from '../pageSetup';
 
 function escapeXml(str: string): string {
   return str
@@ -42,7 +43,7 @@ function processInlineNodes(node: Node): string {
   return '';
 }
 
-export async function exportOdt(htmlContent: string): Promise<Blob> {
+export async function exportOdt(htmlContent: string, pageSetup?: PageSetup | null): Promise<Blob> {
   const parser = new (globalThis.DOMParser || DOMParser)();
   const doc = parser.parseFromString(htmlContent, 'text/html');
   const docElement = doc.body;
@@ -119,8 +120,19 @@ export async function exportOdt(htmlContent: string): Promise<Blob> {
   <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
 </manifest:manifest>`;
 
+  const setup = clampPageSetup(pageSetup ?? readPageSetup(null));
+  const page = PAGE_MM[setup.size];
+  const cm = (mm: number) => (mm / 10).toFixed(2);
   const stylesXml = `<?xml version="1.0" encoding="UTF-8"?>
-<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" office:version="1.2">
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.2">
+  <office:automatic-styles>
+    <style:page-layout style:name="FolioPage">
+      <style:page-layout-properties fo:page-width="${cm(page.width)}cm" fo:page-height="${cm(page.height)}cm" fo:margin-top="${cm(setup.marginTop)}cm" fo:margin-right="${cm(setup.marginRight)}cm" fo:margin-bottom="${cm(setup.marginBottom)}cm" fo:margin-left="${cm(setup.marginLeft)}cm"/>
+    </style:page-layout>
+  </office:automatic-styles>
+  <office:master-styles>
+    <style:master-page style:name="Standard" style:page-layout-name="FolioPage"/>
+  </office:master-styles>
 </office:document-styles>`;
 
   const zip = new JSZip();

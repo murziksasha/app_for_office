@@ -13,6 +13,9 @@ export type SupportedFormat =
   | 'csv'
   | 'tsv'
   | 'pptx'
+  | 'tmdx'
+  | 'pmdx'
+  | 'prdx'
   | 'pdf';
 
 export interface ImportWarning {

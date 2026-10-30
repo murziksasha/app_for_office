@@ -1,6 +1,7 @@
 import React from 'react';
 import { ImportReport } from '../types';
 import { AlertCircle, AlertTriangle, Check, X } from 'lucide-react';
+import { t } from '../i18n/instance';
 
 interface ImportReportDialogProps {
   report: ImportReport;
@@ -12,7 +13,7 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Import Report"
+      aria-label={t('import.aria')}
       data-testid="import-report-dialog"
       style={{
         position: 'fixed',
@@ -57,10 +58,10 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
             )}
             <div>
               <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--folio-ink)' }}>
-                Import Report: {report.fileName}
+                {t('import.title', { name: report.fileName })}
               </h3>
               <span style={{ fontSize: '12px', color: 'var(--folio-ink-muted)' }}>
-                {report.fallbackUsed ? 'Simplified fallback import used' : 'File opened successfully with notices'}
+                {report.fallbackUsed ? t('import.fallback') : t('import.opened')}
               </span>
             </div>
           </div>
@@ -82,15 +83,14 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
                 color: '#92400e',
               }}
             >
-              The OpenXML parser encountered custom or non-standard structures. Folio safely loaded your document using
-              the Mammoth engine. Some complex layouts or headers may be simplified.
+              {t('import.fallbackBody')}
             </div>
           )}
 
           {report.skippedFeatures.length > 0 && (
             <div style={{ marginBottom: '16px' }}>
               <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--folio-ink)' }}>
-                Skipped unsupported features:
+                {t('import.skipped')}
               </h4>
               <ul style={{ paddingLeft: '20px', fontSize: '13px', color: 'var(--folio-ink-muted)' }}>
                 {report.skippedFeatures.map((feat, idx) => (
@@ -105,7 +105,7 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
           {report.warnings.length > 0 && (
             <div>
               <h4 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--folio-ink)' }}>
-                Details:
+                {t('import.details')}
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {report.warnings.map((w, idx) => (
@@ -148,7 +148,7 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
               fontSize: '13px',
             }}
           >
-            Understood
+            {t('import.understood')}
           </button>
         </div>
       </div>

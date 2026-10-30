@@ -1,6 +1,8 @@
-import { EditorState, SupportedFormat } from '../types';
+import { EditorState, ImportWarning, SupportedFormat } from '../types';
 import { saveToFileSystem } from './fileSystem';
 import { documentToHtml } from '../document/model';
+import { pageSetupFromDoc } from '../document/pageSetup';
+import { chromeFromDoc, hasChromeContent } from '../document/chrome';
 import { exportDocx } from '../document/docx/exporter';
 import { exportOdt } from '../document/odt/exporter';
 import { exportRtf } from '../document/rtf/exporter';
@@ -28,25 +30,38 @@ export async function saveEditorContent(
   }
 
   let blob: Blob;
+  const additionalWarnings: ImportWarning[] = [];
 
   try {
     switch (state.kind) {
       case 'document': {
         // DocumentToHtml runs only inside save and export boundaries
         const html = state.documentContent ? documentToHtml(state.documentContent) : '<p></p>';
-        if (format === 'docx') {
-          blob = await exportDocx(html);
-        } else if (format === 'odt') {
-          blob = await exportOdt(html);
-        } else if (format === 'rtf') {
-          blob = await exportRtf(html);
-        } else if (format === 'md') {
-          blob = new Blob([htmlToMarkdown(html)], { type: 'text/markdown;charset=utf-8' });
-        } else if (format === 'html') {
-          blob = new Blob([wrapInHtmlDocument(html, targetName)], { type: 'text/html;charset=utf-8' });
+        const pageSetup = pageSetupFromDoc(state.documentContent);
+        const chrome = chromeFromDoc(state.documentContent);
+
+        if (format === 'docx' || format === 'tmdx') {
+          blob = await exportDocx(html, pageSetup, chrome);
         } else {
-          // txt
-          blob = new Blob([htmlToPlainText(html)], { type: 'text/plain;charset=utf-8' });
+          if (hasChromeContent(chrome)) {
+            additionalWarnings.push({
+              item: 'Headers & Footers',
+              reason: `Header and footer are not supported in .${format} and were not saved.`,
+            });
+          }
+
+          if (format === 'odt') {
+            blob = await exportOdt(html, pageSetup);
+          } else if (format === 'rtf') {
+            blob = await exportRtf(html);
+          } else if (format === 'md') {
+            blob = new Blob([htmlToMarkdown(html)], { type: 'text/markdown;charset=utf-8' });
+          } else if (format === 'html') {
+            blob = new Blob([wrapInHtmlDocument(html, targetName)], { type: 'text/html;charset=utf-8' });
+          } else {
+            // txt
+            blob = new Blob([htmlToPlainText(html)], { type: 'text/plain;charset=utf-8' });
+          }
         }
         break;
       }
@@ -62,7 +77,7 @@ export async function saveEditorContent(
           column: 0,
           data: [],
         };
-        if (format === 'xlsx') {
+        if (format === 'xlsx' || format === 'pmdx') {
           blob = await exportXlsx(sheets);
         } else if (format === 'tsv') {
           blob = new Blob([exportCsvTsv(activeSheet, true)], {
@@ -106,6 +121,17 @@ export async function saveEditorContent(
       return { success: false };
     }
 
+    let report = state.importReport;
+    if (additionalWarnings.length > 0) {
+      report = {
+        fileName: saveResult.newFileName,
+        format,
+        importedAt: new Date().toISOString(),
+        warnings: [...(report?.warnings || []), ...additionalWarnings],
+        skippedFeatures: [...(report?.skippedFeatures || []), 'Headers & Footers'],
+      };
+    }
+
     const updatedState: EditorState = {
       ...state,
       fileName: saveResult.newFileName,
@@ -114,6 +140,7 @@ export async function saveEditorContent(
       filePath: saveResult.path || (options.saveAs ? undefined : state.filePath),
       isDirty: false,
       lastSavedAt: new Date(),
+      importReport: report,
     };
 
     return { success: true, updatedState, bytes };

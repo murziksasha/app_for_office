@@ -17,17 +17,27 @@ import { Placeholder } from '@tiptap/extension-placeholder';
 import { FontSize } from './extensions/fontSize';
 import { Indent } from './extensions/indent';
 import { PageBreak } from './extensions/pageBreak';
+import { FolioDocument } from './extensions/folioDocument';
+import { PageGaps } from './extensions/pageGaps';
+import { applyPageSetup, DEFAULT_PAGE_SETUP } from './pageSetup';
+import { applyDocChrome, createEmptyChrome } from './chrome';
 import { sanitizeHtml } from './sanitize';
 
 export type DocumentModel = JSONContent;
 
 export const defaultDocumentModel: DocumentModel = {
   type: 'doc',
+  attrs: {
+    pageSetup: { ...DEFAULT_PAGE_SETUP },
+    chrome: { ...createEmptyChrome() },
+  },
   content: [{ type: 'paragraph' }],
 };
 
 export const documentExtensions: AnyExtension[] = [
+  FolioDocument,
   StarterKit.configure({
+    document: false,
     heading: { levels: [1, 2, 3, 4, 5, 6] },
     link: false,
     underline: false,
@@ -63,6 +73,7 @@ export const documentExtensions: AnyExtension[] = [
   FontSize,
   Indent,
   PageBreak,
+  PageGaps,
 ];
 
 /**
@@ -85,7 +96,7 @@ export function htmlToDocument(rawHtml: string): DocumentModel {
     if (!json || !json.content || json.content.length === 0) {
       return defaultDocumentModel;
     }
-    return json;
+    return applyDocChrome(applyPageSetup(json));
   } catch (err) {
     console.warn('Failed to parse HTML to document JSON, returning default model:', err);
     return defaultDocumentModel;
@@ -108,4 +119,3 @@ export function documentToHtml(doc: DocumentModel): string {
     return '<p></p>';
   }
 }
-

@@ -6,8 +6,54 @@ import { importOdt } from '../document/odt/importer';
 import { importRtf } from '../document/rtf/importer';
 import { plainTextToHtml, markdownToHtml } from '../document/textMdHtml';
 import { htmlToDocument } from '../document/model';
+import { applyPageSetup, type PageSetup } from '../document/pageSetup';
+import { applyDocChrome, type DocumentChrome } from '../document/chrome';
 import { importXlsx, importCsvTsv } from '../spreadsheet/adapters';
 import { importPptx } from '../slides/pptxAdapter';
+import { t } from '../i18n/instance';
+import { stampClean } from './tabs';
+
+function documentWithSetup(
+  html: string,
+  pageSetup?: PageSetup | null,
+  chrome?: DocumentChrome | null
+) {
+  let doc = htmlToDocument(html);
+  if (pageSetup) doc = applyPageSetup(doc, pageSetup);
+  if (chrome) doc = applyDocChrome(doc, chrome);
+  return doc;
+}
+
+export function legacySoftMakerFormat(fileName: string): 'tmdx' | 'pmdx' | 'prdx' | null {
+  const base = fileName.split(/[\\/]/).pop() || fileName;
+  const dot = base.lastIndexOf('.');
+  const ext = dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+  if (ext === 'tmd') return 'tmdx';
+  if (ext === 'pmd') return 'pmdx';
+  if (ext === 'prd') return 'prdx';
+  return null;
+}
+
+/** Older SoftMaker packages become a dirty copy under the modern extension, with no save path. */
+export function presentLegacyPackage(state: EditorState, originalName: string): EditorState {
+  const format = legacySoftMakerFormat(originalName);
+  if (!format) return state;
+  const baseName = originalName.replace(/\.[^/.]+$/, '');
+  return {
+    ...state,
+    fileName: `${baseName}.${format}`,
+    format,
+    filePath: undefined,
+    fileHandle: undefined,
+    isDirty: true,
+    cleanHash: '',
+  };
+}
+
+/** Stamp the opened editor clean, then restore the dirty pathless copy for an older SoftMaker package. */
+export function finishOpenedTab(loaded: EditorState, originalName: string): EditorState {
+  return presentLegacyPackage(stampClean(loaded), originalName);
+}
 
 export async function loadFileToEditor(
   fileOrBuffer: File | ArrayBuffer,
@@ -19,7 +65,7 @@ export async function loadFileToEditor(
 
   const detection = await detectFileType(fileName, buffer);
 
-  if (detection.isLegacyBinary) {
+  if (detection.errorMessage || detection.isLegacyBinary) {
     throw new Error(
       detection.errorMessage ||
         'Legacy Office binary format (.doc, .xls, .ppt) cannot be opened directly. Please save the file as modern .docx, .xlsx, or .pptx.'
@@ -40,13 +86,13 @@ export async function loadFileToEditor(
 
   switch (detection.kind) {
     case 'document': {
-      if (detection.format === 'docx') {
-        const { html, report } = await importDocx(buffer, fileName);
-        editorState.documentContent = htmlToDocument(html);
+      if (detection.format === 'docx' || detection.format === 'tmdx') {
+        const { html, report, pageSetup, chrome } = await importDocx(buffer, fileName);
+        editorState.documentContent = documentWithSetup(html, pageSetup, chrome);
         editorState.importReport = report;
       } else if (detection.format === 'odt') {
-        const { html, report } = await importOdt(buffer, fileName);
-        editorState.documentContent = htmlToDocument(html);
+        const { html, report, pageSetup } = await importOdt(buffer, fileName);
+        editorState.documentContent = documentWithSetup(html, pageSetup);
         editorState.importReport = report;
       } else if (detection.format === 'rtf') {
         const text = textDecoder.decode(buffer);
@@ -68,7 +114,7 @@ export async function loadFileToEditor(
     }
 
     case 'spreadsheet': {
-      if (detection.format === 'xlsx') {
+      if (detection.format === 'xlsx' || detection.format === 'pmdx') {
         const { sheets, report } = await importXlsx(buffer, fileName);
         editorState.spreadsheetData = sheets;
         editorState.importReport = report;
@@ -111,10 +157,10 @@ export async function loadFileToEditor(
       };
     }
     editorState.importReport.warnings.push({
-      item: 'VBA Macros',
-      reason: 'Embedded macro code was safely ignored and will not execute.',
+      item: t('dialog.vbaItem'),
+      reason: t('dialog.vbaReason'),
     });
-    editorState.importReport.skippedFeatures.push('VBA Macros');
+    editorState.importReport.skippedFeatures.push(t('dialog.vbaItem'));
   }
 
   // Register in recent files
@@ -127,6 +173,5 @@ export async function loadFileToEditor(
     path,
   });
 
-  return editorState;
+  return presentLegacyPackage(editorState, fileName);
 }
-

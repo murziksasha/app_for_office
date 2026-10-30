@@ -1,5 +1,6 @@
 import { FormatFilter, PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
 import { FORMAT_MIME_TYPES } from './browser';
+import { dropHitsTarget, emitHomeDrag, measureHomeDropTarget } from '../shell/dropTarget';
 
 interface RustFilePayload {
   path: string;
@@ -37,7 +38,7 @@ export class DesktopPlatformAdapter implements PlatformAdapter {
 
   async pickSaveTarget(fileName: string, filters: FormatFilter[]): Promise<SaveTarget | null> {
     const rustFilters = (filters || []).map((f) => ({
-      name: f.label,
+      name: f.extensions[0] ? `${f.label} (*.${f.extensions[0]})` : f.label,
       extensions: f.extensions,
     }));
     const pickedPath = await tauriInvoke<string | null>('folio_pick_save', {
@@ -182,17 +183,36 @@ export class DesktopPlatformAdapter implements PlatformAdapter {
     };
   }
 
+  async userRegion(): Promise<string | null> {
+    const region = await tauriInvoke<string>('folio_user_region');
+    const trimmed = (region || '').trim();
+    return trimmed || null;
+  }
+
   setupFileDropHandler(onFiles: (files: PlatformFileResult[]) => void): () => void {
     let unlisten: (() => void) | undefined;
     (async () => {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const appWindow = getCurrentWindow();
-        unlisten = await appWindow.onDragDropEvent(async (event) => {
-          if (event.payload.type !== 'drop' || !event.payload.paths?.length) return;
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+        const webview = getCurrentWebview();
+        unlisten = await webview.onDragDropEvent(async (event) => {
+          if (event.payload.type === 'leave') {
+            emitHomeDrag(false);
+            return;
+          }
+          const box = measureHomeDropTarget();
+          const ratio = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+          const hit = dropHitsTarget(event.payload.position, box, ratio);
+          if (event.payload.type === 'enter' || event.payload.type === 'over') {
+            emitHomeDrag(hit);
+            return;
+          }
+          emitHomeDrag(false);
+          if (event.payload.type !== 'drop' || !event.payload.paths?.length || !hit) return;
           const loaded: PlatformFileResult[] = [];
           for (const targetPath of event.payload.paths) {
             try {
+              await this.allowPath(targetPath);
               loaded.push(await this.readFile(targetPath));
             } catch (err) {
               console.error('Failed to read dropped file in desktop:', err);

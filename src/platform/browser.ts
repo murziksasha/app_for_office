@@ -56,6 +56,21 @@ export const FORMAT_MIME_TYPES: Record<string, { description: string; mime: stri
     mime: 'application/pdf',
     extensions: ['.pdf'],
   },
+  tmdx: {
+    description: 'Document (.tmdx)',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    extensions: ['.tmdx'],
+  },
+  pmdx: {
+    description: 'Spreadsheet (.pmdx)',
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    extensions: ['.pmdx'],
+  },
+  prdx: {
+    description: 'Presentation (.prdx)',
+    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    extensions: ['.prdx'],
+  },
 };
 
 export function hasFileSystemAccess(): boolean {
@@ -126,7 +141,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
             {
               description: 'All Supported Office Files',
               accept: {
-                'application/*': ['.docx', '.odt', '.xlsx', '.pptx', '.pdf'],
+                'application/*': ['.docx', '.odt', '.xlsx', '.pptx', '.pdf', '.tmdx', '.pmdx', '.prdx', '.tmd', '.pmd', '.prd'],
                 'text/*': ['.rtf', '.txt', '.md', '.html', '.htm', '.csv', '.tsv'],
               },
             },
@@ -153,7 +168,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
       input.type = 'file';
       input.multiple = true;
       input.accept =
-        '.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.csv,.tsv,.pptx,.pdf,.doc,.xls,.ppt,.docm,.xlsm,.pptm';
+        '.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.csv,.tsv,.pptx,.pdf,.tmdx,.pmdx,.prdx,.tmd,.pmd,.prd,.doc,.xls,.ppt,.docm,.xlsm,.pptm';
       input.onchange = () => {
         const files = input.files ? Array.from(input.files) : [];
         resolve(files.map((file) => ({ file, name: file.name })));
@@ -295,6 +310,10 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
 
   setupOpenRequestHandler(_onOpen: (paths: string[]) => void): () => void {
     return () => {};
+  }
+
+  async userRegion(): Promise<string | null> {
+    return null;
   }
 }
 

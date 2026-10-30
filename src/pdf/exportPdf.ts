@@ -2,6 +2,14 @@ import { PDFDocument, PDFPage, rgb, RGB, PDFImage } from 'pdf-lib';
 import { EditorState } from '../types';
 import { embedNotoFonts, EmbeddedFonts } from './fonts';
 import { getActiveSheet } from '../files/session';
+import { mmToPt, PAGE_MM, pageSetupFromDoc } from '../document/pageSetup';
+import {
+  chromeFromDoc,
+  hasChromeContent,
+  resolveStoryForPage,
+  type ChromeStory,
+  type ChromeZone,
+} from '../document/chrome';
 
 export interface ExportPdfOptions {
   scope?: 'current' | 'all';
@@ -165,18 +173,23 @@ async function exportDocument(
   fonts: EmbeddedFonts,
   recordOmission: (msg: string) => void
 ) {
-  const PAGE_WIDTH = 612; // US Letter portrait
-  const PAGE_HEIGHT = 792;
-  const MARGIN = 54;
-  const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2; // 504 pt
+  const setup = pageSetupFromDoc(state.documentContent);
+  const pageBox = PAGE_MM[setup.size];
+  const PAGE_WIDTH = mmToPt(pageBox.width);
+  const PAGE_HEIGHT = mmToPt(pageBox.height);
+  const marginLeft = mmToPt(setup.marginLeft);
+  const marginRight = mmToPt(setup.marginRight);
+  const marginTop = mmToPt(setup.marginTop);
+  const marginBottom = mmToPt(setup.marginBottom);
+  const CONTENT_WIDTH = PAGE_WIDTH - marginLeft - marginRight;
 
   let currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let cursorY = PAGE_HEIGHT - MARGIN;
+  let cursorY = PAGE_HEIGHT - marginTop;
 
   const ensureSpace = (neededHeight: number): PDFPage => {
-    if (cursorY - neededHeight < MARGIN) {
+    if (cursorY - neededHeight < marginBottom) {
       currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      cursorY = PAGE_HEIGHT - MARGIN;
+      cursorY = PAGE_HEIGHT - marginTop;
     }
     return currentPage;
   };
@@ -186,7 +199,7 @@ async function exportDocument(
   for (const node of nodes) {
     if (node.type === 'pageBreak') {
       currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      cursorY = PAGE_HEIGHT - MARGIN;
+      cursorY = PAGE_HEIGHT - marginTop;
       continue;
     }
 
@@ -201,7 +214,7 @@ async function exportDocument(
         currentPage,
         ensureSpace,
         tokens,
-        MARGIN,
+        marginLeft,
         cursorY,
         CONTENT_WIDTH,
         fontSize,
@@ -227,7 +240,7 @@ async function exportDocument(
         currentPage,
         ensureSpace,
         tokens,
-        MARGIN,
+        marginLeft,
         cursorY,
         CONTENT_WIDTH,
         fontSize,
@@ -261,7 +274,7 @@ async function exportDocument(
           currentPage,
           ensureSpace,
           itemTokens,
-          MARGIN + indent,
+          marginLeft + indent,
           cursorY,
           CONTENT_WIDTH - indent,
           fontSize,
@@ -293,7 +306,7 @@ async function exportDocument(
 
       ensureSpace(drawHeight + 10);
       currentPage.drawImage(img, {
-        x: MARGIN,
+        x: marginLeft,
         y: cursorY - drawHeight,
         width: drawWidth,
         height: drawHeight,
@@ -334,7 +347,7 @@ async function exportDocument(
         ensureSpace(rowHeight);
 
         for (let c = 0; c < colCount; c++) {
-          const cellX = MARGIN + c * colWidth;
+          const cellX = marginLeft + c * colWidth;
           const cellY = cursorY - rowHeight;
 
           // Border
@@ -382,6 +395,192 @@ async function exportDocument(
       cursorY -= 8;
       continue;
     }
+  }
+
+  const chrome = chromeFromDoc(state.documentContent);
+  if (hasChromeContent(chrome)) {
+    const pages = doc.getPages();
+    const totalPages = pages.length;
+    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+      const page = pages[pIdx];
+      const pageNumber = pIdx + 1;
+      const headerStory = resolveStoryForPage(chrome, 'header', pageNumber);
+      const footerStory = resolveStoryForPage(chrome, 'footer', pageNumber);
+
+      await renderPdfStory(
+        doc,
+        page,
+        headerStory,
+        'header',
+        pageNumber,
+        totalPages,
+        marginLeft,
+        CONTENT_WIDTH,
+        PAGE_HEIGHT - marginTop,
+        marginTop,
+        fonts,
+        recordOmission
+      );
+
+      await renderPdfStory(
+        doc,
+        page,
+        footerStory,
+        'footer',
+        pageNumber,
+        totalPages,
+        marginLeft,
+        CONTENT_WIDTH,
+        marginBottom,
+        marginBottom,
+        fonts,
+        recordOmission
+      );
+    }
+  }
+}
+
+async function renderPdfStory(
+  doc: PDFDocument,
+  page: PDFPage,
+  story: ChromeStory,
+  bandType: 'header' | 'footer',
+  pageNumber: number,
+  totalPages: number,
+  marginLeft: number,
+  contentWidth: number,
+  marginBoundY: number,
+  marginHeight: number,
+  fonts: EmbeddedFonts,
+  recordOmission: (msg: string) => void
+) {
+  if (!story) return;
+  const l0 = story.line0;
+  const hasLine0 =
+    (l0.left.runs && l0.left.runs.length > 0) ||
+    (l0.center.runs && l0.center.runs.length > 0) ||
+    (l0.right.runs && l0.right.runs.length > 0);
+  const hasLines = story.lines && story.lines.length > 0;
+  if (!hasLine0 && !hasLines) return;
+
+  const defaultFontSize = 10;
+  const lineHeight = 13;
+
+  let baseY =
+    bandType === 'header'
+      ? marginBoundY + marginHeight - 18
+      : marginBoundY - 14;
+
+  const renderZone = async (
+    zone: ChromeZone,
+    zoneAlign: 'left' | 'center' | 'right',
+    currentY: number
+  ) => {
+    if (!zone.runs || zone.runs.length === 0) return;
+
+    const textRuns: { token: TextToken; fontSize: number; color?: RGB }[] = [];
+    const imageRuns: { src: string; width?: number; height?: number }[] = [];
+
+    for (const run of zone.runs) {
+      if (run.type === 'image') {
+        imageRuns.push(run);
+      } else {
+        const text =
+          run.type === 'field'
+            ? run.field === 'page'
+              ? String(pageNumber)
+              : `Page ${pageNumber} of ${totalPages}`
+            : run.text;
+
+        const token: TextToken = {
+          text,
+          bold: Boolean(run.bold),
+          italic: Boolean(run.italic),
+          underline: Boolean(run.underline),
+        };
+        const fontSize = run.fontSize || defaultFontSize;
+        const color = run.color ? parseColor(run.color) : rgb(0, 0, 0);
+        textRuns.push({ token, fontSize, color });
+      }
+    }
+
+    let totalTextWidth = 0;
+    const filteredRuns: { token: TextToken; fontSize: number; font: any; width: number; color?: RGB }[] = [];
+
+    for (const r of textRuns) {
+      const font = selectFont(r.token.bold, r.token.italic, fonts);
+      const filtered = filterGlyphs(r.token, fonts, recordOmission);
+      const w = font.widthOfTextAtSize(filtered.text, r.fontSize);
+      filteredRuns.push({ token: filtered, fontSize: r.fontSize, font, width: w, color: r.color });
+      totalTextWidth += w;
+    }
+
+    let currentX = marginLeft;
+    if (zoneAlign === 'center') {
+      currentX = marginLeft + (contentWidth - totalTextWidth) / 2;
+    } else if (zoneAlign === 'right') {
+      currentX = marginLeft + contentWidth - totalTextWidth;
+    }
+
+    for (const imgRun of imageRuns) {
+      const embedded = await embedBase64Image(doc, imgRun.src);
+      if (embedded.error) {
+        recordOmission(embedded.error);
+        continue;
+      }
+      if (embedded.image) {
+        const img = embedded.image;
+        const maxH = Math.min(img.height, marginHeight * 0.7);
+        const scale = maxH / img.height;
+        const drawW = img.width * scale;
+        const drawH = maxH;
+        let imgX = currentX;
+        if (zoneAlign === 'right') {
+          imgX = currentX - drawW - 4;
+        }
+        page.drawImage(img, {
+          x: imgX,
+          y: currentY - 2,
+          width: drawW,
+          height: drawH,
+        });
+        if (zoneAlign === 'left') {
+          currentX += drawW + 4;
+        }
+      }
+    }
+
+    for (const r of filteredRuns) {
+      page.drawText(r.token.text, {
+        x: currentX,
+        y: currentY,
+        size: r.fontSize,
+        font: r.font,
+        color: r.color || rgb(0, 0, 0),
+      });
+
+      if (r.token.underline) {
+        page.drawLine({
+          start: { x: currentX, y: currentY - 1 },
+          end: { x: currentX + r.width, y: currentY - 1 },
+          thickness: 0.75,
+          color: r.color || rgb(0, 0, 0),
+        });
+      }
+      currentX += r.width;
+    }
+  };
+
+  if (hasLine0) {
+    await renderZone(l0.left, l0.left.align || 'left', baseY);
+    await renderZone(l0.center, l0.center.align || 'center', baseY);
+    await renderZone(l0.right, l0.right.align || 'right', baseY);
+    baseY -= lineHeight;
+  }
+
+  for (const line of story.lines) {
+    await renderZone(line, line.align || 'left', baseY);
+    baseY -= lineHeight;
   }
 }
 

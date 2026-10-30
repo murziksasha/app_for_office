@@ -1,4 +1,25 @@
 import React from 'react';
+import { t } from '../i18n/instance';
+
+const BUTTON_KEYS: Record<string, string> = {
+  Save: 'buttons.save',
+  "Don't save": 'buttons.dontSave',
+  Cancel: 'buttons.cancel',
+  OK: 'buttons.ok',
+  Overwrite: 'buttons.overwrite',
+  'Save As': 'buttons.saveAs',
+  Reload: 'buttons.reload',
+  Keep: 'buttons.keep',
+  Restore: 'buttons.restore',
+  'Open from disk': 'buttons.openFromDisk',
+  Replace: 'buttons.replace',
+  'Active sheet': 'buttons.activeSheet',
+  'All sheets': 'buttons.allSheets',
+  'All slides': 'buttons.allSlides',
+  'This slide': 'buttons.thisSlide',
+  'All pages': 'buttons.allPages',
+  'This page': 'buttons.thisPage',
+};
 
 interface ChoiceDialogProps {
   title: string;
@@ -53,7 +74,7 @@ export const ChoiceDialog: React.FC<ChoiceDialogProps> = ({ title, message, butt
                 fontSize: '13px',
               }}
             >
-              {label}
+              {BUTTON_KEYS[label] ? t(BUTTON_KEYS[label]) : label}
             </button>
           ))}
         </div>

@@ -2,29 +2,34 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import { documentExtensions, defaultDocumentModel } from './model';
-import { Search, ChevronDown, ChevronUp, X, Replace } from 'lucide-react';
+import { MarginRuler } from './MarginRuler';
+import { formatMargin, mergePageSetup, mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from './pageSetup';
+import { bandState } from './bandState';
+import { X } from 'lucide-react';
+import { i18n, t } from '../i18n/instance';
 
 interface DocumentEditorProps {
   content: JSONContent;
   onChange: (doc: JSONContent) => void;
-  pageSize?: 'letter' | 'a4';
   zoom?: number;
   onEditorReady?: (editor: any) => void;
   onSaveShortcut?: () => void;
+  findSignal?: number;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   content,
   onChange,
-  pageSize = 'letter',
   zoom = 100,
   onEditorReady,
   onSaveShortcut,
+  findSignal = 0,
 }) => {
   const [showFind, setShowFind] = useState(false);
   const [findText, setFindText] = useState('');
   const [replaceText, setReplaceText] = useState('');
   const [matchCount, setMatchCount] = useState(0);
+  const [preview, setPreview] = useState<PageSetup | null>(null);
 
   const editor = useEditor({
     extensions: documentExtensions,
@@ -32,11 +37,17 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     onUpdate: ({ editor }) => {
       onChange(editor.getJSON());
     },
+    onSelectionUpdate: () => {
+      bandState.setFocus(null);
+    },
   });
 
   useEffect(() => {
-    if (editor && onEditorReady) {
-      onEditorReady(editor);
+    if (editor) {
+      bandState.setView(editor.view);
+      if (onEditorReady) {
+        onEditorReady(editor);
+      }
     }
   }, [editor, onEditorReady]);
 
@@ -52,6 +63,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       prevContentRef.current = content;
     }
   }, [content, editor]);
+
+  const seenFindSignal = useRef(findSignal);
+  useEffect(() => {
+    if (findSignal !== seenFindSignal.current) {
+      seenFindSignal.current = findSignal;
+      setShowFind(true);
+    }
+  }, [findSignal]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -94,9 +113,21 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     handleFind();
   };
 
-  // Dimensions
-  const pageWidth = pageSize === 'a4' ? '794px' : '816px';
-  const minHeight = pageSize === 'a4' ? '1123px' : '1056px';
+  const committed = pageSetupFromDoc(content);
+  const display = preview ?? committed;
+  const page = PAGE_MM[display.size];
+  const pageW = mmToPx(page.width);
+  const pageH = mmToPx(page.height);
+  const scale = zoom / 100;
+  const visualW = pageW * scale;
+  const visualH = pageH * scale;
+  const lang = i18n.language;
+  const marginText = (mm: number) => `${formatMargin(mm, lang)} ${lang.toLowerCase().startsWith('uk') ? t('ribbon.unitCm') : t('ribbon.unitIn')}`;
+
+  const commitSetup = (partial: Partial<PageSetup>) => {
+    editor?.commands.setPageSetup(partial);
+    setPreview(null);
+  };
 
   return (
     <div
@@ -110,6 +141,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         alignItems: 'center',
         padding: '36px 16px',
         position: 'relative',
+        ['--folio-page-break-label' as string]: `"${t('find.pageBreak')}"`,
       }}
     >
       {/* Find & Replace Floating Panel */}
@@ -118,7 +150,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           className="folio-find-panel animate-fade-in"
           style={{
             position: 'fixed',
-            top: '110px',
+            top: '230px',
             right: '24px',
             zIndex: 100,
             background: 'var(--folio-panel)',
@@ -133,7 +165,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--folio-ink)' }}>Find & Replace</span>
+            <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--folio-ink)' }}>{t('find.title')}</span>
             <button onClick={() => setShowFind(false)} style={{ padding: '2px', color: 'var(--folio-ink-muted)' }}>
               <X size={14} />
             </button>
@@ -141,7 +173,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           <div style={{ display: 'flex', gap: '6px' }}>
             <input
               type="text"
-              placeholder="Find text..."
+              placeholder={t('find.placeholder')}
               value={findText}
               onChange={(e) => {
                 setFindText(e.target.value);
@@ -165,16 +197,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 fontWeight: 500,
               }}
             >
-              Find
+              {t('find.action')}
             </button>
           </div>
           {matchCount > 0 && (
-            <div style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>Found {matchCount} matches</div>
+            <div style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>{t('find.found', { count: matchCount })}</div>
           )}
           <div style={{ display: 'flex', gap: '6px' }}>
             <input
               type="text"
-              placeholder="Replace with..."
+              placeholder={t('find.replacePlaceholder')}
               value={replaceText}
               onChange={(e) => setReplaceText(e.target.value)}
               style={{
@@ -195,40 +227,134 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 fontWeight: 500,
               }}
             >
-              Replace
+              {t('find.replace')}
             </button>
           </div>
         </div>
       )}
 
-      {/* Paper Sheet */}
-      <div
-        className="folio-paper-sheet"
-        style={{
-          width: pageWidth,
-          minHeight,
-          background: '#ffffff',
-          boxShadow: 'var(--folio-shadow-paper)',
-          borderRadius: '2px',
-          border: '1px solid var(--folio-border-light)',
-          padding: '64px 72px',
-          transform: `scale(${zoom / 100})`,
-          transformOrigin: 'top center',
-          transition: 'transform 0.1s ease',
-          marginBottom: '60px',
-        }}
-      >
-        <EditorContent editor={editor} className="folio-prose" />
+      <style>{`@page { size: ${display.size === 'a4' ? 'A4' : 'letter'}; margin: ${display.marginTop}mm ${display.marginRight}mm ${display.marginBottom}mm ${display.marginLeft}mm; }`}</style>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '0 auto 48px' }}>
+        <div style={{ paddingTop: 30 }}>
+          <MarginRuler
+            axis="vertical"
+            length={visualH}
+            pageMm={page.height}
+            startMm={display.marginTop}
+            endMm={display.marginBottom}
+            startLabel={t('ribbon.marginTop')}
+            endLabel={t('ribbon.marginBottom')}
+            startText={marginText(display.marginTop)}
+            endText={marginText(display.marginBottom)}
+            onPreview={(partial) => setPreview(mergePageSetup(committed, partial))}
+            onCommit={commitSetup}
+          />
+        </div>
+        <div style={{ width: visualW }}>
+          <MarginRuler
+            axis="horizontal"
+            length={visualW}
+            pageMm={page.width}
+            startMm={display.marginLeft}
+            endMm={display.marginRight}
+            startLabel={t('ribbon.marginLeft')}
+            endLabel={t('ribbon.marginRight')}
+            startText={marginText(display.marginLeft)}
+            endText={marginText(display.marginRight)}
+            onPreview={(partial) => setPreview(mergePageSetup(committed, partial))}
+            onCommit={commitSetup}
+          />
+          <div style={{ height: 8 }} />
+          <div style={{ width: visualW, overflow: 'visible' }}>
+            <div
+              className="folio-paper-sheet"
+              style={{
+                width: pageW,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              <div
+                className="folio-prose"
+                style={
+                  {
+                    ['--folio-margin-top' as string]: `${mmToPx(display.marginTop)}px`,
+                    ['--folio-margin-right' as string]: `${mmToPx(display.marginRight)}px`,
+                    ['--folio-margin-bottom' as string]: `${mmToPx(display.marginBottom)}px`,
+                    ['--folio-margin-left' as string]: `${mmToPx(display.marginLeft)}px`,
+                    ['--folio-page-height' as string]: `${pageH}px`,
+                  } as React.CSSProperties
+                }
+              >
+                <EditorContent editor={editor} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`
         .folio-prose .ProseMirror {
+          position: relative;
           outline: none;
-          min-height: 800px;
+          min-height: var(--folio-page-height, 1056px);
+          padding: var(--folio-margin-top, 96px) var(--folio-margin-right, 96px) var(--folio-margin-bottom, 96px) var(--folio-margin-left, 96px);
+          background: #ffffff;
+          box-shadow: var(--folio-shadow-paper);
+          border: 1px solid var(--folio-border-light);
+          box-sizing: border-box;
           color: var(--folio-ink);
           font-family: Georgia, 'Times New Roman', Cambria, serif;
           font-size: 11pt;
           line-height: 1.6;
+        }
+        .folio-header-top-band {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          padding-left: var(--folio-margin-left, 96px);
+          padding-right: var(--folio-margin-right, 96px);
+          box-sizing: border-box;
+          pointer-events: auto;
+          user-select: text;
+          z-index: 2;
+        }
+        .folio-footer-bottom-band {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding-left: var(--folio-margin-left, 96px);
+          padding-right: var(--folio-margin-right, 96px);
+          box-sizing: border-box;
+          pointer-events: auto;
+          user-select: text;
+          z-index: 2;
+        }
+        .folio-page-gap {
+          margin-left: calc(-1 * var(--folio-margin-left, 96px));
+          margin-right: calc(-1 * var(--folio-margin-right, 96px));
+          user-select: none;
+        }
+        .folio-page-gap-end,
+        .folio-page-gap-start {
+          background: #ffffff;
+          padding-left: var(--folio-margin-left, 96px);
+          padding-right: var(--folio-margin-right, 96px);
+          box-sizing: border-box;
+          pointer-events: auto;
+          user-select: text;
+        }
+        .folio-page-gap-desk {
+          height: 28px;
+          background: var(--folio-bg);
+          pointer-events: none;
+        }
+        .folio-band-container {
+          pointer-events: auto !important;
+          user-select: text !important;
         }
         .folio-prose .ProseMirror p {
           margin-bottom: 0.8em;
@@ -313,7 +439,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           position: relative;
         }
         .folio-page-break::after {
-          content: 'Page Break';
+          content: var(--folio-page-break-label, 'Page Break');
           position: absolute;
           top: -9px;
           right: 12px;

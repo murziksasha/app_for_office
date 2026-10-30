@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Plus } from 'lucide-react';
 import { EditorState } from '../types';
+import { t } from '../i18n/instance';
 
 interface TabStripProps {
   tabs: EditorState[];
@@ -93,7 +94,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
               </button>
               <button
                 data-testid="tab-close"
-                aria-label={`Close ${tab.fileName}`}
+                aria-label={t('tabs.close', { name: tab.fileName })}
                 onClick={(e) => {
                   e.stopPropagation();
                   tab.id && onClose(tab.id);
@@ -151,11 +152,11 @@ export const TabStrip: React.FC<TabStripProps> = ({
                 color: 'inherit',
               }}
             >
-              Home
+              {t('tabs.home')}
             </button>
             <button
               data-testid="tab-close"
-              aria-label="Close Home"
+              aria-label={t('tabs.closeHome')}
               onClick={(e) => {
                 e.stopPropagation();
                 onCloseHome?.();
@@ -177,7 +178,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
       </div>
       <button
         data-testid="tab-new"
-        aria-label="New tab"
+        aria-label={t('tabs.newTab')}
         onClick={onNewTab}
         style={{
           display: 'flex',

@@ -3,6 +3,9 @@ import path from 'path';
 
 test.describe('Save as PDF and Edit as Document E2E tests', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('folio_ui_lang', 'en');
+    });
     await page.goto('/');
     // Use fallback download mechanism in browser test environment
     await page.evaluate(() => {
@@ -22,8 +25,7 @@ test.describe('Save as PDF and Edit as Document E2E tests', () => {
     // Verify both toolbar and ribbon offer Edit as Document
     await expect(page.locator('.folio-pdf-viewer').getByRole('button', { name: 'Edit as Document' })).toBeVisible();
 
-    // Verify PDF reader does not offer "Save as PDF" in File tab
-    await page.getByRole('button', { name: 'File', exact: true }).click();
+    // File is already the open PDF tab. A click on it would collapse the tool strip.
     await expect(page.locator('.folio-ribbon').getByRole('button', { name: 'Save as PDF' })).not.toBeVisible();
     await expect(page.locator('.folio-ribbon').getByRole('button', { name: 'Edit as Document' })).toBeVisible();
 
@@ -140,8 +142,8 @@ test.describe('Save as PDF and Edit as Document E2E tests', () => {
 
     await expect(page.locator('.folio-pdf-viewer')).toBeVisible({ timeout: 10000 });
 
-    // Open File tab
-    await page.getByRole('button', { name: 'File', exact: true }).click();
+    // File is already the open PDF tab, so its tools are on screen until that tab is clicked.
+    await expect(page.locator('.folio-ribbon').getByRole('button', { name: 'Edit as Document' })).toBeVisible();
 
     // Save as PDF must NOT be offered on PDF reader
     await expect(page.locator('.folio-ribbon').getByRole('button', { name: 'Save as PDF' })).not.toBeVisible();
