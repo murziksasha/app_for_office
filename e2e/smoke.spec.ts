@@ -96,6 +96,58 @@ test.describe('Folio Smoke Test Suite', () => {
     await expect(ribbon.locator('.folio-ribbon-caption', { hasText: 'Number' })).toBeVisible();
   });
 
+  test('4b. Spreadsheet ribbon can sum, freeze, filter, and merge', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('heading', { name: 'New Spreadsheet' }).click();
+    const sheet = page.locator('.folio-spreadsheet-container');
+    await expect(sheet).toBeVisible();
+    await expect(page.locator('.fortune-toolbar')).toHaveCount(0);
+
+    const ribbon = page.locator('.folio-ribbon');
+    for (const caption of ['Font', 'Number', 'View', 'Data']) {
+      await expect(ribbon.locator('.folio-ribbon-caption', { hasText: caption })).toBeVisible();
+    }
+
+    const cells = page.locator('.fortune-cell-area');
+    await expect(cells).toBeVisible();
+    const box = await cells.boundingBox();
+    if (!box) throw new Error('spreadsheet cells have no box');
+
+    const cell = (row: number, column: number) => ({
+      x: box.x + 30 + column * 73,
+      y: box.y + 10 + row * 19,
+    });
+
+    const a1 = cell(0, 0);
+    await page.mouse.click(a1.x, a1.y);
+    const nameBox = page.locator('.fortune-name-box');
+    for (const [value, next] of [['10', 'A2'], ['20', 'A3'], ['30', 'A4']] as const) {
+      await page.locator('.fortune-fx-input').click();
+      await page.keyboard.type(value);
+      await page.keyboard.press('Enter');
+      await expect(nameBox).toHaveText(next);
+    }
+    await ribbon.getByRole('button', { name: 'AutoSum' }).click();
+    await expect(page.locator('.fortune-fx-input')).toContainText('SUM', { timeout: 5000 });
+
+    await ribbon.getByRole('button', { name: 'Filter' }).click();
+    await expect(page.locator('.luckysheet-filter-options').first()).toBeVisible();
+
+    const b1 = cell(0, 1);
+    await page.mouse.move(a1.x, a1.y);
+    await page.mouse.down();
+    await page.mouse.move(b1.x, b1.y);
+    await page.mouse.up();
+    await ribbon.getByRole('button', { name: 'Merge', exact: true }).click();
+    await expect(page.locator('.fortune-fx-input')).toContainText('10');
+
+    await ribbon.getByRole('button', { name: 'Freeze row' }).click();
+    await expect.poll(async () => {
+      const top = await page.locator('.fortune-rows-freeze-handle').evaluate((el) => Number.parseFloat(getComputedStyle(el).top));
+      return top;
+    }).toBeGreaterThan(8);
+  });
+
   test('5. Opens fixture PPTX and displays presentation editor', async ({ page }) => {
     await page.goto('/');
 

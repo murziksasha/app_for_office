@@ -5,7 +5,7 @@
 ### The Rule
 Every file adapter, parser, and platform boundary must have automated test coverage:
 - `tests/detect.test.ts`: Magic byte detection and file extension routing.
-- `tests/docx.test.ts`: Open XML document parsing, styling preservation, and Mammoth fallback.
+- `tests/docx.test.ts`: Open XML document parsing, styling preservation, styles.xml resolution, zero-byte and empty package handling, and Mammoth fallback.
 - `tests/odt.test.ts`: OpenDocument text parsing and XML container building.
 - `tests/rtf.test.ts`: RTF control-word parsing and font/color table generation.
 - `tests/text_md_html.test.ts`: Markdown, HTML, and plain text bidirectional conversions.

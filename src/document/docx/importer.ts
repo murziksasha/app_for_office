@@ -20,7 +20,21 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
   isArray: (name) => {
-    return ['p', 'r', 'tbl', 'tr', 'tc', 'Relationship', 'lvl', 'num', 'abstractNum', 'headerReference', 'footerReference', 'fldSimple'].includes(name);
+    return [
+      'p',
+      'r',
+      'tbl',
+      'tr',
+      'tc',
+      'Relationship',
+      'lvl',
+      'num',
+      'abstractNum',
+      'headerReference',
+      'footerReference',
+      'fldSimple',
+      'style',
+    ].includes(name);
   },
 });
 
@@ -115,6 +129,184 @@ async function loadNumbering(zip: JSZip): Promise<NumberingMap> {
   } catch (err) {
     console.warn('Could not parse numbering.xml:', err);
     return {};
+  }
+}
+
+export interface DocxResolvedStyle {
+  font?: string;
+  sizePt?: number;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+}
+
+export interface StylesDictionary {
+  docDefaults: DocxResolvedStyle;
+  styles: Map<string, DocxResolvedStyle>;
+  lookup: (key: string | undefined | null) => DocxResolvedStyle | undefined;
+}
+
+function parseDocxRPr(rPr: any): DocxResolvedStyle {
+  if (!rPr || typeof rPr !== 'object') return {};
+  const res: DocxResolvedStyle = {};
+  if (rPr.rFonts) {
+    const f = rPr.rFonts['@_ascii'] || rPr.rFonts['@_hAnsi'] || rPr.rFonts['@_cs'];
+    if (f) res.font = String(f);
+  }
+  if (rPr.sz) {
+    const halfPt = typeof rPr.sz === 'object' ? rPr.sz['@_val'] : rPr.sz;
+    if (halfPt != null) {
+      const pt = parseFloat(String(halfPt)) / 2;
+      if (!Number.isNaN(pt)) res.sizePt = pt;
+    }
+  }
+  if (rPr.color) {
+    const c = typeof rPr.color === 'object' ? rPr.color['@_val'] : rPr.color;
+    if (c && c !== 'auto') res.color = String(c).replace(/^#/, '');
+  }
+  if (rPr.b !== undefined) {
+    const v = typeof rPr.b === 'object' ? rPr.b?.['@_val'] : rPr.b;
+    res.bold = v !== '0' && v !== 'false' && v !== 'off';
+  }
+  if (rPr.i !== undefined) {
+    const v = typeof rPr.i === 'object' ? rPr.i?.['@_val'] : rPr.i;
+    res.italic = v !== '0' && v !== 'false' && v !== 'off';
+  }
+  if (rPr.u !== undefined) {
+    const v = typeof rPr.u === 'object' ? rPr.u?.['@_val'] : rPr.u;
+    res.underline = v !== '0' && v !== 'false' && v !== 'none' && v !== 'off';
+  }
+  if (rPr.strike !== undefined) {
+    const v = typeof rPr.strike === 'object' ? rPr.strike?.['@_val'] : rPr.strike;
+    res.strike = v !== '0' && v !== 'false' && v !== 'off';
+  }
+  return res;
+}
+
+async function loadStyles(zip: JSZip): Promise<StylesDictionary> {
+  const emptyDict: StylesDictionary = {
+    docDefaults: {},
+    styles: new Map(),
+    lookup: () => undefined,
+  };
+
+  const stylesFile = zip.file('word/styles.xml');
+  if (!stylesFile) return emptyDict;
+
+  try {
+    const xmlText = await stylesFile.async('text');
+    const parsed = xmlParser.parse(xmlText);
+    const stylesRoot = parsed?.styles;
+    if (!stylesRoot) return emptyDict;
+
+    const docDefaults = parseDocxRPr(stylesRoot.docDefaults?.rPrDefault?.rPr);
+
+    const rawList = Array.isArray(stylesRoot.style)
+      ? stylesRoot.style
+      : stylesRoot.style
+      ? [stylesRoot.style]
+      : [];
+
+    interface RawStyle {
+      styleId: string;
+      name?: string;
+      basedOn?: string;
+      type?: string;
+      isDefault?: boolean;
+      rPr: DocxResolvedStyle;
+    }
+
+    const rawMap = new Map<string, RawStyle>();
+    let defaultParaStyleId: string | undefined;
+
+    for (const s of rawList) {
+      const styleId = s['@_styleId'];
+      if (!styleId) continue;
+      const name = s.name?.['@_val'];
+      const basedOn = s.basedOn?.['@_val'];
+      const type = s['@_type'] || 'paragraph';
+      const isDefault = s['@_default'] === '1' || s['@_default'] === 'true';
+      if (isDefault && type === 'paragraph') {
+        defaultParaStyleId = styleId;
+      }
+      rawMap.set(styleId, {
+        styleId,
+        name,
+        basedOn,
+        type,
+        isDefault,
+        rPr: parseDocxRPr(s.rPr),
+      });
+    }
+
+    const resolved = new Map<string, DocxResolvedStyle>();
+
+    const resolveHierarchy = (id: string, visited = new Set<string>()): DocxResolvedStyle => {
+      if (resolved.has(id)) return resolved.get(id)!;
+      if (visited.has(id)) return {};
+      visited.add(id);
+
+      const raw = rawMap.get(id);
+      if (!raw) return {};
+
+      let base: DocxResolvedStyle = {};
+      if (raw.basedOn && raw.basedOn !== id) {
+        base = resolveHierarchy(raw.basedOn, visited);
+      }
+
+      const merged: DocxResolvedStyle = {
+        font: raw.rPr.font ?? base.font,
+        sizePt: raw.rPr.sizePt ?? base.sizePt,
+        color: raw.rPr.color ?? base.color,
+        bold: raw.rPr.bold ?? base.bold,
+        italic: raw.rPr.italic ?? base.italic,
+        underline: raw.rPr.underline ?? base.underline,
+        strike: raw.rPr.strike ?? base.strike,
+      };
+
+      resolved.set(id, merged);
+      return merged;
+    };
+
+    const finalStyles = new Map<string, DocxResolvedStyle>();
+
+    for (const [id] of rawMap) {
+      const res = resolveHierarchy(id);
+      finalStyles.set(id, res);
+      finalStyles.set(id.toLowerCase(), res);
+      const raw = rawMap.get(id);
+      if (raw?.name) {
+        finalStyles.set(raw.name, res);
+        finalStyles.set(raw.name.toLowerCase(), res);
+        finalStyles.set(raw.name.toLowerCase().replace(/\s+/g, ''), res);
+      }
+    }
+
+    if (defaultParaStyleId && finalStyles.has(defaultParaStyleId)) {
+      finalStyles.set('__default_para__', finalStyles.get(defaultParaStyleId)!);
+    }
+
+    const lookup = (key: string | undefined | null): DocxResolvedStyle | undefined => {
+      if (!key) return finalStyles.get('__default_para__') || finalStyles.get('normal');
+      const direct = finalStyles.get(key);
+      if (direct) return direct;
+      const lower = key.toLowerCase();
+      const lowerMatch = finalStyles.get(lower);
+      if (lowerMatch) return lowerMatch;
+      const noSpace = lower.replace(/\s+/g, '');
+      return finalStyles.get(noSpace);
+    };
+
+    return {
+      docDefaults,
+      styles: finalStyles,
+      lookup,
+    };
+  } catch (err) {
+    console.warn('Could not parse word/styles.xml:', err);
+    return emptyDict;
   }
 }
 
@@ -503,6 +695,21 @@ export async function importDocx(
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
 
+  if (!buffer || buffer.byteLength === 0) {
+    return {
+      html: '<p></p>',
+      pageSetup: null,
+      chrome: null,
+      report: {
+        fileName,
+        format: 'docx',
+        importedAt: new Date().toISOString(),
+        warnings,
+        skippedFeatures,
+      },
+    };
+  }
+
   try {
     const zip = await JSZip.loadAsync(buffer);
     const docFile = zip.file('word/document.xml');
@@ -520,6 +727,7 @@ export async function importDocx(
 
     const relMap = await loadRelationships(zip, 'word/_rels/document.xml.rels');
     const numMap = await loadNumbering(zip);
+    const stylesDict = await loadStyles(zip);
 
     // Detect skipped features in raw XML
     if (xmlText.includes('commentReference') || zip.file('word/comments.xml')) {
@@ -634,7 +842,7 @@ export async function importDocx(
     }
 
     // Helper to render text runs
-    const renderRun = async (r: any): Promise<string> => {
+    const renderRun = async (r: any, paraStyleName?: string): Promise<string> => {
       if (!r) return '';
       const rPr = r.rPr || {};
       let text = '';
@@ -676,10 +884,62 @@ export async function importDocx(
       // Style attributes
       const styles: string[] = [];
 
-      const isBold = rPr.b !== undefined && rPr.b?.['@_val'] !== '0' && rPr.b?.['@_val'] !== 'false';
-      const isItalic = rPr.i !== undefined && rPr.i?.['@_val'] !== '0' && rPr.i?.['@_val'] !== 'false';
-      const isUnderline = rPr.u !== undefined && rPr.u?.['@_val'] !== '0' && rPr.u?.['@_val'] !== 'false' && rPr.u?.['@_val'] !== 'none';
-      const isStrike = rPr.strike !== undefined && rPr.strike?.['@_val'] !== '0' && rPr.strike?.['@_val'] !== 'false';
+      const charStyleName = rPr.rStyle?.['@_val'];
+      const charStyle = charStyleName ? stylesDict.lookup(charStyleName) : undefined;
+      const paraStyle = (paraStyleName ? stylesDict.lookup(paraStyleName) : undefined) || stylesDict.lookup('Normal');
+      const defaults = stylesDict.docDefaults;
+
+      // Resolve bold
+      let isBold: boolean | undefined = undefined;
+      if (rPr.b !== undefined) {
+        const v = typeof rPr.b === 'object' ? rPr.b?.['@_val'] : rPr.b;
+        isBold = v !== '0' && v !== 'false' && v !== 'off';
+      } else if (charStyle?.bold !== undefined) {
+        isBold = charStyle.bold;
+      } else if (paraStyle?.bold !== undefined) {
+        isBold = paraStyle.bold;
+      } else if (defaults.bold !== undefined) {
+        isBold = defaults.bold;
+      }
+
+      // Resolve italic
+      let isItalic: boolean | undefined = undefined;
+      if (rPr.i !== undefined) {
+        const v = typeof rPr.i === 'object' ? rPr.i?.['@_val'] : rPr.i;
+        isItalic = v !== '0' && v !== 'false' && v !== 'off';
+      } else if (charStyle?.italic !== undefined) {
+        isItalic = charStyle.italic;
+      } else if (paraStyle?.italic !== undefined) {
+        isItalic = paraStyle.italic;
+      } else if (defaults.italic !== undefined) {
+        isItalic = defaults.italic;
+      }
+
+      // Resolve underline
+      let isUnderline: boolean | undefined = undefined;
+      if (rPr.u !== undefined) {
+        const v = typeof rPr.u === 'object' ? rPr.u?.['@_val'] : rPr.u;
+        isUnderline = v !== '0' && v !== 'false' && v !== 'none' && v !== 'off';
+      } else if (charStyle?.underline !== undefined) {
+        isUnderline = charStyle.underline;
+      } else if (paraStyle?.underline !== undefined) {
+        isUnderline = paraStyle.underline;
+      } else if (defaults.underline !== undefined) {
+        isUnderline = defaults.underline;
+      }
+
+      // Resolve strike
+      let isStrike: boolean | undefined = undefined;
+      if (rPr.strike !== undefined) {
+        const v = typeof rPr.strike === 'object' ? rPr.strike?.['@_val'] : rPr.strike;
+        isStrike = v !== '0' && v !== 'false' && v !== 'off';
+      } else if (charStyle?.strike !== undefined) {
+        isStrike = charStyle.strike;
+      } else if (paraStyle?.strike !== undefined) {
+        isStrike = paraStyle.strike;
+      } else if (defaults.strike !== undefined) {
+        isStrike = defaults.strike;
+      }
 
       if (isBold) {
         styles.push('font-weight: bold;');
@@ -698,26 +958,57 @@ export async function importDocx(
         html = `<s>${html}</s>`;
       }
 
+      // Resolve size
+      let sizePt: number | undefined = undefined;
       if (rPr.sz) {
         const halfPt = typeof rPr.sz === 'object' ? rPr.sz['@_val'] : rPr.sz;
-        if (halfPt) {
-          const pt = parseFloat(halfPt) / 2;
-          styles.push(`font-size: ${pt}pt;`);
+        if (halfPt != null) {
+          const pt = parseFloat(String(halfPt)) / 2;
+          if (!Number.isNaN(pt)) sizePt = pt;
         }
+      } else if (charStyle?.sizePt !== undefined) {
+        sizePt = charStyle.sizePt;
+      } else if (paraStyle?.sizePt !== undefined) {
+        sizePt = paraStyle.sizePt;
+      } else if (defaults.sizePt !== undefined) {
+        sizePt = defaults.sizePt;
       }
 
+      if (sizePt !== undefined) {
+        styles.push(`font-size: ${sizePt}pt;`);
+      }
+
+      // Resolve color
+      let colorVal: string | undefined = undefined;
       if (rPr.color) {
-        const colorVal = typeof rPr.color === 'object' ? rPr.color['@_val'] : rPr.color;
-        if (colorVal && colorVal !== 'auto') {
-          styles.push(`color: #${colorVal};`);
-        }
+        const c = typeof rPr.color === 'object' ? rPr.color['@_val'] : rPr.color;
+        if (c && c !== 'auto') colorVal = String(c).replace(/^#/, '');
+      } else if (charStyle?.color !== undefined) {
+        colorVal = charStyle.color;
+      } else if (paraStyle?.color !== undefined) {
+        colorVal = paraStyle.color;
+      } else if (defaults.color !== undefined) {
+        colorVal = defaults.color;
       }
 
+      if (colorVal) {
+        styles.push(`color: #${colorVal};`);
+      }
+
+      // Resolve font
+      let fontVal: string | undefined = undefined;
       if (rPr.rFonts) {
-        const font = rPr.rFonts['@_ascii'] || rPr.rFonts['@_hAnsi'];
-        if (font) {
-          styles.push(`font-family: '${font}', sans-serif;`);
-        }
+        fontVal = rPr.rFonts['@_ascii'] || rPr.rFonts['@_hAnsi'] || rPr.rFonts['@_cs'];
+      } else if (charStyle?.font !== undefined) {
+        fontVal = charStyle.font;
+      } else if (paraStyle?.font !== undefined) {
+        fontVal = paraStyle.font;
+      } else if (defaults.font !== undefined) {
+        fontVal = defaults.font;
+      }
+
+      if (fontVal) {
+        styles.push(`font-family: '${fontVal}', sans-serif;`);
       }
 
       if (styles.length > 0) {
@@ -751,7 +1042,7 @@ export async function importDocx(
 
       let innerContent = '';
       for (const r of runs) {
-        innerContent += await renderRun(r);
+        innerContent += await renderRun(r, pStyle);
       }
 
       // Handle hyperlinks
@@ -763,7 +1054,7 @@ export async function importDocx(
           let linkText = '';
           const hlRuns = Array.isArray(hl.r) ? hl.r : hl.r ? [hl.r] : [];
           for (const hr of hlRuns) {
-            linkText += await renderRun(hr);
+            linkText += await renderRun(hr, pStyle);
           }
           innerContent += `<a href="${target}">${linkText || target}</a>`;
         }
@@ -774,7 +1065,7 @@ export async function importDocx(
       }
 
       if (!innerContent.trim()) {
-        innerContent = '<br>';
+        innerContent = '';
       }
 
       // Check heading style

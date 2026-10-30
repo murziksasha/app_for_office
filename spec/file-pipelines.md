@@ -6,11 +6,11 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 1. Word Documents (`.docx`)
 
-- **Read Pipeline**: Decompressed via `JSZip`. `word/document.xml` is parsed with `fast-xml-parser` extracting paragraphs, runs, headings, tables, and images into HTML. `sectPr` page size and margins are read. Portrait Letter and A4 are kept. Any other size, including landscape, snaps to the nearer portrait size and is named on the import report. Missing section properties use the default page setup. `word/header*.xml` and `word/footer*.xml` are parsed via section references: line 0 maps tabs or single 3-cell table into left/center/right zones, floating logo into left zone, and later paragraphs into full-width lines. Mapped stories are stored in `doc.attrs.chrome`.
+- **Read Pipeline**: Decompressed via `JSZip`. `word/document.xml` is parsed with `fast-xml-parser` extracting paragraphs, runs, headings, tables, and images into HTML. When `word/styles.xml` is present, `docDefaults` and named styles (`Normal`, `Heading 1`–`Heading 6`, `Title`, `Subtitle`) are resolved onto runs lacking direct font, size, color, bold, or italic. A zero-byte file or an empty package yields one empty paragraph and the resolved or default page setup. `sectPr` page size and margins are read. Portrait Letter and A4 are kept. Any other size, including landscape, snaps to the nearer portrait size and is named on the import report. Missing section properties use the default page setup. `word/header*.xml` and `word/footer*.xml` are parsed via section references: line 0 maps tabs or single 3-cell table into left/center/right zones, floating logo into left zone, and later paragraphs into full-width lines. Mapped stories are stored in `doc.attrs.chrome`.
 - **Mammoth Fallback**: If the custom XML parser fails or encounters corrupt markup, the file is automatically processed using `mammoth.convertToHtml` as a resilient fallback. The import report records `fallbackUsed: true`.
 - **Write Pipeline**: Exported using the `docx` library, translating HTML nodes into native Open XML paragraphs, tables, images, and text runs. The section page size and margins are written from the document `pageSetup`. Document chrome is written into native headers and footers; line 0 is written as a borderless 1-row 3-cell table for round-trip fidelity, and page fields are real PAGE and NUMPAGES fields. ODT, RTF, HTML, Markdown, and plain text stay body-only; saving one of those with chrome adds an omission warning.
 - **Skipped Features**: VBA macros, complex shape drawing art, SmartArt diagrams, tracked revision history, odd/even headers, extra sections, multi-row header tables, extra floating shapes, EMF/WMF images, and unsupported fields (reported as diagnostic warnings on import).
-- **Fixture**: `fixtures/sample.docx`.
+- **Fixtures**: `fixtures/sample.docx`, `fixtures/empty.docx`, and `fixtures/styles_sample.docx`.
 - **Failure Behavior**: Never present a blank document with no report. Any unparseable file triggers an `ImportReport` with diagnostic notices.
 
 ---
@@ -62,9 +62,9 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 7. Excel Spreadsheets (`.xlsx`)
 
-- **Read Pipeline**: Loaded via `ExcelJS.Workbook`, iterating worksheets, rows, cells, formulas, and styles into FortuneSheet matrix data.
-- **Write Pipeline**: Serialized via `ExcelJS.Workbook` into modern Open XML spreadsheet packages.
-- **Skipped Features**: VBA macros, pivot tables, dynamic external data connections.
+- **Read Pipeline**: Loaded via `ExcelJS.Workbook`, iterating worksheets, rows, cells, formulas, and styles into FortuneSheet matrix data. Merged cells, row heights, freeze panes, cell borders, underline, wrap, and autofilter ranges are kept. Formula text is kept. A formula with no cached result is recalculated by Formula.js when the sheet opens. A function Formula.js does not provide stays as text and is named on the import report.
+- **Write Pipeline**: Serialized via `ExcelJS.Workbook` into modern Open XML spreadsheet packages, including merges, row heights, freeze panes, borders, underline, wrap, and the autofilter range.
+- **Skipped Features**: VBA macros (not run), pivot tables, charts (reported, not drawn), dynamic external data connections.
 - **Fixture**: `fixtures/sample.xlsx`.
 
 ---

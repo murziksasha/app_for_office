@@ -3,13 +3,22 @@ import type { WorkbookInstance } from '@fortune-sheet/react';
 import { DraftItem, EditorState, DocumentKind, RecentItem, SlideElement } from '../types';
 import type { SlideCommandState, SlideEditorHandle } from '../slides/SlideEditor';
 import {
+  autoSumSheet,
   clearSheetSelection,
   deleteSheetAxis,
+  freezeSheet,
   insertSheetAxis,
+  mergeSheetSelection,
+  setSheetBorder,
+  setSheetFill,
   setSheetNumberFormat,
   setSheetStyle,
+  sortSheetSelection,
+  toggleSheetFilter,
   toggleSheetMark,
   toggleSheetWrap,
+  unfreezeSheet,
+  unmergeSheetSelection,
 } from '../spreadsheet/sheetCommands';
 import { RibbonGroup } from './ribbon/RibbonGroup';
 import { RibbonButton, ribbonFieldStyle } from './ribbon/RibbonButton';
@@ -62,6 +71,15 @@ import {
   Eraser,
   Plus,
   Settings as SettingsIcon,
+  Merge,
+  Split,
+  Grid2x2,
+  Pin,
+  PinOff,
+  ArrowDownAZ,
+  ArrowDownZA,
+  ListFilter,
+  Sigma,
 } from 'lucide-react';
 
 type RibbonTab = 'file' | 'home' | 'insert' | 'layout';
@@ -911,12 +929,25 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
           }}
           style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
+        <input
+          type="color"
+          title={t('ribbon.fillColor')}
+          aria-label={t('ribbon.fillColor')}
+          defaultValue="#fff3bf"
+          onChange={(e) => {
+            const sheet = book();
+            if (sheet) setSheetFill(sheet, e.target.value);
+          }}
+          style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+        />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.alignment')}>
         <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 1); }} />
         <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 0); }} />
         <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} onClick={() => { const sheet = book(); if (sheet) setSheetStyle(sheet, 'ht', 2); }} />
         <RibbonButton title={t('ribbon.wrap')} icon={<WrapText size={16} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetWrap(sheet); }} />
+        <RibbonButton title={t('ribbon.merge')} label={t('ribbon.merge')} icon={<Merge size={14} />} onClick={() => { const sheet = book(); if (sheet) mergeSheetSelection(sheet); }} />
+        <RibbonButton title={t('ribbon.unmerge')} label={t('ribbon.unmerge')} icon={<Split size={14} />} onClick={() => { const sheet = book(); if (sheet) unmergeSheetSelection(sheet); }} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.number')}>
         <RibbonButton title={t('ribbon.general')} label={t('ribbon.general')} onClick={() => { const sheet = book(); if (sheet) setSheetNumberFormat(sheet, 'General', 'g'); }} />
@@ -930,6 +961,19 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
         <RibbonButton title={t('ribbon.deleteRow')} label={t('ribbon.deleteRow')} icon={<Trash2 size={14} />} onClick={() => { const sheet = book(); if (sheet) deleteSheetAxis(sheet, 'row'); }} />
         <RibbonButton title={t('ribbon.deleteColumn')} label={t('ribbon.deleteColumn')} icon={<Trash2 size={14} />} onClick={() => { const sheet = book(); if (sheet) deleteSheetAxis(sheet, 'column'); }} />
         <RibbonButton title={t('ribbon.clear')} label={t('ribbon.clear')} icon={<Eraser size={14} />} onClick={() => { const sheet = book(); if (sheet) clearSheetSelection(sheet); }} />
+        <RibbonButton title={t('ribbon.borderAll')} label={t('ribbon.borderAll')} icon={<Grid2x2 size={14} />} onClick={() => { const sheet = book(); if (sheet) setSheetBorder(sheet, 'border-all'); }} />
+        <RibbonButton title={t('ribbon.borderNone')} label={t('ribbon.borderNone')} icon={<Square size={14} />} onClick={() => { const sheet = book(); if (sheet) setSheetBorder(sheet, 'border-none'); }} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.view')}>
+        <RibbonButton title={t('ribbon.freezeRow')} label={t('ribbon.freezeRow')} icon={<Pin size={14} />} onClick={() => { const sheet = book(); if (sheet) freezeSheet(sheet, 'row'); }} />
+        <RibbonButton title={t('ribbon.freezeColumn')} label={t('ribbon.freezeColumn')} icon={<Pin size={14} />} onClick={() => { const sheet = book(); if (sheet) freezeSheet(sheet, 'column'); }} />
+        <RibbonButton title={t('ribbon.unfreeze')} label={t('ribbon.unfreeze')} icon={<PinOff size={14} />} onClick={() => { const sheet = book(); if (sheet) unfreezeSheet(sheet); }} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.data')}>
+        <RibbonButton title={t('ribbon.sortAsc')} label={t('ribbon.sortAsc')} icon={<ArrowDownAZ size={14} />} onClick={() => { const sheet = book(); if (sheet) sortSheetSelection(sheet, true); }} />
+        <RibbonButton title={t('ribbon.sortDesc')} label={t('ribbon.sortDesc')} icon={<ArrowDownZA size={14} />} onClick={() => { const sheet = book(); if (sheet) sortSheetSelection(sheet, false); }} />
+        <RibbonButton title={t('ribbon.filter')} label={t('ribbon.filter')} icon={<ListFilter size={14} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetFilter(sheet); }} />
+        <RibbonButton title={t('ribbon.autoSum')} label={t('ribbon.autoSum')} icon={<Sigma size={14} />} onClick={() => { const sheet = book(); if (sheet) autoSumSheet(sheet); }} />
       </RibbonGroup>
     </>,
   );
