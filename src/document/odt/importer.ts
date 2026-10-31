@@ -9,7 +9,7 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
   isArray: (name) => {
-    return ['p', 'h', 'span', 'list', 'list-item', 'table', 'table-row', 'table-cell', 'style'].includes(name);
+    return ['p', 'h', 'span', 'list', 'list-item', 'table', 'table-row', 'table-cell', 'style', 'note'].includes(name);
   },
 });
 
@@ -25,9 +25,10 @@ interface StyleDef {
 export async function importOdt(
   buffer: ArrayBuffer,
   fileName: string
-): Promise<{ html: string; report: ImportReport; pageSetup?: PageSetup | null }> {
+): Promise<{ html: string; report: ImportReport; pageSetup?: PageSetup | null; footnotes?: Array<{ id: string; text: string }> }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
+  const footnotes: Array<{ id: string; text: string }> = [];
 
   const zip = await JSZip.loadAsync(buffer);
   let pageSetup: PageSetup | null = null;
@@ -76,6 +77,7 @@ export async function importOdt(
 
   // Parse automatic styles
   const styleMap: Record<string, StyleDef> = {};
+  const paragraphStyleMap: Record<string, string> = {};
   const autoStyles = doc['automatic-styles']?.style || [];
   const styleList = Array.isArray(autoStyles) ? autoStyles : [autoStyles];
 
@@ -91,6 +93,16 @@ export async function importOdt(
         color: tp['@_color'],
         fontSize: tp['@_font-size'],
       };
+    }
+    const pp = st['paragraph-properties'];
+    if (name && pp) {
+      const lh = pp['@_line-height'];
+      if (lh) {
+        if (lh === '115%') paragraphStyleMap[name] = 'line-height: 1.15;';
+        else if (lh === '150%') paragraphStyleMap[name] = 'line-height: 1.5;';
+        else if (lh === '200%') paragraphStyleMap[name] = 'line-height: 2;';
+        else if (lh === '100%') paragraphStyleMap[name] = 'line-height: 1;';
+      }
     }
   }
 
@@ -176,6 +188,24 @@ export async function importOdt(
       });
     }
 
+    if (p.note) {
+      const notes = Array.isArray(p.note) ? p.note : [p.note];
+      notes.forEach((nt: any) => {
+        const citation = nt['note-citation'] || nt.citation || '1';
+        const citStr = typeof citation === 'object' ? citation['#text'] || '1' : String(citation);
+        const bodyObj = nt['note-body'] || nt.body;
+        const noteP = bodyObj?.p || bodyObj;
+        let noteText = '';
+        if (typeof noteP === 'string') noteText = noteP;
+        else if (noteP?.['#text']) noteText = String(noteP['#text']);
+        else if (Array.isArray(noteP)) {
+          noteText = noteP.map((item: any) => (typeof item === 'string' ? item : item['#text'] || '')).join(' ');
+        }
+        footnotes.push({ id: citStr, text: noteText.trim() });
+        content += `<sup data-footnote-id="${citStr}" class="folio-footnote-ref">[${citStr}]</sup>`;
+      });
+    }
+
     return content || '<br>';
   };
 
@@ -195,7 +225,9 @@ export async function importOdt(
 
   // Paragraphs
   pList.forEach((p: any) => {
-    resultHtml += `<p>${renderParagraphContent(p)}</p>`;
+    const sName = p['@_style-name'];
+    const pStyle = sName && paragraphStyleMap[sName] ? ` style="${paragraphStyleMap[sName]}"` : '';
+    resultHtml += `<p${pStyle}>${renderParagraphContent(p)}</p>`;
   });
 
   // Lists
@@ -233,6 +265,7 @@ export async function importOdt(
   return {
     html: sanitized,
     pageSetup,
+    footnotes: footnotes.length ? footnotes : undefined,
     report: {
       fileName,
       format: 'odt',

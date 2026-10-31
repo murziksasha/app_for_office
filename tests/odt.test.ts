@@ -43,5 +43,15 @@ describe('ODT Importer and Exporter', () => {
     expect(html).toContain('Heading Test');
     expect(html).toContain('Simple');
   });
+
+  it('round-trips a 1.5-spaced paragraph', async () => {
+    const inputHtml = '<p style="line-height: 1.5;">Testing 1.5 line spacing in ODT.</p>';
+    const blob = await exportOdt(inputHtml);
+    const buffer = await blob.arrayBuffer();
+    const { html } = await importOdt(buffer, 'spacing.odt');
+
+    expect(html).toContain('line-height: 1.5');
+    expect(html).toContain('Testing 1.5 line spacing in ODT.');
+  });
 });
 

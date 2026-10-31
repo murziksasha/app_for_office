@@ -2,6 +2,7 @@ import { PDFDocument, PDFPage, rgb, RGB, PDFImage } from 'pdf-lib';
 import { EditorState } from '../types';
 import { embedNotoFonts, EmbeddedFonts } from './fonts';
 import { getActiveSheet } from '../files/session';
+import { defaultPrintSetup, calculateFitWidthScale } from '../spreadsheet/sheetPrint';
 import { mmToPt, PAGE_MM, pageSetupFromDoc } from '../document/pageSetup';
 import {
   chromeFromDoc,
@@ -775,7 +776,8 @@ async function exportSpreadsheet(
     }
 
     // Shrink wide sheet uniformly to page width
-    const scale = Math.min(1, AVAILABLE_WIDTH / Math.max(1, totalColsWidth));
+    const setup = (sheet as any).printSetup || defaultPrintSetup;
+    const scale = calculateFitWidthScale(totalColsWidth, AVAILABLE_WIDTH, setup.fitWidth);
     const scaledColWidths = colWidths.map((w) => w * scale);
     const fontSize = Math.max(4, 9 * scale);
     const rowHeight = Math.max(8, 16 * scale);
@@ -787,6 +789,44 @@ async function exportSpreadsheet(
       if (cursorY - rowHeight < MARGIN) {
         page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
         cursorY = PAGE_HEIGHT - MARGIN;
+        if (setup.repeatHeaderRow && r > minR) {
+          const headerRow = grid[minR] || [];
+          let hX = MARGIN;
+          for (let hc = minC; hc <= maxC; hc++) {
+            const hw = scaledColWidths[hc - minC];
+            const hcell = headerRow[hc];
+            if (setup.gridlines || hcell?.bd) {
+              page.drawRectangle({
+                x: hX,
+                y: cursorY - rowHeight,
+                width: hw,
+                height: rowHeight,
+                borderColor: rgb(0.85, 0.85, 0.85),
+                borderWidth: 0.5,
+              });
+            }
+            const htext = hcell?.m != null ? String(hcell.m) : hcell?.v != null ? String(hcell.v) : '';
+            if (htext.length > 0) {
+              const hfont = selectFont(Boolean(hcell?.bl === 1), Boolean(hcell?.it === 1), fonts);
+              let hclean = '';
+              for (const ch of htext) {
+                if (fonts.hasGlyph(ch.codePointAt(0)!)) hclean += ch;
+              }
+              if (hclean.length > 0) {
+                page.drawText(hclean, {
+                  x: hX + 2 * scale,
+                  y: cursorY - rowHeight + 3.5 * scale,
+                  size: fontSize,
+                  font: hfont,
+                  color: rgb(0, 0, 0),
+                  maxWidth: Math.max(1, hw - 4 * scale),
+                });
+              }
+            }
+            hX += hw;
+          }
+          cursorY -= rowHeight;
+        }
       }
 
       const row = grid[r] || [];
@@ -796,7 +836,7 @@ async function exportSpreadsheet(
         const w = scaledColWidths[c - minC];
         const cell = row[c];
 
-        // Draw cell border
+        if (setup.gridlines || cell?.bd) {
         page.drawRectangle({
           x: cellX,
           y: cursorY - rowHeight,
@@ -805,6 +845,8 @@ async function exportSpreadsheet(
           borderColor: rgb(0.85, 0.85, 0.85),
           borderWidth: 0.5,
         });
+
+        }
 
         // Displayed text (m, otherwise v; formula strings f are NOT written)
         const rawText = cell?.m != null ? String(cell.m) : cell?.v != null ? String(cell.v) : '';

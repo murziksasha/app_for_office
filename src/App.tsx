@@ -53,12 +53,15 @@ import { htmlToDocument } from './document/model';
 import { markdownToHtml, plainTextToHtml } from './document/textMdHtml';
 import { importCsvTsv } from './spreadsheet/adapters';
 import { applyEdit, blankTab, draftContent, newTabId, stampClean, tabFromDraft } from './files/tabs';
+import { getTemplateById } from './templates';
 import { exportPdf } from './pdf/exportPdf';
 import { extractTextFromPdf } from './pdf/extractText';
 import { StartScreen } from './shell/StartScreen';
 import { SettingsDialog } from './shell/SettingsDialog';
+import { ShortcutPanel } from './shell/ShortcutPanel';
 import { Ribbon } from './shell/Ribbon';
 import { StatusBar } from './shell/StatusBar';
+import type { SheetSelectionStats } from './spreadsheet/sheetCommands';
 import { ImportReportDialog } from './shell/ImportReportDialog';
 import { SaveAsDialog } from './shell/SaveAsDialog';
 import { ChoiceDialog } from './shell/ChoiceDialog';
@@ -67,6 +70,7 @@ import { PrintView } from './shell/PrintView';
 import { DocumentEditor } from './document/DocumentEditor';
 import { SpreadsheetEditor } from './spreadsheet/SpreadsheetEditor';
 import { SlideEditor, emptySlideCommandState, type SlideCommandState, type SlideEditorHandle } from './slides/SlideEditor';
+import { Slideshow } from './slides/Slideshow';
 import type { WorkbookInstance } from '@fortune-sheet/react';
 import { PdfViewer } from './pdf/PdfViewer';
 
@@ -104,6 +108,12 @@ export const App: React.FC = () => {
   const [printJob, setPrintJob] = useState<{ tab: EditorState; scope: 'current' | 'all' } | null>(null);
   const [findSignal, setFindSignal] = useState(0);
   const [slideState, setSlideState] = useState<SlideCommandState>(emptySlideCommandState);
+  const [docPageInfo, setDocPageInfo] = useState<{ page: number; totalPages: number } | undefined>();
+  const [sheetStats, setSheetStats] = useState<SheetSelectionStats | null>(null);
+  const [slideshowState, setSlideshowState] = useState<{ active: boolean; mode: 'beginning' | 'current' } | null>(null);
+  const [showOutline, setShowOutline] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [uiLanguage, setUiLanguage] = useState(i18n.language);
   const slideCommands = useRef<SlideEditorHandle>(null);
   const sheetApi = useRef<WorkbookInstance | null>(null);
@@ -236,7 +246,10 @@ export const App: React.FC = () => {
           path: tab.filePath,
           cleanHash: tab.cleanHash,
           diskStamp: tab.diskStamp,
-        }).then(() => refreshLists());
+        }).then(() => {
+          refreshLists();
+          setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        });
       }, 1500)
     );
     return () => timers.forEach((timer) => window.clearTimeout(timer));
@@ -407,6 +420,7 @@ export const App: React.FC = () => {
       }
 
       updatedTab = stampClean(updatedTab);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       updatedTab.diskStamp = await rememberStamp(updatedTab.filePath);
       commit(tabsRef.current.map((item) => (item.id === tab.id ? updatedTab : item)));
 
@@ -845,8 +859,34 @@ export const App: React.FC = () => {
       const hasActiveTab = Boolean(activeRef.current);
 
       const isF12 = event.key === 'F12';
+      const isF5 = event.key === 'F5';
       const mod = event.ctrlKey || event.metaKey;
       const isCtrlShiftS = Boolean(mod && event.shiftKey && event.key.toLowerCase() === 's');
+
+      if (event.key === '?' && !mod && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        const isEditing = target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          Boolean(target.closest('.ProseMirror')) ||
+          Boolean(target.closest('.luckysheet-input-box'))
+        );
+        if (!isEditing && !isPromptOpen) {
+          event.preventDefault();
+          setShowShortcuts((prev) => !prev);
+          return;
+        }
+      }
+
+      if (isF5 && !mod && !event.altKey) {
+        const currentTab = tabsRef.current.find((t) => t.id === activeRef.current);
+        if (currentTab?.kind === 'presentation') {
+          event.preventDefault();
+          setSlideshowState({ active: true, mode: event.shiftKey ? 'current' : 'beginning' });
+          return;
+        }
+      }
 
       if (isF12 || isCtrlShiftS) {
         event.preventDefault();
@@ -879,8 +919,38 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [choice, showSaveAs, showImportReport]);
 
-  const createNew = (kind: DocumentKind) => {
-    const tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+  const createNew = (kind: DocumentKind, templateId?: string) => {
+    let tab: EditorState;
+    if (templateId) {
+      const template = getTemplateById(templateId);
+      if (template) {
+        const fileName = nextFileName(
+          template.kind,
+          tabsRef.current.map((item) => item.fileName),
+        );
+        const format =
+          template.kind === 'spreadsheet'
+            ? 'xlsx'
+            : template.kind === 'presentation'
+              ? 'pptx'
+              : 'docx';
+        const content = template.getContent();
+        tab = {
+          id: newTabId(),
+          kind: template.kind,
+          fileName,
+          format,
+          isDirty: true,
+          documentContent: template.kind === 'document' ? (content as any) : undefined,
+          spreadsheetData: template.kind === 'spreadsheet' ? (content as any) : undefined,
+          presentationData: template.kind === 'presentation' ? (content as any) : undefined,
+        };
+      } else {
+        tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+      }
+    } else {
+      tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+    }
     commit([...tabsRef.current, tab], tab.id || null);
   };
 
@@ -1176,6 +1246,10 @@ export const App: React.FC = () => {
             slideCommands={slideCommands}
             slideState={slideState}
             sheetApi={sheetApi}
+            showOutline={showOutline}
+            onToggleOutline={() => setShowOutline((prev) => !prev)}
+            onStartSlideshow={(mode) => setSlideshowState({ active: true, mode })}
+            docPageInfo={docPageInfo}
           />
           <main className="folio-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
             {activeTab.kind === 'document' && (
@@ -1187,6 +1261,9 @@ export const App: React.FC = () => {
                 onEditorReady={setDocumentEditorInstance}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
                 findSignal={findSignal}
+                onPageInfoChange={setDocPageInfo}
+                showOutline={showOutline}
+                onToggleOutline={() => setShowOutline((prev) => !prev)}
               />
             )}
             {activeTab.kind === 'spreadsheet' && (
@@ -1196,6 +1273,8 @@ export const App: React.FC = () => {
                 onChange={(sheets) => updateActive({ spreadsheetData: sheets })}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
                 onWorkbookReady={handleWorkbookReady}
+                findSignal={findSignal}
+                onSelectionChange={setSheetStats}
               />
             )}
             {activeTab.kind === 'presentation' && (
@@ -1207,6 +1286,7 @@ export const App: React.FC = () => {
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
                 onActiveSlideChange={setSlideIndex}
                 onSelectionChange={setSlideState}
+                findSignal={findSignal}
               />
             )}
             {activeTab.kind === 'pdf' && activeTab.pdfData && (
@@ -1221,7 +1301,15 @@ export const App: React.FC = () => {
               />
             )}
           </main>
-          <StatusBar editorState={activeTab} documentEditor={documentEditorInstance} zoom={zoom} onZoomChange={setZoom} />
+          <StatusBar
+            editorState={activeTab}
+            documentEditor={documentEditorInstance}
+            pageInfo={docPageInfo}
+            sheetStats={sheetStats}
+            zoom={zoom}
+            onZoomChange={setZoom}
+            lastSavedTime={lastSavedTime}
+          />
         </>
       )}
 
@@ -1242,6 +1330,11 @@ export const App: React.FC = () => {
       )}
       {choice && <ChoiceDialog title={choice.title} message={choice.message} buttons={choice.buttons} onChoose={resolveChoice} />}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <ShortcutPanel
+        open={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+        activeKind={activeTab?.kind}
+      />
       {printJob && (
         <PrintView
           tab={printJob.tab}
@@ -1249,6 +1342,15 @@ export const App: React.FC = () => {
           slideIndex={slideIndex}
           pdfPage={pdfPage}
           onDone={() => setPrintJob(null)}
+        />
+      )}
+      {slideshowState?.active && activeTab?.kind === 'presentation' && (
+        <Slideshow
+          slides={activeTab.presentationData?.slides || []}
+          slideSize={activeTab.presentationData?.slideSize}
+          mode={slideshowState.mode}
+          initialIndex={slideIndex}
+          onExit={() => setSlideshowState(null)}
         />
       )}
     </div>

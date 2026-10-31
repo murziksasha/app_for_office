@@ -108,6 +108,7 @@ Ctrl+P prints the active tab through the WebView print dialog. Folio does not ch
 - Spreadsheets, slides, and PDFs ask only when there is more than one sheet, slide, or page. The choices are Active sheet or All sheets, All slides or This slide, and All pages or This page. Cancel does not open the system dialog.
 - One sheet, one slide, or one page skips the scope dialog.
 - The tab strip, ribbon, and status bar stay off the printed page. Sheet, slide, and PDF output is a print-only render. The on-screen editor stays as it is.
+- Spreadsheet printing and PDF export respect sheet `printSetup`: `fitWidth` scales wide columns to page width, `repeatHeaderRow` outputs recurring header rows at page breaks, and `gridlines` governs cell border visibility.
 
 ### The Reason
 A document is one flowing paper, not a set of numbered pages. Sheets, slides, and PDF pages are real units the user can choose.
@@ -129,7 +130,10 @@ A document is one flowing paper, not a set of numbered pages. Sheets, slides, an
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`: Cycle tabs (including the Home tab when open, after the file chips).
 - `Ctrl+Z` / `Cmd+Z`, `Ctrl+Y` / `Cmd+Y`: Undo and redo inside the editor.
 - `Ctrl+B` / `Cmd+B`, `Ctrl+I` / `Cmd+I`, `Ctrl+U` / `Cmd+U`: Bold, italic, underline.
-- `Ctrl+F` / `Cmd+F`: Find and replace in a document.
+- `Ctrl+F` / `Cmd+F`: Find in a document (focuses find field).
+- `Ctrl+H` / `Cmd+H`: Find and replace in a document (focuses replace field).
+- `F5`: Start presentation slideshow from the beginning.
+- `Shift+F5`: Start presentation slideshow from the current slide.
 - `Escape`: Close the find palette or cancel the in-page choice dialog.
 - `Alt+F4`: Window close, which quits after the dirty-tab pass.
 
@@ -140,3 +144,22 @@ These match Windows Office habits without a second window per file.
 
 ### The Check
 Playwright covers Ctrl+N, the close dialog, and Ctrl+S on a new document. Editor formatting shortcuts remain in `e2e/smoke.spec.ts` test 2.
+
+---
+
+## 7. Status Bar
+
+### The Rule
+The status bar at the bottom of the window displays editor metrics and state:
+- For documents: word and character count, current page "Page N of M" based on caret position calculated via `src/document/pagination.ts`, page size (A4 / Letter), save state, and document zoom controls.
+- For spreadsheets: sheet count, and when the active selection spans more than one cell, non-empty Count, Sum, and Average for numeric values. When a single cell is selected, Count, Sum, and Average are hidden.
+- For presentations: slide count and save state.
+- For PDFs: page indicator and zoom controls.
+
+The status bar stays hidden on Home and print output.
+
+### The Reason
+Users need immediate feedback on document position, page metrics, selection statistics, and storage status without opening dialogs.
+
+### The Check
+`tests/pagination.test.ts` covers page counting and caret page location. `tests/sheet_commands.test.ts` verifies selectionStats over numeric, text, and empty cells. `e2e/document-tools.spec.ts` inserts a page break and reads "Page 2 of 2".

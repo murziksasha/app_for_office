@@ -53,9 +53,10 @@ export const PageBreak = Node.create({
         () =>
         ({ chain }: { chain: any }) => {
           return chain()
-            .insertContent({
-              type: this.name,
-            })
+            .insertContent([
+              { type: this.name },
+              { type: 'paragraph' },
+            ])
             .run();
         },
     };

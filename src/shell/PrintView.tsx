@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { EditorState, PresentationModel, Slide } from '../types';
 import { FortuneSheetData } from '../spreadsheet/adapters';
+import { defaultPrintSetup } from '../spreadsheet/sheetPrint';
 import { mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from '../document/pageSetup';
 import { documentToHtml } from '../document/model';
 import {
@@ -500,22 +501,64 @@ export const PrintView: React.FC<PrintViewProps> = ({ tab, scope, slideIndex, pd
     const chosen = scope === 'all' ? sheets : active ? [active] : [];
     return (
       <div className="folio-print-root">
-        {chosen.map((sheet) => (
-          <table key={sheet.id || sheet.name} className="folio-print-sheet" style={{ breakAfter: 'page', borderCollapse: 'collapse', width: '100%' }}>
-            <caption style={{ textAlign: 'left', fontWeight: 700, marginBottom: '8px' }}>{sheet.name}</caption>
-            <tbody>
-              {sheetCells(sheet).map((row, r) => (
-                <tr key={r}>
-                  {row.map((cell, c) => (
-                    <td key={c} style={{ border: '1px solid #ccc', padding: '4px 6px', fontSize: '12px' }}>
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ))}
+        {chosen.map((sheet) => {
+          const setup = sheet.printSetup || defaultPrintSetup;
+          const rows = sheetCells(sheet);
+          const header = rows[0] || [];
+          const dataRows = setup.repeatHeaderRow ? rows.slice(1) : rows;
+          return (
+            <table
+              key={sheet.id || sheet.name}
+              className="folio-print-sheet"
+              style={{
+                breakAfter: 'page',
+                borderCollapse: 'collapse',
+                width: setup.fitWidth ? '100%' : 'auto',
+                tableLayout: setup.fitWidth ? 'fixed' : 'auto',
+              }}
+            >
+              <caption style={{ textAlign: 'left', fontWeight: 700, marginBottom: '8px' }}>{sheet.name}</caption>
+              {setup.repeatHeaderRow && (
+                <thead style={{ display: 'table-header-group' }}>
+                  <tr>
+                    {header.map((cell, c) => (
+                      <th
+                        key={c}
+                        style={{
+                          border: setup.gridlines ? '1px solid #ccc' : 'none',
+                          padding: '4px 6px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          textAlign: 'left',
+                        }}
+                      >
+                        {cell}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
+              <tbody>
+                {dataRows.map((row, r) => (
+                  <tr key={r}>
+                    {row.map((cell, c) => (
+                      <td
+                        key={c}
+                        style={{
+                          border: setup.gridlines ? '1px solid #ccc' : 'none',
+                          padding: '4px 6px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })}
       </div>
     );
   }

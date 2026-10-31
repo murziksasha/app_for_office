@@ -114,4 +114,58 @@ describe('page setup', () => {
     expect(pageSetupFromDoc(editor.getJSON()).marginLeft).toBe(25.4);
     editor.destroy();
   });
+
+  it('swaps dimensions and clamps correctly in landscape orientation', () => {
+    const setup = clampPageSetup({
+      size: 'a4',
+      orientation: 'landscape',
+      columns: 2,
+      marginTop: 20,
+      marginBottom: 20,
+      marginLeft: 25,
+      marginRight: 25,
+    });
+    expect(setup.size).toBe('a4');
+    expect(setup.orientation).toBe('landscape');
+    expect(setup.columns).toBe(2);
+    // In A4 landscape: width is 297, height is 210
+    expect(setup.marginTop + setup.marginBottom).toBeLessThanOrEqual(210 - 40 + 0.05);
+    expect(setup.marginLeft + setup.marginRight).toBeLessThanOrEqual(297 - 40 + 0.05);
+  });
+
+  it('round-trips landscape orientation and columns in docx', async () => {
+    const setup = clampPageSetup({
+      size: 'letter',
+      orientation: 'landscape',
+      columns: 2,
+      marginLeft: 25.4,
+      marginRight: 25.4,
+      marginTop: 25.4,
+      marginBottom: 25.4,
+    });
+    const blob = await exportDocx('<p>Landscape two-column body text</p>', setup);
+    const { html, pageSetup } = await importDocx(await blob.arrayBuffer(), 'landscape.docx');
+    expect(html).toContain('Landscape two-column body text');
+    expect(pageSetup?.size).toBe('letter');
+    expect(pageSetup?.orientation).toBe('landscape');
+    expect(pageSetup?.columns).toBe(2);
+  });
+
+  it('round-trips landscape orientation and columns in odt', async () => {
+    const setup = clampPageSetup({
+      size: 'letter',
+      orientation: 'landscape',
+      columns: 2,
+      marginLeft: 25.4,
+      marginRight: 25.4,
+      marginTop: 25.4,
+      marginBottom: 25.4,
+    });
+    const blob = await exportOdt('<p>ODT landscape two-column content</p>', setup);
+    const { html, pageSetup } = await importOdt(await blob.arrayBuffer(), 'landscape.odt');
+    expect(html).toContain('ODT landscape two-column content');
+    expect(pageSetup?.size).toBe('letter');
+    expect(pageSetup?.orientation).toBe('landscape');
+    expect(pageSetup?.columns).toBe(2);
+  });
 });

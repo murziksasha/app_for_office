@@ -1,5 +1,8 @@
 import ExcelJS from 'exceljs';
 import { ImportReport, ImportWarning } from '../types';
+import type { ConditionalFormatRule } from './conditionalFormat';
+import type { DataValidationRule } from './dataValidation';
+import type { SheetPrintSetup } from './sheetPrint';
 
 export interface FortuneCell {
   v?: any;
@@ -57,11 +60,16 @@ export interface FortuneSheetData {
   row: number;
   column: number;
   data: (FortuneCell | null)[][];
+  color?: string;
   frozen?: {
     type: FortuneFreezeType;
     range?: { row_focus: number; column_focus: number };
   };
   filter_select?: { row: number[]; column: number[] };
+  conditionalFormats?: ConditionalFormatRule[];
+  conditionalBase?: Record<string, string | undefined>;
+  dataValidations?: DataValidationRule[];
+  printSetup?: SheetPrintSetup;
   config?: {
     columnlen?: Record<string, number>;
     rowlen?: Record<string, number>;
@@ -415,6 +423,48 @@ export async function importXlsx(
       ensureGrid(data, filterSelect.row[1] + 1, filterSelect.column[1] + 1);
     }
 
+    const conditionalFormats: ConditionalFormatRule[] = [];
+    if (Array.isArray((worksheet as any).conditionalFormattings)) {
+      for (const cf of (worksheet as any).conditionalFormattings) {
+        const parsed = parseA1Range(cf.ref || '');
+        if (parsed && Array.isArray(cf.rules)) {
+          for (let ri = 0; ri < cf.rules.length; ri++) {
+            const rule = cf.rules[ri];
+            if (rule.operator === 'greaterThan' || rule.operator === 'lessThan') {
+              const val = rule.formulae?.[0] != null ? Number(String(rule.formulae[0]).replace(/^"|"$/g, '')) : 0;
+              const fillArgb = rule.style?.fill?.bgColor?.argb || rule.style?.fill?.fgColor?.argb;
+              conditionalFormats.push({
+                id: `cf_${sheetIndex}_${ri}`,
+                range: { row: [parsed.r1, parsed.r2], column: [parsed.c1, parsed.c2] },
+                kind: rule.operator === 'greaterThan' ? 'greater' : 'less',
+                value: val,
+                colors: [argbToHex(fillArgb) || '#f87171'],
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const dataValidations: DataValidationRule[] = [];
+    worksheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell, colNumber) => {
+        if (cell.dataValidation && cell.dataValidation.type === 'list' && cell.dataValidation.formulae?.length) {
+          const raw = String(cell.dataValidation.formulae[0]).replace(/^"|"$/g, '');
+          const items = raw.split(',').map((s) => s.trim()).filter(Boolean);
+          if (items.length > 0) {
+            dataValidations.push({
+              range: {
+                row: [rowNumber - 1, rowNumber - 1],
+                column: [colNumber - 1, colNumber - 1],
+              },
+              list: items,
+            });
+          }
+        }
+      });
+    });
+
     sheets.push({
       name: worksheet.name || `Sheet${sheetIndex + 1}`,
       id: `sheet_${id || sheetIndex + 1}`,
@@ -423,8 +473,11 @@ export async function importXlsx(
       row: Math.max(rowCount, data.length),
       column: Math.max(colCount, data[0]?.length || 0),
       data,
+      color: worksheet.properties?.tabColor?.argb ? argbToHex(worksheet.properties.tabColor.argb) : undefined,
       frozen: freezeFromView(worksheet.views?.[0]),
       filter_select: filterSelect,
+      conditionalFormats: conditionalFormats.length ? conditionalFormats : undefined,
+      dataValidations: dataValidations.length ? dataValidations : undefined,
       config: {
         columnlen,
         rowlen: Object.keys(rowlen).length ? rowlen : undefined,
@@ -627,6 +680,79 @@ export async function exportXlsx(sheets: FortuneSheetData[]): Promise<Blob> {
       const c0 = Math.min(...filter.column);
       const c1 = Math.max(...filter.column);
       ws.autoFilter = `${columnName(c0)}${r0 + 1}:${columnName(c1)}${r1 + 1}`;
+    }
+
+    if (sheet.color) {
+      try {
+        const argb = hexToArgb(sheet.color);
+        if (argb) {
+          ws.properties.tabColor = { argb };
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    if (sheet.conditionalFormats && Array.isArray(sheet.conditionalFormats)) {
+      for (const cf of sheet.conditionalFormats) {
+        const r0 = Math.min(...cf.range.row);
+        const r1 = Math.max(...cf.range.row);
+        const c0 = Math.min(...cf.range.column);
+        const c1 = Math.max(...cf.range.column);
+        const ref = `${columnName(c0)}${r0 + 1}:${columnName(c1)}${r1 + 1}`;
+        if (cf.kind === 'greater' || cf.kind === 'less') {
+          const operator = cf.kind === 'greater' ? 'greaterThan' : 'lessThan';
+          const fill = cf.colors[0] || '#f87171';
+          const argb = hexToArgb(fill) || 'FFFF0000';
+          try {
+            if (typeof (ws as any).addConditionalFormatting === 'function') {
+              (ws as any).addConditionalFormatting({
+                ref,
+                rules: [
+                  {
+                    type: 'cellIs',
+                    operator,
+                    formulae: [String(cf.value ?? 0)],
+                    style: {
+                      fill: {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        bgColor: { argb },
+                      },
+                    },
+                  },
+                ],
+              });
+            }
+          } catch {
+            // ExcelJS fallback
+          }
+        }
+      }
+    }
+
+    if (sheet.dataValidations && Array.isArray(sheet.dataValidations)) {
+      for (const dv of sheet.dataValidations) {
+        const r0 = Math.min(...dv.range.row);
+        const r1 = Math.max(...dv.range.row);
+        const c0 = Math.min(...dv.range.column);
+        const c1 = Math.max(...dv.range.column);
+        const listFormula = `"${dv.list.join(',')}"`;
+        for (let r = r0; r <= r1; r++) {
+          for (let c = c0; c <= c1; c++) {
+            try {
+              const cell = ws.getCell(`${columnName(c)}${r + 1}`);
+              cell.dataValidation = {
+                type: 'list',
+                allowBlank: true,
+                formulae: [listFormula],
+              };
+            } catch {
+              // fallback
+            }
+          }
+        }
+      }
     }
   });
 

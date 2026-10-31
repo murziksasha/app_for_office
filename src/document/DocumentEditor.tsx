@@ -7,6 +7,25 @@ import { formatMargin, mergePageSetup, mmToPx, PAGE_MM, pageSetupFromDoc, type P
 import { bandState } from './bandState';
 import { X } from 'lucide-react';
 import { i18n, t } from '../i18n/instance';
+import { FindPanel } from '../shell/FindPanel';
+import { ContextMenu, getContextMenuItems } from '../shell/ContextMenu';
+import { MiniToolbar } from '../shell/MiniToolbar';
+import {
+  formatPainter,
+  applyDocumentFormat,
+} from '../shell/formatPainter';
+import {
+  findNextIndex,
+  findPreviousIndex,
+  findTextRanges,
+  replaceAll,
+  replaceOne,
+  type TextRange,
+} from './findText';
+import { computeDocumentPagination, getPageAtPosition } from './pagination';
+import { getHeadings, type HeadingItem } from './outline';
+import { getSuggestions } from './spell/checker';
+import { addUserWord } from './spell/userDictionary';
 
 interface DocumentEditorProps {
   content: JSONContent;
@@ -15,6 +34,9 @@ interface DocumentEditorProps {
   onEditorReady?: (editor: any) => void;
   onSaveShortcut?: () => void;
   findSignal?: number;
+  onPageInfoChange?: (info: { page: number; totalPages: number }) => void;
+  showOutline?: boolean;
+  onToggleOutline?: () => void;
 }
 
 export const DocumentEditor: React.FC<DocumentEditorProps> = ({
@@ -24,21 +46,65 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onEditorReady,
   onSaveShortcut,
   findSignal = 0,
+  onPageInfoChange,
+  showOutline = false,
+  onToggleOutline,
 }) => {
+  const onPageInfoChangeRef = useRef(onPageInfoChange);
+  onPageInfoChangeRef.current = onPageInfoChange;
+
+  const updatePageInfo = (ed: any) => {
+    if (!ed || !ed.view) return;
+    try {
+      const setup = pageSetupFromDoc(ed.getJSON());
+      const { gapPositions, totalPages } = computeDocumentPagination(
+        ed.state.doc,
+        setup,
+        (offset) => {
+          const dom = ed.view.nodeDOM(offset);
+          return dom instanceof HTMLElement ? dom.offsetHeight : 0;
+        }
+      );
+      const page = getPageAtPosition(gapPositions, ed.state.selection.from);
+      onPageInfoChangeRef.current?.({ page, totalPages });
+    } catch {
+      // safe fallback
+    }
+  };
   const [showFind, setShowFind] = useState(false);
+  const [findFocus, setFindFocus] = useState<'find' | 'replace'>('find');
   const [findText, setFindText] = useState('');
   const [replaceText, setReplaceText] = useState('');
   const [matchCount, setMatchCount] = useState(0);
+  const [matchCase, setMatchCase] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const matchesRef = useRef<TextRange[]>([]);
   const [preview, setPreview] = useState<PageSetup | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; target: 'docText' | 'docTable'; spelling?: any } | null>(null);
+  const [miniToolbarPos, setMiniToolbarPos] = useState<{ x: number; y: number } | null>(null);
+  const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const [footnotes, setFootnotes] = useState<Array<{ id: string; text: string }>>([]);
 
   const editor = useEditor({
     extensions: documentExtensions,
     content: content || defaultDocumentModel,
     onUpdate: ({ editor }) => {
       onChange(editor.getJSON());
+      updatePageInfo(editor);
+      setHeadings(getHeadings(editor.state.doc));
+      setFootnotes(editor.state.doc.attrs.footnotes || []);
     },
-    onSelectionUpdate: () => {
+    onSelectionUpdate: ({ editor }) => {
       bandState.setFocus(null);
+      const painter = formatPainter.getState();
+      if (painter.armed && painter.docPayload && !editor.state.selection.empty) {
+        applyDocumentFormat(editor, painter.docPayload);
+        formatPainter.didApply();
+      }
+      updatePageInfo(editor);
+      if (editor.state.selection.empty) {
+        setMiniToolbarPos(null);
+      }
     },
   });
 
@@ -48,6 +114,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       if (onEditorReady) {
         onEditorReady(editor);
       }
+      updatePageInfo(editor);
+      setHeadings(getHeadings(editor.state.doc));
+      setFootnotes(editor.state.doc.attrs.footnotes || []);
     }
   }, [editor, onEditorReady]);
 
@@ -61,6 +130,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         editor.commands.setContent(content, { emitUpdate: false });
       }
       prevContentRef.current = content;
+      setFootnotes(editor.state.doc.attrs.footnotes || []);
     }
   }, [content, editor]);
 
@@ -69,6 +139,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     if (findSignal !== seenFindSignal.current) {
       seenFindSignal.current = findSignal;
       setShowFind(true);
+      setFindFocus('find');
     }
   }, [findSignal]);
 
@@ -78,44 +149,114 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setShowFind(true);
+        setFindFocus('find');
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setShowFind(true);
+        setFindFocus('replace');
       }
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         onSaveShortcut?.();
       }
-      if (e.key === 'Escape' && showFind) {
-        setShowFind(false);
+      if (e.key === 'Escape') {
+        if (showFind) setShowFind(false);
+        setMiniToolbarPos(null);
+        formatPainter.cancel();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showFind, onSaveShortcut]);
 
-  // Find occurrences
+  const selectMatch = (idx: number, ranges: TextRange[]) => {
+    if (!editor || !ranges[idx]) return;
+    const match = ranges[idx];
+    editor.commands.setTextSelection({ from: match.from, to: match.to });
+    editor.commands.scrollIntoView();
+  };
+
   const handleFind = () => {
     if (!editor || !findText) {
       setMatchCount(0);
+      setCurrentIndex(-1);
+      matchesRef.current = [];
       return;
     }
-    const text = editor.getText();
-    const regex = new RegExp(findText, 'gi');
-    const matches = text.match(regex);
-    setMatchCount(matches ? matches.length : 0);
+    const ranges = findTextRanges(editor.state.doc, findText, { matchCase });
+    matchesRef.current = ranges;
+    setMatchCount(ranges.length);
+    if (ranges.length > 0) {
+      setCurrentIndex(0);
+      selectMatch(0, ranges);
+    } else {
+      setCurrentIndex(-1);
+    }
   };
 
-  const handleReplace = () => {
+  const handleFindNext = () => {
     if (!editor || !findText) return;
-    const currentHtml = editor.getHTML();
-    const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escaped, 'g');
-    const newHtml = currentHtml.replace(regex, replaceText);
-    editor.commands.setContent(newHtml);
-    handleFind();
+    const ranges = findTextRanges(editor.state.doc, findText, { matchCase });
+    matchesRef.current = ranges;
+    setMatchCount(ranges.length);
+    if (ranges.length === 0) {
+      setCurrentIndex(-1);
+      return;
+    }
+    const nextIdx = findNextIndex(ranges.length, currentIndex);
+    setCurrentIndex(nextIdx);
+    selectMatch(nextIdx, ranges);
+  };
+
+  const handleFindPrevious = () => {
+    if (!editor || !findText) return;
+    const ranges = findTextRanges(editor.state.doc, findText, { matchCase });
+    matchesRef.current = ranges;
+    setMatchCount(ranges.length);
+    if (ranges.length === 0) {
+      setCurrentIndex(-1);
+      return;
+    }
+    const prevIdx = findPreviousIndex(ranges.length, currentIndex);
+    setCurrentIndex(prevIdx);
+    selectMatch(prevIdx, ranges);
+  };
+
+  const handleReplaceOne = () => {
+    if (!editor || !findText) return;
+    const ranges = findTextRanges(editor.state.doc, findText, { matchCase });
+    if (ranges.length === 0) return;
+    const targetIdx = currentIndex >= 0 && currentIndex < ranges.length ? currentIndex : 0;
+    replaceOne(editor, ranges[targetIdx], replaceText);
+    const newRanges = findTextRanges(editor.state.doc, findText, { matchCase });
+    matchesRef.current = newRanges;
+    setMatchCount(newRanges.length);
+    if (newRanges.length > 0) {
+      const nextIdx = targetIdx % newRanges.length;
+      setCurrentIndex(nextIdx);
+      selectMatch(nextIdx, newRanges);
+    } else {
+      setCurrentIndex(-1);
+    }
+  };
+
+  const handleReplaceAll = () => {
+    if (!editor || !findText) return;
+    replaceAll(editor, findText, replaceText, { matchCase });
+    const newRanges = findTextRanges(editor.state.doc, findText, { matchCase });
+    matchesRef.current = newRanges;
+    setMatchCount(newRanges.length);
+    setCurrentIndex(-1);
   };
 
   const committed = pageSetupFromDoc(content);
   const display = preview ?? committed;
-  const page = PAGE_MM[display.size];
+  const basePage = PAGE_MM[display.size];
+  const isLandscape = display.orientation === 'landscape';
+  const page = isLandscape
+    ? { width: basePage.height, height: basePage.width }
+    : basePage;
   const pageW = mmToPx(page.width);
   const pageH = mmToPx(page.height);
   const scale = zoom / 100;
@@ -131,7 +272,176 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   return (
     <div
-      className="folio-doc-viewport"
+      className="folio-document-workspace"
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'row',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      {showOutline && (
+        <aside
+          className="folio-outline-pane"
+          data-testid="outline-pane"
+          style={{
+            width: 240,
+            flexShrink: 0,
+            borderRight: '1px solid var(--folio-border)',
+            backgroundColor: '#ffffff',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden',
+            zIndex: 5,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              borderBottom: '1px solid var(--folio-border-light)',
+              fontWeight: 600,
+              fontSize: 13,
+              color: 'var(--folio-ink)',
+            }}
+          >
+            <span>{t('document.headings')}</span>
+            {onToggleOutline && (
+              <button
+                type="button"
+                aria-label={t('settings.close')}
+                onClick={onToggleOutline}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 2,
+                  color: 'var(--folio-ink-muted)',
+                  borderRadius: 4,
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+            {headings.length === 0 ? (
+              <div
+                className="folio-outline-empty"
+                style={{
+                  padding: '16px 14px',
+                  color: 'var(--folio-ink-muted)',
+                  fontSize: 12,
+                  fontStyle: 'italic',
+                }}
+              >
+                {t('document.noHeadings')}
+              </div>
+            ) : (
+              headings.map((item, idx) => (
+                <button
+                  key={`${item.pos}-${idx}`}
+                  type="button"
+                  className="folio-outline-item"
+                  data-heading-level={item.level}
+                  data-heading-pos={item.pos}
+                  onClick={() => {
+                    if (editor) {
+                      const posInside = Math.min(item.pos + 1, editor.state.doc.content.size);
+                      editor.chain().focus().setTextSelection(posInside).scrollIntoView().run();
+                    }
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    padding: '6px 14px',
+                    paddingLeft: (item.level - 1) * 12 + 14,
+                    fontSize: item.level === 1 ? 13 : item.level === 2 ? 12.5 : 12,
+                    fontWeight: item.level === 1 ? 600 : item.level === 2 ? 500 : 400,
+                    color: 'var(--folio-ink)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {item.text || `Heading ${item.level}`}
+                </button>
+              ))
+            )}
+          </div>
+        </aside>
+      )}
+
+      <div
+        className="folio-doc-viewport"
+        onMouseUp={() => {
+          setTimeout(() => {
+            if (editor && !editor.state.selection.empty && !contextMenu) {
+              try {
+                const { from, to } = editor.state.selection;
+                const start = editor.view.coordsAtPos(from);
+                const end = editor.view.coordsAtPos(to);
+                setMiniToolbarPos({
+                  x: (start.left + end.right) / 2,
+                  y: Math.min(start.top, end.top),
+                });
+              } catch {
+                setMiniToolbarPos(null);
+              }
+            } else {
+              setMiniToolbarPos(null);
+            }
+          }, 20);
+        }}
+        onScroll={() => {
+          setMiniToolbarPos(null);
+        }}
+        onContextMenu={(e) => {
+        setMiniToolbarPos(null);
+        const target = e.target as HTMLElement;
+        if (target.closest('.ProseMirror')) {
+          e.preventDefault();
+          const isTable = editor?.isActive?.('table') || Boolean(target.closest('table'));
+          const misElem = target.closest('.folio-misspelling') as HTMLElement | null;
+          let spelling: any = undefined;
+          if (misElem && editor) {
+            const word = misElem.getAttribute('data-misspelled-word') || misElem.textContent || '';
+            const suggestions = getSuggestions(word, i18n.language);
+            spelling = {
+              word,
+              suggestions,
+              onSelect: (replacement: string) => {
+                try {
+                  const pos = editor.view.posAtDOM(misElem, 0);
+                  if (pos != null) {
+                    editor.chain().focus().setTextSelection({ from: pos, to: pos + word.length }).insertContent(replacement).run();
+                  }
+                } catch {
+                  // fallback
+                }
+              },
+              onAdd: (w: string) => {
+                addUserWord(w);
+              },
+            };
+          }
+          setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            target: isTable ? 'docTable' : 'docText',
+            spelling,
+          });
+        }
+      }}
       style={{
         flex: 1,
         overflow: 'auto',
@@ -145,95 +455,58 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       }}
     >
       {/* Find & Replace Floating Panel */}
-      {showFind && (
-        <div
-          className="folio-find-panel animate-fade-in"
-          style={{
-            position: 'fixed',
-            top: '230px',
-            right: '24px',
-            zIndex: 100,
-            background: 'var(--folio-panel)',
-            padding: '12px 16px',
-            borderRadius: 'var(--folio-radius-md)',
-            boxShadow: 'var(--folio-shadow-md)',
-            border: '1px solid var(--folio-border)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            width: '320px',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--folio-ink)' }}>{t('find.title')}</span>
-            <button onClick={() => setShowFind(false)} style={{ padding: '2px', color: 'var(--folio-ink-muted)' }}>
-              <X size={14} />
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <input
-              type="text"
-              placeholder={t('find.placeholder')}
-              value={findText}
-              onChange={(e) => {
-                setFindText(e.target.value);
-              }}
-              onKeyUp={(e) => e.key === 'Enter' && handleFind()}
-              style={{
-                flex: 1,
-                padding: '4px 8px',
-                border: '1px solid var(--folio-border)',
-                borderRadius: '4px',
-                outline: 'none',
-              }}
-            />
-            <button
-              onClick={handleFind}
-              style={{
-                padding: '4px 10px',
-                background: 'var(--folio-teal)',
-                color: 'white',
-                borderRadius: '4px',
-                fontWeight: 500,
-              }}
-            >
-              {t('find.action')}
-            </button>
-          </div>
-          {matchCount > 0 && (
-            <div style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>{t('find.found', { count: matchCount })}</div>
-          )}
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <input
-              type="text"
-              placeholder={t('find.replacePlaceholder')}
-              value={replaceText}
-              onChange={(e) => setReplaceText(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '4px 8px',
-                border: '1px solid var(--folio-border)',
-                borderRadius: '4px',
-                outline: 'none',
-              }}
-            />
-            <button
-              onClick={handleReplace}
-              style={{
-                padding: '4px 10px',
-                background: 'var(--folio-bg-alt)',
-                border: '1px solid var(--folio-border)',
-                borderRadius: '4px',
-                fontWeight: 500,
-              }}
-            >
-              {t('find.replace')}
-            </button>
-          </div>
-        </div>
+      <FindPanel
+        open={showFind}
+        onClose={() => setShowFind(false)}
+        initialFocus={findFocus}
+        supportsReplace={true}
+        findText={findText}
+        setFindText={setFindText}
+        replaceText={replaceText}
+        setReplaceText={setReplaceText}
+        matchCase={matchCase}
+        setMatchCase={(mc) => {
+          setMatchCase(mc);
+          if (editor && findText) {
+            const ranges = findTextRanges(editor.state.doc, findText, { matchCase: mc });
+            matchesRef.current = ranges;
+            setMatchCount(ranges.length);
+            if (ranges.length > 0) {
+              setCurrentIndex(0);
+              selectMatch(0, ranges);
+            } else {
+              setCurrentIndex(-1);
+            }
+          }
+        }}
+        matchCount={matchCount}
+        currentIndex={currentIndex}
+        onFind={handleFind}
+        onFindNext={handleFindNext}
+        onFindPrevious={handleFindPrevious}
+        onReplaceOne={handleReplaceOne}
+        onReplaceAll={handleReplaceAll}
+      />
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          commandIds={getContextMenuItems(contextMenu.target)}
+          context={{ kind: 'document', editor, spelling: contextMenu.spelling }}
+          onClose={() => setContextMenu(null)}
+        />
       )}
 
-      <style>{`@page { size: ${display.size === 'a4' ? 'A4' : 'letter'}; margin: ${display.marginTop}mm ${display.marginRight}mm ${display.marginBottom}mm ${display.marginLeft}mm; }`}</style>
+      {miniToolbarPos && editor && !contextMenu && (
+        <MiniToolbar
+          editor={editor}
+          position={miniToolbarPos}
+          onClose={() => setMiniToolbarPos(null)}
+        />
+      )}
+
+      <style>{`@page { size: ${display.size === 'a4' ? 'A4' : 'letter'} ${isLandscape ? 'landscape' : 'portrait'}; margin: ${display.marginTop}mm ${display.marginRight}mm ${display.marginBottom}mm ${display.marginLeft}mm; }`}</style>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '0 auto 48px' }}>
         <div style={{ paddingTop: 30 }}>
@@ -284,11 +557,61 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                     ['--folio-margin-bottom' as string]: `${mmToPx(display.marginBottom)}px`,
                     ['--folio-margin-left' as string]: `${mmToPx(display.marginLeft)}px`,
                     ['--folio-page-height' as string]: `${pageH}px`,
+                    ['--folio-column-count' as string]: `${display.columns || 1}`,
                   } as React.CSSProperties
                 }
               >
                 <EditorContent editor={editor} />
               </div>
+              {footnotes.length > 0 && (
+                <div
+                  className="folio-footnotes-area"
+                  style={{
+                    padding: `16px ${mmToPx(display.marginRight)}px 24px ${mmToPx(display.marginLeft)}px`,
+                    borderTop: '1px solid #d8d3c8',
+                    marginTop: 16,
+                    background: '#ffffff',
+                    boxShadow: 'var(--folio-shadow-paper)',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--folio-ink-muted)', marginBottom: 8 }}>
+                    {t('document.footnote')}
+                  </div>
+                  {footnotes.map((fn) => (
+                    <div
+                      key={fn.id}
+                      className="folio-footnote-item"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: '12px' }}
+                    >
+                      <span style={{ fontWeight: 600, minWidth: 20, color: 'var(--folio-teal)' }}>{fn.id}.</span>
+                      <input
+                        type="text"
+                        className="folio-footnote-input"
+                        data-footnote-id={fn.id}
+                        value={fn.text}
+                        placeholder={t('document.footnotePlaceholder') || 'Footnote text...'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          (editor?.commands as any).updateFootnoteText(fn.id, val);
+                          setFootnotes((prev) =>
+                            prev.map((item) => (item.id === fn.id ? { ...item, text: val } : item))
+                          );
+                        }}
+                        style={{
+                          flex: 1,
+                          border: 'none',
+                          borderBottom: '1px solid #e0deda',
+                          padding: '2px 4px',
+                          fontSize: '12px',
+                          background: 'transparent',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -308,6 +631,8 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           font-family: Georgia, 'Times New Roman', Cambria, serif;
           font-size: 11pt;
           line-height: 1.6;
+          column-count: var(--folio-column-count, 1);
+          column-gap: 24px;
         }
         .folio-header-top-band {
           position: absolute;
@@ -358,6 +683,22 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         }
         .folio-prose .ProseMirror p {
           margin-bottom: 0.8em;
+        }
+        .folio-prose .ProseMirror [data-style-name="Title"] {
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 26pt !important;
+          font-weight: 700 !important;
+          line-height: 1.2;
+          margin-top: 0.8em;
+          margin-bottom: 0.4em;
+        }
+        .folio-prose .ProseMirror blockquote {
+          border-left: 3px solid var(--folio-teal);
+          padding-left: 16px;
+          margin-left: 0;
+          margin-right: 0;
+          color: var(--folio-ink-muted);
+          font-style: italic;
         }
         .folio-prose .ProseMirror h1 {
           font-family: system-ui, -apple-system, sans-serif;
@@ -459,6 +800,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             display: none;
           }
         }
+        .folio-misspelling {
+          text-decoration: underline wavy #ef4444;
+          text-decoration-skip-ink: none;
+        }
         .folio-prose .ProseMirror p.is-editor-empty:first-child::before {
           color: var(--folio-ink-faint);
           content: attr(data-placeholder);
@@ -467,6 +812,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           pointer-events: none;
         }
       `}</style>
+      </div>
     </div>
   );
 };

@@ -15,6 +15,9 @@ import {
   Footer,
   PageNumber,
   ImageRun,
+  TableOfContents,
+  FootnoteReferenceRun,
+  PageOrientation,
 } from 'docx';
 import { clampPageSetup, mmToTwip, PAGE_MM, readPageSetup, type PageSetup } from '../pageSetup';
 import {
@@ -60,8 +63,11 @@ interface RunStyleContext {
   font?: string;
 }
 
-function extractRuns(node: Node, ctx: RunStyleContext = {}): Array<TextRun | ExternalHyperlink> {
-  const runs: Array<TextRun | ExternalHyperlink> = [];
+function extractRuns(
+  node: Node,
+  ctx: RunStyleContext = {}
+): Array<TextRun | ExternalHyperlink | FootnoteReferenceRun> {
+  const runs: Array<TextRun | ExternalHyperlink | FootnoteReferenceRun> = [];
 
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent || '';
@@ -85,6 +91,12 @@ function extractRuns(node: Node, ctx: RunStyleContext = {}): Array<TextRun | Ext
   if (node.nodeType === Node.ELEMENT_NODE) {
     const el = node as HTMLElement;
     const tag = el.tagName.toLowerCase();
+
+    if (el.getAttribute('data-footnote-id')) {
+      const numId = parseInt(el.getAttribute('data-footnote-id') || '1', 10);
+      runs.push(new FootnoteReferenceRun(numId));
+      return runs;
+    }
 
     if (tag === 'br') {
       runs.push(new TextRun({ break: 1 }));
@@ -278,7 +290,8 @@ function buildStoryChildren(story: ChromeStory): (Table | Paragraph)[] {
 export async function exportDocx(
   htmlContent: string,
   pageSetup?: PageSetup | null,
-  chrome?: DocumentChrome | null
+  chrome?: DocumentChrome | null,
+  footnotes?: Array<{ id: string; text: string }> | null
 ): Promise<Blob> {
   let docElement: HTMLElement;
   if (typeof DOMParser !== 'undefined') {
@@ -292,7 +305,7 @@ export async function exportDocx(
     docElement = dom.window.document.body;
   }
 
-  const paragraphsOrTables: Array<Paragraph | Table> = [];
+  const paragraphsOrTables: Array<Paragraph | Table | TableOfContents> = [];
 
   const processNode = (node: Node) => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -318,13 +331,59 @@ export async function exportDocx(
       return;
     }
 
+    // Check table of contents
+    if ((tag === 'nav' || tag === 'div') && el.getAttribute('data-type') === 'toc') {
+      const raw = el.getAttribute('data-items');
+      let items: any[] = [];
+      try {
+        items = raw ? JSON.parse(raw) : [];
+      } catch {
+        items = [];
+      }
+      if (items.length === 0) {
+        const entries = Array.from(el.querySelectorAll('.folio-toc-entry'));
+        items = entries.map((entry) => {
+          const level = parseInt(entry.getAttribute('data-level') || '1', 10);
+          const text = entry.querySelector('.folio-toc-text')?.textContent || entry.textContent || '';
+          const page = parseInt(entry.querySelector('.folio-toc-leader')?.textContent || '1', 10);
+          return { level, text, page };
+        });
+      }
+
+      const cachedEntries = items.map((it) => ({
+        level: it.level || 1,
+        title: it.text || '',
+        page: it.page || 1,
+      }));
+
+      paragraphsOrTables.push(
+        new TableOfContents('Table of Contents', {
+          cachedEntries,
+        })
+      );
+      return;
+    }
+
     if (tag === 'p') {
       const align = getAlignment(el.getAttribute('style'));
+      const lhStr = el.style.lineHeight;
+      const lh = lhStr ? parseFloat(lhStr) : 1.15;
+      const lineTwips = Math.round((isNaN(lh) ? 1.15 : lh) * 240);
+      const styleName = el.getAttribute('data-style-name');
+      let styleOpt: string | undefined = undefined;
+      if (styleName === 'Normal') styleOpt = 'Normal';
+      else if (styleName === 'Title') styleOpt = 'Title';
+      else if (styleName === 'Quote') styleOpt = 'Quote';
+      else if (styleName === 'Heading 1') styleOpt = 'Heading1';
+      else if (styleName === 'Heading 2') styleOpt = 'Heading2';
+      else if (styleName === 'Heading 3') styleOpt = 'Heading3';
+
       paragraphsOrTables.push(
         new Paragraph({
           children: extractRuns(el),
+          style: styleOpt,
           alignment: align,
-          spacing: { before: 100, after: 100 },
+          spacing: { before: 100, after: 100, line: lineTwips },
         })
       );
     } else if (tag.startsWith('h') && tag.length === 2) {
@@ -337,14 +396,43 @@ export async function exportDocx(
         5: HeadingLevel.HEADING_5,
         6: HeadingLevel.HEADING_6,
       };
+      const styleName = el.getAttribute('data-style-name');
+      const isTitle = styleName === 'Title';
+      const headingVal = headingLevels[levelNum] || HeadingLevel.HEADING_1;
+      const styleOpt = isTitle ? 'Title' : (headingVal as string);
+
       paragraphsOrTables.push(
         new Paragraph({
           children: extractRuns(el),
-          heading: headingLevels[levelNum] || HeadingLevel.HEADING_1,
+          heading: isTitle ? undefined : headingVal,
+          style: styleOpt,
           alignment: getAlignment(el.getAttribute('style')),
           spacing: { before: 240, after: 120 },
         })
       );
+    } else if (tag === 'blockquote') {
+      const pList = Array.from(el.querySelectorAll('p'));
+      if (pList.length > 0) {
+        pList.forEach((p) => {
+          paragraphsOrTables.push(
+            new Paragraph({
+              children: extractRuns(p),
+              style: 'Quote',
+              spacing: { before: 120, after: 120 },
+              indent: { left: 720 },
+            })
+          );
+        });
+      } else {
+        paragraphsOrTables.push(
+          new Paragraph({
+            children: extractRuns(el),
+            style: 'Quote',
+            spacing: { before: 120, after: 120 },
+            indent: { left: 720 },
+          })
+        );
+      }
     } else if (tag === 'ul' || tag === 'ol') {
       const isOrdered = tag === 'ol';
       const items = Array.from(el.querySelectorAll(':scope > li'));
@@ -408,7 +496,10 @@ export async function exportDocx(
   }
 
   const setup = clampPageSetup(pageSetup ?? readPageSetup(null));
-  const page = PAGE_MM[setup.size];
+  const basePage = PAGE_MM[setup.size];
+  const isLandscape = setup.orientation === 'landscape';
+  const widthMm = isLandscape ? basePage.height : basePage.width;
+  const heightMm = isLandscape ? basePage.width : basePage.height;
 
   const sectionHeaders: Record<string, Header> = {};
   const sectionFooters: Record<string, Footer> = {};
@@ -433,8 +524,9 @@ export async function exportDocx(
   const sectionProps: any = {
     page: {
       size: {
-        width: mmToTwip(page.width),
-        height: mmToTwip(page.height),
+        width: mmToTwip(widthMm),
+        height: mmToTwip(heightMm),
+        orientation: isLandscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
       },
       margin: {
         top: mmToTwip(setup.marginTop),
@@ -445,11 +537,41 @@ export async function exportDocx(
     },
   };
 
+  if (setup.columns && setup.columns > 1) {
+    sectionProps.column = {
+      count: setup.columns,
+      space: 720,
+    };
+  }
+
   if (chrome?.differentFirstPage) {
     sectionProps.titlePage = true;
   }
 
+  const footnotesMap: Record<number, { children: Paragraph[] }> = {};
+  if (footnotes && footnotes.length > 0) {
+    for (const fn of footnotes) {
+      const numId = parseInt(fn.id, 10) || 1;
+      footnotesMap[numId] = {
+        children: [new Paragraph(fn.text || '')],
+      };
+    }
+  } else {
+    const fnNodes = docElement.querySelectorAll('[data-footnote-id]');
+    fnNodes.forEach((node) => {
+      const id = node.getAttribute('data-footnote-id');
+      const text = node.getAttribute('data-footnote-text') || '';
+      if (id && text) {
+        const numId = parseInt(id, 10) || 1;
+        footnotesMap[numId] = {
+          children: [new Paragraph(text)],
+        };
+      }
+    });
+  }
+
   const doc = new Document({
+    footnotes: Object.keys(footnotesMap).length > 0 ? footnotesMap : undefined,
     sections: [
       {
         properties: sectionProps,

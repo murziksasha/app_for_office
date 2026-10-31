@@ -39,9 +39,10 @@ export async function saveEditorContent(
         const html = state.documentContent ? documentToHtml(state.documentContent) : '<p></p>';
         const pageSetup = pageSetupFromDoc(state.documentContent);
         const chrome = chromeFromDoc(state.documentContent);
+        const footnotes = (state.documentContent?.attrs?.footnotes as Array<{ id: string; text: string }>) || null;
 
         if (format === 'docx' || format === 'tmdx') {
-          blob = await exportDocx(html, pageSetup, chrome);
+          blob = await exportDocx(html, pageSetup, chrome, footnotes);
         } else {
           if (hasChromeContent(chrome)) {
             additionalWarnings.push({
@@ -51,7 +52,7 @@ export async function saveEditorContent(
           }
 
           if (format === 'odt') {
-            blob = await exportOdt(html, pageSetup);
+            blob = await exportOdt(html, pageSetup, footnotes);
           } else if (format === 'rtf') {
             blob = await exportRtf(html);
           } else if (format === 'md') {

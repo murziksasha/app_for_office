@@ -7,6 +7,7 @@ interface RibbonButtonProps {
   large?: boolean;
   pressed?: boolean;
   disabled?: boolean;
+  keyTip?: string;
   onClick?: () => void;
 }
 
@@ -18,6 +19,7 @@ export const RibbonButton: React.FC<RibbonButtonProps> = ({
   large = false,
   pressed = false,
   disabled = false,
+  keyTip,
   onClick,
 }) => {
   return (
@@ -29,6 +31,7 @@ export const RibbonButton: React.FC<RibbonButtonProps> = ({
       disabled={disabled}
       onClick={onClick}
       style={{
+        position: 'relative',
         display: 'flex',
         flexDirection: large ? 'column' : 'row',
         alignItems: 'center',
@@ -49,6 +52,29 @@ export const RibbonButton: React.FC<RibbonButtonProps> = ({
     >
       {icon}
       {label ? <span>{label}</span> : null}
+      {keyTip && (
+        <span
+          data-testid={`keytip-command-${keyTip}`}
+          style={{
+            position: 'absolute',
+            bottom: -6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '1px 5px',
+            borderRadius: 3,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+            zIndex: 1200,
+            lineHeight: 1.2,
+          }}
+        >
+          {keyTip}
+        </span>
+      )}
     </button>
   );
 };
