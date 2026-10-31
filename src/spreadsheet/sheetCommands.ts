@@ -1,5 +1,6 @@
 import type { WorkbookInstance } from '@fortune-sheet/react';
 import type { CellStyle } from '@fortune-sheet/core';
+import { SheetPrintSetup, defaultPrintSetup } from './sheetPrint';
 
 type StyleAttr = keyof CellStyle;
 
@@ -178,6 +179,69 @@ export function freezeSheet(api: WorkbookInstance, type: 'row' | 'column') {
   api.freeze(type, { row: 0, column: 0 });
 }
 
+export function freezeAtSelectionMath(row: number, col: number) {
+  if (row <= 0 && col <= 0) return null;
+  if (row > 0 && col > 0) {
+    return {
+      type: 'rangeBoth' as const,
+      range: { row_focus: row - 1, column_focus: col - 1 },
+    };
+  }
+  if (row > 0) {
+    return {
+      type: 'rangeRow' as const,
+      range: { row_focus: row - 1, column_focus: 0 },
+    };
+  }
+  return {
+    type: 'rangeColumn' as const,
+    range: { row_focus: 0, column_focus: col - 1 },
+  };
+}
+
+export function freezeSheetAtSelection(api: WorkbookInstance) {
+  const cell = focusCell(api);
+  if (!cell) return;
+  const math = freezeAtSelectionMath(cell.row, cell.column);
+  if (!math) return;
+  api.freeze(math.type as any, { row: math.range.row_focus, column: math.range.column_focus });
+}
+
+export function validateSheetName(
+  name: string,
+  existingNames: string[],
+  currentName?: string
+): { valid: boolean; error?: 'empty' | 'duplicate' } {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'empty' };
+  }
+  const isDuplicate = existingNames.some(
+    (n) => n.trim().toLowerCase() === trimmed.toLowerCase() && n.trim().toLowerCase() !== (currentName || '').trim().toLowerCase()
+  );
+  if (isDuplicate) {
+    return { valid: false, error: 'duplicate' };
+  }
+  return { valid: true };
+}
+
+export function addSheetDataValidation(api: WorkbookInstance, list: string[] = ['Alpha', 'Beta', 'Gamma']) {
+  const cell = focusCell(api);
+  if (!cell) return;
+  const sheet = api.getSheet();
+  if (!sheet) return;
+  const { r0, r1, c0, c1 } = bounds(cell.range);
+  const rule = {
+    range: { row: [r0, r1] as [number, number], column: [c0, c1] as [number, number] },
+    list,
+  };
+  const existing = (sheet as any).dataValidations || [];
+  commitSheet(api, {
+    ...sheet,
+    dataValidations: [...existing, rule],
+  } as any);
+}
+
 // updateSheet assigns `.data` on the object we pass in. A later strict-mode
 // replay freezes that object, so a plain sheet copy throws and drops the edit.
 function commitSheet(api: WorkbookInstance, sheet: NonNullable<ReturnType<WorkbookInstance['getSheet']>>) {
@@ -199,6 +263,17 @@ export function unfreezeSheet(api: WorkbookInstance) {
   const next = { ...sheet };
   delete next.frozen;
   commitSheet(api, next);
+}
+
+export function setSheetPrintSetup(api: WorkbookInstance, setup: Partial<SheetPrintSetup>) {
+  const sheet = api.getSheet();
+  if (!sheet) return;
+  const current = (sheet as any).printSetup || defaultPrintSetup;
+  const next = { ...current, ...setup };
+  commitSheet(api, {
+    ...sheet,
+    printSetup: next,
+  } as any);
 }
 
 function sortValue(cell: GridCell): unknown {
@@ -326,5 +401,178 @@ export function autoSumSheet(api: WorkbookInstance) {
   }
   for (let column = c0; column <= c1; column += 1) {
     api.setCellValue(r1 + 1, column, `=SUM(${columnName(column)}${r0 + 1}:${columnName(column)}${r1 + 1})`);
+  }
+}
+
+export interface SheetSelectionStats {
+  cellCount: number;
+  count: number;
+  sum: number;
+  average: number;
+}
+
+export function selectionStats(api: WorkbookInstance): SheetSelectionStats | null {
+  const sel = api.getSelection()?.[0];
+  if (!sel?.row?.length || !sel.column?.length) return null;
+  const r0 = Math.min(...sel.row);
+  const r1 = Math.max(...sel.row);
+  const c0 = Math.min(...sel.column);
+  const c1 = Math.max(...sel.column);
+
+  const cellCount = (r1 - r0 + 1) * (c1 - c0 + 1);
+  if (cellCount <= 1) return null;
+
+  let count = 0;
+  let sum = 0;
+  let numericCount = 0;
+
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      let raw = api.getCellValue(r, c);
+      if (raw === undefined) {
+        raw = api.getCellValue(r, c, { type: 'v' });
+      }
+      const val = raw !== null && typeof raw === 'object' && 'v' in raw ? (raw as any).v : raw;
+
+      if (val !== undefined && val !== null && val !== '') {
+        count++;
+        if (typeof val === 'number' && !Number.isNaN(val)) {
+          sum += val;
+          numericCount++;
+        }
+      }
+    }
+  }
+
+  const average = numericCount > 0 ? sum / numericCount : 0;
+  return {
+    cellCount,
+    count,
+    sum,
+    average,
+  };
+}
+
+function parseYmd(val: unknown): number | null {
+  if (typeof val !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val.trim());
+  if (!match) return null;
+  const y = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const d = parseInt(match[3], 10);
+  return Date.UTC(y, m - 1, d);
+}
+
+function formatYmd(ms: number): string {
+  const dt = new Date(ms);
+  const y = dt.getUTCFullYear();
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(dt.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getRawValue(api: WorkbookInstance, row: number, column: number): unknown {
+  let raw = api.getCellValue(row, column);
+  if (raw === undefined) {
+    raw = api.getCellValue(row, column, { type: 'v' });
+  }
+  if (raw !== null && typeof raw === 'object' && 'v' in raw) {
+    return (raw as { v?: unknown }).v;
+  }
+  return raw;
+}
+
+export function fillSheetSelection(api: WorkbookInstance, mode: 'copy' | 'series' = 'series') {
+  const cell = focusCell(api);
+  if (!cell) return;
+  const { r0, r1, c0, c1 } = bounds(cell.range);
+  if (r0 === r1 && c0 === c1) return;
+
+  if (mode === 'copy') {
+    const seed = getRawValue(api, r0, c0);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        if (r === r0 && c === c0) continue;
+        api.setCellValue(r, c, seed);
+      }
+    }
+    return;
+  }
+
+  // mode === 'series'
+  const isVertical = r1 > r0;
+  if (isVertical) {
+    for (let c = c0; c <= c1; c++) {
+      const val0 = getRawValue(api, r0, c);
+      if (val0 == null || val0 === '') continue;
+
+      const date0 = parseYmd(val0);
+      if (date0 !== null) {
+        const val1 = r1 > r0 ? getRawValue(api, r0 + 1, c) : null;
+        const date1 = parseYmd(val1);
+        let stepDays = 1;
+        let startRow = r0 + 1;
+        if (date1 !== null) {
+          stepDays = Math.round((date1 - date0) / 86400000) || 1;
+          startRow = r0 + 2;
+        }
+        for (let r = startRow; r <= r1; r++) {
+          const nextMs = date0 + (r - r0) * stepDays * 86400000;
+          api.setCellValue(r, c, formatYmd(nextMs));
+        }
+      } else {
+        const num0 = typeof val0 === 'number' ? val0 : /^-?\d+(?:\.\d+)?$/.test(String(val0).trim()) ? Number(val0) : null;
+        if (num0 !== null) {
+          const val1 = r1 > r0 ? getRawValue(api, r0 + 1, c) : null;
+          const num1 = val1 != null && val1 !== '' && !isNaN(Number(val1)) ? Number(val1) : null;
+          let step = 1;
+          let startRow = r0 + 1;
+          if (num1 !== null) {
+            step = num1 - num0;
+            startRow = r0 + 2;
+          }
+          for (let r = startRow; r <= r1; r++) {
+            api.setCellValue(r, c, num0 + (r - r0) * step);
+          }
+        }
+      }
+    }
+  } else {
+    // Horizontal series (c1 > c0)
+    for (let r = r0; r <= r1; r++) {
+      const val0 = getRawValue(api, r, c0);
+      if (val0 == null || val0 === '') continue;
+
+      const date0 = parseYmd(val0);
+      if (date0 !== null) {
+        const val1 = c1 > c0 ? getRawValue(api, r, c0 + 1) : null;
+        const date1 = parseYmd(val1);
+        let stepDays = 1;
+        let startCol = c0 + 1;
+        if (date1 !== null) {
+          stepDays = Math.round((date1 - date0) / 86400000) || 1;
+          startCol = c0 + 2;
+        }
+        for (let c = startCol; c <= c1; c++) {
+          const nextMs = date0 + (c - c0) * stepDays * 86400000;
+          api.setCellValue(r, c, formatYmd(nextMs));
+        }
+      } else {
+        const num0 = typeof val0 === 'number' ? val0 : /^-?\d+(?:\.\d+)?$/.test(String(val0).trim()) ? Number(val0) : null;
+        if (num0 !== null) {
+          const val1 = c1 > c0 ? getRawValue(api, r, c0 + 1) : null;
+          const num1 = val1 != null && val1 !== '' && !isNaN(Number(val1)) ? Number(val1) : null;
+          let step = 1;
+          let startCol = c0 + 1;
+          if (num1 !== null) {
+            step = num1 - num0;
+            startCol = c0 + 2;
+          }
+          for (let c = startCol; c <= c1; c++) {
+            api.setCellValue(r, c, num0 + (c - c0) * step);
+          }
+        }
+      }
+    }
   }
 }

@@ -37,6 +37,7 @@ export function sanitizeHtml(rawHtml: string): string {
       'th',
       'td',
       'div',
+      'nav',
       'mark',
       'sub',
       'sup',
@@ -55,8 +56,14 @@ export function sanitizeHtml(rawHtml: string): string {
       'colspan',
       'rowspan',
       'align',
+      'data-style-name',
+      'data-page-break',
+      'data-type',
+      'data-items',
+      'data-level',
+      'data-footnote-id',
+      'data-footnote-text',
     ],
     ALLOW_DATA_ATTR: false,
   });
 }
-

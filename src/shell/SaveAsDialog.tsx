@@ -47,6 +47,9 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('saveAs.title')}
         className="animate-fade-in"
         style={{
           width: '420px',

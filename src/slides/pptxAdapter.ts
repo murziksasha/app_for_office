@@ -576,6 +576,131 @@ export async function importPptx(
   };
 }
 
+export type SlideLayoutType = 'blank' | 'title' | 'titleContent' | 'twoContent';
+
+export function createSlideLayout(type: SlideLayoutType, slideNumber = 1): Slide {
+  const ts = Date.now();
+  const id = `slide_${ts}_${slideNumber}`;
+  const title = `Slide ${slideNumber}`;
+
+  let elements: SlideElement[] = [];
+
+  switch (type) {
+    case 'blank':
+      elements = [];
+      break;
+
+    case 'title':
+      elements = [
+        {
+          id: `elem_${ts}_title`,
+          type: 'text',
+          x: 10,
+          y: 35,
+          width: 80,
+          height: 18,
+          text: slideNumber === 1 ? 'Title of Presentation' : 'Slide Title',
+          fontSize: 44,
+          bold: true,
+          align: 'center',
+          color: '#1e2022',
+        },
+        {
+          id: `elem_${ts}_subtitle`,
+          type: 'text',
+          x: 20,
+          y: 55,
+          width: 60,
+          height: 12,
+          text: 'Subtitle or presenter name',
+          fontSize: 24,
+          align: 'center',
+          color: '#666666',
+        },
+      ];
+      break;
+
+    case 'titleContent':
+      elements = [
+        {
+          id: `elem_${ts}_title`,
+          type: 'text',
+          x: 10,
+          y: 8,
+          width: 80,
+          height: 12,
+          text: 'Slide Title',
+          fontSize: 36,
+          bold: true,
+          align: 'left',
+          color: '#1e2022',
+        },
+        {
+          id: `elem_${ts}_content`,
+          type: 'text',
+          x: 10,
+          y: 25,
+          width: 80,
+          height: 65,
+          text: '• First key idea\n• Second key takeaway\n• Third supporting detail',
+          fontSize: 20,
+          align: 'left',
+          color: '#5c6370',
+        },
+      ];
+      break;
+
+    case 'twoContent':
+      elements = [
+        {
+          id: `elem_${ts}_title`,
+          type: 'text',
+          x: 10,
+          y: 8,
+          width: 80,
+          height: 12,
+          text: 'Slide Title',
+          fontSize: 36,
+          bold: true,
+          align: 'left',
+          color: '#1e2022',
+        },
+        {
+          id: `elem_${ts}_left`,
+          type: 'text',
+          x: 10,
+          y: 25,
+          width: 38,
+          height: 65,
+          text: '• Left column point 1\n• Left column point 2',
+          fontSize: 20,
+          align: 'left',
+          color: '#5c6370',
+        },
+        {
+          id: `elem_${ts}_right`,
+          type: 'text',
+          x: 52,
+          y: 25,
+          width: 38,
+          height: 65,
+          text: '• Right column point 1\n• Right column point 2',
+          fontSize: 20,
+          align: 'left',
+          color: '#5c6370',
+        },
+      ];
+      break;
+  }
+
+  return {
+    id,
+    title,
+    background: '#ffffff',
+    elements,
+  };
+}
+
 /**
  * Creates a default empty slide.
  */

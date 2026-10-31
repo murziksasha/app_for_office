@@ -1,9 +1,13 @@
 import type { JSONContent } from '@tiptap/core';
 
 export type PageSizeName = 'letter' | 'a4';
+export type PageOrientation = 'portrait' | 'landscape';
+export type PageColumns = 1 | 2 | 3;
 
 export interface PageSetup {
   size: PageSizeName;
+  orientation?: PageOrientation;
+  columns?: PageColumns;
   marginTop: number;
   marginRight: number;
   marginBottom: number;
@@ -12,6 +16,8 @@ export interface PageSetup {
 
 export const DEFAULT_PAGE_SETUP: PageSetup = {
   size: 'letter',
+  orientation: 'portrait',
+  columns: 1,
   marginTop: 25.4,
   marginRight: 25.4,
   marginBottom: 25.4,
@@ -52,7 +58,15 @@ function finite(value: unknown, fallback: number): number {
 
 export function clampPageSetup(input: Partial<PageSetup> | null | undefined): PageSetup {
   const size: PageSizeName = input?.size === 'a4' ? 'a4' : 'letter';
-  const page = PAGE_MM[size];
+  const orientation: PageOrientation = input?.orientation === 'landscape' ? 'landscape' : 'portrait';
+  const rawCols = input?.columns != null ? Number(input.columns) : 1;
+  const columns: PageColumns = rawCols === 2 ? 2 : rawCols === 3 ? 3 : 1;
+
+  const basePage = PAGE_MM[size];
+  const page = orientation === 'landscape'
+    ? { width: basePage.height, height: basePage.width }
+    : basePage;
+
   let top = Math.max(0, finite(input?.marginTop, DEFAULT_PAGE_SETUP.marginTop));
   let right = Math.max(0, finite(input?.marginRight, DEFAULT_PAGE_SETUP.marginRight));
   let bottom = Math.max(0, finite(input?.marginBottom, DEFAULT_PAGE_SETUP.marginBottom));
@@ -73,6 +87,8 @@ export function clampPageSetup(input: Partial<PageSetup> | null | undefined): Pa
 
   return {
     size,
+    orientation,
+    columns,
     marginTop: roundMm(top),
     marginRight: roundMm(right),
     marginBottom: roundMm(bottom),
@@ -92,12 +108,27 @@ export function pageSetupFromDoc(doc: JSONContent | null | undefined): PageSetup
 /** Apply one edit. A single margin is capped against the opposite side so the other thumb stays put. */
 export function mergePageSetup(current: PageSetup, partial: Partial<PageSetup>): PageSetup {
   const size: PageSizeName = partial.size === 'a4' ? 'a4' : partial.size === 'letter' ? 'letter' : current.size;
-  const page = PAGE_MM[size];
+  const orientation: PageOrientation =
+    partial.orientation === 'landscape' || partial.orientation === 'portrait'
+      ? partial.orientation
+      : current.orientation || 'portrait';
+  const columns: PageColumns =
+    partial.columns === 1 || partial.columns === 2 || partial.columns === 3
+      ? partial.columns
+      : current.columns || 1;
+
+  const basePage = PAGE_MM[size];
+  const page = orientation === 'landscape'
+    ? { width: basePage.height, height: basePage.width }
+    : basePage;
+
   const maxH = page.width - MIN_CONTENT_MM;
   const maxV = page.height - MIN_CONTENT_MM;
   const cap = (value: number, other: number, max: number) => roundMm(Math.min(Math.max(0, value), Math.max(0, max - other)));
   const next: PageSetup = {
     size,
+    orientation,
+    columns,
     marginTop: current.marginTop,
     marginRight: current.marginRight,
     marginBottom: current.marginBottom,
@@ -107,13 +138,20 @@ export function mergePageSetup(current: PageSetup, partial: Partial<PageSetup>):
   if (partial.marginRight != null) next.marginRight = cap(finite(partial.marginRight, current.marginRight), next.marginLeft, maxH);
   if (partial.marginTop != null) next.marginTop = cap(finite(partial.marginTop, current.marginTop), next.marginBottom, maxV);
   if (partial.marginBottom != null) next.marginBottom = cap(finite(partial.marginBottom, current.marginBottom), next.marginTop, maxV);
-  if (partial.size != null && partial.size !== current.size) return clampPageSetup(next);
+  if (
+    (partial.size != null && partial.size !== current.size) ||
+    (partial.orientation != null && partial.orientation !== current.orientation)
+  ) {
+    return clampPageSetup(next);
+  }
   return next;
 }
 
 export function samePageSetup(a: PageSetup, b: PageSetup): boolean {
   return (
     a.size === b.size &&
+    (a.orientation || 'portrait') === (b.orientation || 'portrait') &&
+    (a.columns || 1) === (b.columns || 1) &&
     a.marginTop === b.marginTop &&
     a.marginRight === b.marginRight &&
     a.marginBottom === b.marginBottom &&
@@ -161,6 +199,8 @@ interface TwipSection {
   right?: number | null;
   bottom?: number | null;
   left?: number | null;
+  orientation?: PageOrientation;
+  columns?: PageColumns;
 }
 
 function optionalTwip(value: unknown): number | null {
@@ -171,21 +211,25 @@ function optionalTwip(value: unknown): number | null {
 
 export function pageSetupFromTwips(input: TwipSection): { setup: PageSetup; adjusted: boolean } {
   let size: PageSizeName = 'letter';
+  let orientation: PageOrientation = input.orientation || 'portrait';
   let adjusted = false;
   if (input.width != null && input.height != null) {
     const widthMm = twipToMm(input.width);
     const heightMm = twipToMm(input.height);
-    const landscape = widthMm > heightMm + 1;
-    const w = landscape ? heightMm : widthMm;
-    const h = landscape ? widthMm : heightMm;
+    const isLandscape = input.orientation === 'landscape' || widthMm > heightMm + 1;
+    orientation = isLandscape ? 'landscape' : 'portrait';
+    const w = isLandscape ? heightMm : widthMm;
+    const h = isLandscape ? widthMm : heightMm;
     const letterDist = Math.abs(w - PAGE_MM.letter.width) + Math.abs(h - PAGE_MM.letter.height);
     const a4Dist = Math.abs(w - PAGE_MM.a4.width) + Math.abs(h - PAGE_MM.a4.height);
     size = letterDist <= a4Dist ? 'letter' : 'a4';
     const target = PAGE_MM[size];
-    adjusted = landscape || Math.abs(w - target.width) > 2 || Math.abs(h - target.height) > 2;
+    adjusted = Math.abs(w - target.width) > 2 || Math.abs(h - target.height) > 2;
   }
   const setup = clampPageSetup({
     size,
+    orientation,
+    columns: input.columns || 1,
     marginTop: input.top == null ? DEFAULT_PAGE_SETUP.marginTop : twipToMm(input.top),
     marginRight: input.right == null ? DEFAULT_PAGE_SETUP.marginRight : twipToMm(input.right),
     marginBottom: input.bottom == null ? DEFAULT_PAGE_SETUP.marginBottom : twipToMm(input.bottom),
@@ -204,14 +248,19 @@ export function readDocxSection(body: unknown): { setup: PageSetup; adjusted: bo
   if (!sect || typeof sect !== 'object') return null;
   const pgSz = (sect.pgSz || {}) as Record<string, unknown>;
   const pgMar = (sect.pgMar || {}) as Record<string, unknown>;
+  const cols = (sect.cols || {}) as Record<string, unknown>;
   const width = optionalTwip(pgSz['@_w']);
   const height = optionalTwip(pgSz['@_h']);
   const top = optionalTwip(pgMar['@_top']);
   const right = optionalTwip(pgMar['@_right']);
   const bottom = optionalTwip(pgMar['@_bottom']);
   const left = optionalTwip(pgMar['@_left']);
+  const orientStr = ((pgSz['@_orient'] || pgSz['@_w:orient']) as string) || '';
+  const orientation: PageOrientation = orientStr.toLowerCase() === 'landscape' ? 'landscape' : 'portrait';
+  const numCols = cols['@_num'] != null ? Number(cols['@_num']) : cols['@_w:num'] != null ? Number(cols['@_w:num']) : 1;
+  const columns: PageColumns = numCols === 2 ? 2 : numCols === 3 ? 3 : 1;
   if (width == null && height == null && top == null && right == null && bottom == null && left == null) return null;
-  return pageSetupFromTwips({ width, height, top, right, bottom, left });
+  return pageSetupFromTwips({ width, height, top, right, bottom, left, orientation, columns });
 }
 
 function pageLayoutsOf(node: unknown): Record<string, unknown>[] {
@@ -245,22 +294,32 @@ export function readOdtPageSetup(root: unknown): { setup: PageSetup; adjusted: b
     const bottom = lengthToMm(attrs['@_margin-bottom']);
     const left = lengthToMm(attrs['@_margin-left']);
     if (width == null && height == null && top == null && right == null && bottom == null && left == null) continue;
+    const colsNode = (props as Record<string, unknown>)['columns'] || (props as Record<string, unknown>)['style:columns'];
+    let columns: PageColumns = 1;
+    if (colsNode && typeof colsNode === 'object') {
+      const cCount = Number((colsNode as any)['@_column-count'] || (colsNode as any)['@_fo:column-count'] || 1);
+      columns = cCount === 2 ? 2 : cCount === 3 ? 3 : 1;
+    }
+    const orientAttr = ((attrs['@_print-orientation'] || attrs['@_style:print-orientation']) as string) || '';
+    const isLandscape = (width != null && height != null && width > height + 1) || orientAttr === 'landscape';
+    const orientation: PageOrientation = isLandscape ? 'landscape' : 'portrait';
     let size: PageSizeName = 'letter';
     let adjusted = false;
     if (width != null && height != null) {
-      const landscape = width > height + 1;
-      const w = landscape ? height : width;
-      const h = landscape ? width : height;
+      const w = isLandscape ? height : width;
+      const h = isLandscape ? width : height;
       const letterDist = Math.abs(w - PAGE_MM.letter.width) + Math.abs(h - PAGE_MM.letter.height);
       const a4Dist = Math.abs(w - PAGE_MM.a4.width) + Math.abs(h - PAGE_MM.a4.height);
       size = letterDist <= a4Dist ? 'letter' : 'a4';
       const target = PAGE_MM[size];
-      adjusted = landscape || Math.abs(w - target.width) > 2 || Math.abs(h - target.height) > 2;
+      adjusted = Math.abs(w - target.width) > 2 || Math.abs(h - target.height) > 2;
     }
     return {
       adjusted,
       setup: clampPageSetup({
         size,
+        orientation,
+        columns,
         marginTop: top ?? DEFAULT_PAGE_SETUP.marginTop,
         marginRight: right ?? DEFAULT_PAGE_SETUP.marginRight,
         marginBottom: bottom ?? DEFAULT_PAGE_SETUP.marginBottom,

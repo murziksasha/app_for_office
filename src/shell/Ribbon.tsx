@@ -6,12 +6,14 @@ import {
   autoSumSheet,
   clearSheetSelection,
   deleteSheetAxis,
+  fillSheetSelection,
   freezeSheet,
   insertSheetAxis,
   mergeSheetSelection,
   setSheetBorder,
   setSheetFill,
   setSheetNumberFormat,
+  setSheetPrintSetup,
   setSheetStyle,
   sortSheetSelection,
   toggleSheetFilter,
@@ -19,15 +21,28 @@ import {
   toggleSheetWrap,
   unfreezeSheet,
   unmergeSheetSelection,
+  addSheetDataValidation,
 } from '../spreadsheet/sheetCommands';
+import { PrintSetupDialog } from '../spreadsheet/PrintSetupDialog';
+import { defaultPrintSetup } from '../spreadsheet/sheetPrint';
+import { clearFormatting } from '../document/clearFormatting';
+import { applyDocumentStyle } from '../document/styles';
+import {
+  useFormatPainter,
+  formatPainter,
+  captureDocumentFormat,
+  captureSheetFormat,
+} from './formatPainter';
 import { RibbonGroup } from './ribbon/RibbonGroup';
 import { RibbonButton, ribbonFieldStyle } from './ribbon/RibbonButton';
 import { LanguageButton } from './LanguageButton';
 import { i18n, t } from '../i18n/instance';
+import { Backstage } from './Backstage';
+import { CommandSearch } from './CommandSearch';
+import { QuickAccess } from './QuickAccess';
+import { handleKeyTipKey, TAB_KEY_TIPS, type KeyTipMode } from './keyTips';
 import type { JSONContent } from '@tiptap/core';
 import { formatMargin, marginUnit, pageSetupFromDoc, parseMargin, type PageSetup } from '../document/pageSetup';
-import { bandState, type ActiveBandFocus } from '../document/bandState';
-import { chromeFromDoc } from '../document/chrome';
 import {
   Save,
   Printer,
@@ -64,13 +79,31 @@ import {
   Type,
   Video,
   Square,
+  Circle,
+  Triangle,
   Trash2,
   ChevronUp,
   ChevronDown,
   WrapText,
   Eraser,
   Plus,
-  Settings as SettingsIcon,
+  Grid,
+  LayoutGrid,
+  Palette,
+  BringToFront,
+  SendToBack,
+  AlignStartHorizontal,
+  AlignCenterHorizontal,
+  AlignEndHorizontal,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignHorizontalDistributeCenter,
+  AlignVerticalDistributeCenter,
+  Paintbrush,
+  Superscript,
+  Subscript,
+  RemoveFormatting,
   Merge,
   Split,
   Grid2x2,
@@ -80,11 +113,9 @@ import {
   ArrowDownZA,
   ListFilter,
   Sigma,
-  Circle,
-  Triangle,
 } from 'lucide-react';
 
-type RibbonTab = 'file' | 'home' | 'insert' | 'layout';
+type RibbonTab = 'file' | 'home' | 'insert' | 'layout' | 'view' | 'table' | 'picture';
 
 const DOC_FONT_SIZES = ['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt', '28pt', '36pt', '48pt', '72pt'];
 const SHEET_FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36];
@@ -104,7 +135,6 @@ interface RibbonProps {
   onSavePdf?: () => void;
   onEditAsDocument?: () => void;
   onOpenReport?: () => void;
-  onOpenSettings?: () => void;
   onFind?: () => void;
   recentFiles?: RecentItem[];
   drafts?: DraftItem[];
@@ -114,12 +144,27 @@ interface RibbonProps {
   slideCommands?: React.RefObject<SlideEditorHandle | null>;
   slideState?: SlideCommandState;
   sheetApi?: React.RefObject<WorkbookInstance | null>;
+  onStartSlideshow?: (mode: 'beginning' | 'current') => void;
+  onOpenSettings?: () => void;
+  docPageInfo?: { page: number; totalPages: number; words?: number } | null;
+  templates?: any[];
+  showOutline?: boolean;
+  onToggleOutline?: () => void;
 }
 
 function tabsFor(kind: EditorState['kind']): RibbonTab[] {
   if (kind === 'pdf') return ['file'];
-  if (kind === 'document') return ['file', 'home', 'insert', 'layout'];
+  if (kind === 'document') return ['file', 'home', 'insert', 'layout', 'view'];
+  if (kind === 'presentation') return ['file', 'home', 'insert', 'view'];
+  if (kind === 'spreadsheet') return ['file', 'home', 'insert', 'layout'];
   return ['file', 'home', 'insert'];
+}
+
+export function getContextualTabs(isTable?: boolean, isPicture?: boolean): string[] {
+  const tabs: string[] = [];
+  if (isTable) tabs.push('table');
+  if (isPicture) tabs.push('picture');
+  return tabs;
 }
 
 const RIBBON_COLLAPSED_KEY = 'folio_ribbon_collapsed';
@@ -127,6 +172,7 @@ const RIBBON_COLLAPSED_KEY = 'folio_ribbon_collapsed';
 export const Ribbon: React.FC<RibbonProps> = (props) => {
   const { editorState } = props;
   const [activeTab, setActiveTab] = useState<RibbonTab>(editorState.kind === 'pdf' ? 'file' : 'home');
+  const [keyTipMode, setKeyTipMode] = useState<KeyTipMode>('none');
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(RIBBON_COLLAPSED_KEY) === '1';
@@ -147,20 +193,92 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
     }
   }, [collapsed]);
 
-  const tabs = tabsFor(editorState.kind);
+  const isTableActive = editorState.kind === 'document' && Boolean(props.documentEditor?.isActive?.('table'));
+  const isImageActive = editorState.kind === 'document' && Boolean(props.documentEditor?.isActive?.('image'));
+  const contextual = editorState.kind === 'document' ? getContextualTabs(isTableActive, isImageActive) : [];
+  const tabs = [...tabsFor(editorState.kind), ...contextual] as RibbonTab[];
 
-  const selectTab = (tab: RibbonTab) => {
+  useEffect(() => {
+    if (activeTab === 'table' && !isTableActive) {
+      setActiveTab('home');
+    } else if (activeTab === 'picture' && !isImageActive) {
+      setActiveTab('home');
+    }
+  }, [activeTab, isTableActive, isImageActive]);
+
+  const selectTab = (tab: RibbonTab, toggleCollapse = true) => {
+    if (tab === 'file' && editorState.kind !== 'pdf') {
+      setActiveTab('file');
+      return;
+    }
     if (collapsed) {
       setActiveTab(tab);
       setCollapsed(false);
       return;
     }
     if (tab === activeTab) {
-      setCollapsed(true);
+      if (toggleCollapse) {
+        setCollapsed(true);
+      }
       return;
     }
     setActiveTab(tab);
   };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+
+      if (e.key === 'Alt') {
+        e.preventDefault();
+        setKeyTipMode((prev) => (prev === 'none' ? 'tabs' : 'none'));
+        return;
+      }
+
+      if (keyTipMode !== 'none') {
+        const availableTabs = tabsFor(editorState.kind);
+        const commandsForTab: Record<string, () => void> = {
+          B: () => props.documentEditor?.chain().focus().toggleBold().run(),
+          I: () => props.documentEditor?.chain().focus().toggleItalic().run(),
+          U: () => props.documentEditor?.chain().focus().toggleUnderline().run(),
+        };
+        const quickAccessCommands: Record<string, () => void> = {
+          save: props.onSave,
+          undo: () => props.documentEditor?.chain().focus().undo().run(),
+          redo: () => props.documentEditor?.chain().focus().redo().run(),
+          print: props.onPrint,
+        };
+
+        const result = handleKeyTipKey(
+          e.key,
+          { mode: keyTipMode, activeTab },
+          availableTabs,
+          commandsForTab,
+          quickAccessCommands,
+          (tab) => {
+            setCollapsed(false);
+            selectTab(tab as RibbonTab, false);
+          },
+        );
+
+        if (result.nextState.mode !== keyTipMode || result.nextState.activeTab !== activeTab) {
+          e.preventDefault();
+          setKeyTipMode(result.nextState.mode);
+          if (result.nextState.activeTab !== activeTab) {
+            setActiveTab(result.nextState.activeTab as RibbonTab);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [keyTipMode, activeTab, editorState.kind, props]);
 
   return (
     <div
@@ -173,8 +291,17 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
         userSelect: 'none',
       }}
     >
+      <QuickAccess
+        editorState={editorState}
+        onSave={props.onSave}
+        onPrint={props.onPrint}
+        documentEditor={props.documentEditor}
+        sheetApi={props.sheetApi}
+        slideCommands={props.slideCommands}
+      />
       <TitleBar {...props} />
       <div
+        className="folio-tab-strip"
         style={{
           display: 'flex',
           gap: 2,
@@ -183,7 +310,13 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
         }}
       >
         {tabs.map((tab) => (
-          <TabButton key={tab} tab={tab} active={activeTab === tab} onClick={() => selectTab(tab)} />
+          <TabButton
+            key={tab}
+            tab={tab}
+            active={activeTab === tab}
+            keyTip={keyTipMode === 'tabs' ? TAB_KEY_TIPS[tab] : undefined}
+            onClick={() => selectTab(tab)}
+          />
         ))}
         <button
           type="button"
@@ -200,6 +333,28 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </button>
       </div>
+      {activeTab === 'file' && editorState.kind !== 'pdf' && (
+        <Backstage
+          editorState={editorState}
+          docPageInfo={props.docPageInfo}
+          onClose={() => setActiveTab('home')}
+          onNew={props.onNew}
+          onOpen={props.onOpen}
+          onSave={props.onSave}
+          onSaveAs={props.onSaveAs}
+          onSavePdf={props.onSavePdf || (() => {})}
+          onEditAsDocument={props.onEditAsDocument}
+          onPrint={props.onPrint}
+          onCloseFile={props.onCloseFile}
+          onOpenSettings={props.onOpenSettings}
+          recentFiles={props.recentFiles as any}
+          drafts={props.drafts as any}
+          onOpenRecent={props.onOpenRecent as any}
+          onRestoreDraft={props.onRestoreDraft as any}
+          onDismissDraft={props.onDismissDraft as any}
+          templates={props.templates}
+        />
+      )}
       {!collapsed && (
       <div
         style={{
@@ -210,9 +365,9 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
           overflowX: 'auto',
         }}
       >
-        {activeTab === 'file' && <FilePane {...props} />}
+        {activeTab === 'file' && editorState.kind === 'pdf' && <FilePane {...props} />}
         {activeTab === 'home' && editorState.kind === 'document' && (
-          <DocumentHome editor={props.documentEditor} onFind={props.onFind} />
+          <DocumentHome editor={props.documentEditor} onFind={props.onFind} keyTipMode={keyTipMode} />
         )}
         {activeTab === 'insert' && editorState.kind === 'document' && <DocumentInsert editor={props.documentEditor} />}
         {activeTab === 'layout' && editorState.kind === 'document' && (
@@ -223,26 +378,73 @@ export const Ribbon: React.FC<RibbonProps> = (props) => {
             onZoomChange={props.onZoomChange}
           />
         )}
-        {activeTab === 'home' && editorState.kind === 'spreadsheet' && <SheetHome api={props.sheetApi} />}
+        {activeTab === 'view' && editorState.kind === 'document' && (
+          <DocumentView
+            showOutline={props.showOutline}
+            onToggleOutline={props.onToggleOutline}
+            zoom={props.zoom}
+            onZoomChange={props.onZoomChange}
+          />
+        )}
+        {activeTab === 'table' && editorState.kind === 'document' && (
+          <TableTab editor={props.documentEditor} />
+        )}
+        {activeTab === 'picture' && editorState.kind === 'document' && (
+          <PictureTab editor={props.documentEditor} />
+        )}
+        {activeTab === 'home' && editorState.kind === 'spreadsheet' && (
+          <SheetHome api={props.sheetApi} onFind={props.onFind} />
+        )}
         {activeTab === 'insert' && editorState.kind === 'spreadsheet' && <SheetInsert api={props.sheetApi} />}
+        {activeTab === 'layout' && editorState.kind === 'spreadsheet' && <SheetLayout api={props.sheetApi} />}
         {activeTab === 'home' && editorState.kind === 'presentation' && (
-          <SlideHome commands={props.slideCommands} state={props.slideState} />
+          <SlideHome commands={props.slideCommands} state={props.slideState} onStartSlideshow={props.onStartSlideshow} />
         )}
         {activeTab === 'insert' && editorState.kind === 'presentation' && <SlideInsert commands={props.slideCommands} />}
+        {activeTab === 'view' && editorState.kind === 'presentation' && (
+          <SlideView commands={props.slideCommands} state={props.slideState} />
+        )}
       </div>
       )}
     </div>
   );
 };
 
-function TabButton({ tab, active, onClick }: { tab: RibbonTab; active: boolean; onClick: () => void }) {
-  const label = tab === 'file' ? t('ribbon.file') : tab === 'home' ? t('ribbon.home') : tab === 'insert' ? t('ribbon.insert') : t('ribbon.layout');
+function TabButton({
+  tab,
+  active,
+  keyTip,
+  onClick,
+}: {
+  tab: RibbonTab;
+  active: boolean;
+  keyTip?: string;
+  onClick: () => void;
+}) {
+  const label =
+    tab === 'file'
+      ? t('ribbon.file')
+      : tab === 'home'
+        ? t('ribbon.home')
+        : tab === 'insert'
+          ? t('ribbon.insert')
+          : tab === 'layout'
+            ? t('ribbon.layout')
+            : tab === 'view'
+              ? t('ribbon.view')
+              : tab === 'table'
+                ? t('ribbon.table')
+                : tab === 'picture'
+                  ? t('ribbon.picture')
+                  : tab;
   const file = tab === 'file';
   return (
     <button
       type="button"
+      data-testid={`ribbon-tab-${tab}`}
       onClick={onClick}
       style={{
+        position: 'relative',
         padding: '6px 14px',
         fontSize: 12,
         fontWeight: active || file ? 600 : 500,
@@ -254,6 +456,29 @@ function TabButton({ tab, active, onClick }: { tab: RibbonTab; active: boolean; 
       }}
     >
       {label}
+      {keyTip && (
+        <span
+          data-testid={`keytip-tab-${tab}`}
+          style={{
+            position: 'absolute',
+            bottom: -6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '1px 5px',
+            borderRadius: 3,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+            zIndex: 1200,
+            lineHeight: 1.2,
+          }}
+        >
+          {keyTip}
+        </span>
+      )}
     </button>
   );
 }
@@ -317,7 +542,29 @@ function TitleBar(props: RibbonProps) {
           )}
         </div>
       </div>
+      <CommandSearch
+        kind={editorState.kind}
+        context={{
+          editor: props.documentEditor,
+          api: props.sheetApi?.current,
+          workbook: props.sheetApi?.current,
+          slideHandle: props.slideCommands?.current,
+          onSave: props.onSave,
+          onSaveAs: props.onSaveAs,
+          onPrint: props.onPrint,
+          onSavePdf: props.onSavePdf,
+          startSlideshow: props.onStartSlideshow,
+          toggleSnapToGrid: props.slideCommands?.current?.toggleSnapToGrid,
+          alignSelected: props.slideCommands?.current?.alignSelected,
+          distributeSelected: props.slideCommands?.current?.distributeSelected,
+          bringForward: props.slideCommands?.current?.bringForward,
+          sendBackward: props.slideCommands?.current?.sendBackward,
+          applyPalette: props.slideCommands?.current?.applyPalette,
+          toggleViewMode: props.slideCommands?.current?.toggleViewMode,
+        }}
+      />
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <LanguageButton />
         <button
           type="button"
           onClick={onSave}
@@ -352,7 +599,6 @@ function TitleBar(props: RibbonProps) {
         >
           <SaveAll size={14} /> {t('ribbon.saveAs')}
         </button>
-        <LanguageButton />
         <button type="button" onClick={onPrint} title={t('ribbon.printDocument')} style={{ padding: '4px 8px', borderRadius: 4, color: 'var(--folio-ink-muted)' }}>
           <Printer size={14} />
         </button>
@@ -369,7 +615,7 @@ function commandRow(children: React.ReactNode) {
 }
 
 function FilePane(props: RibbonProps) {
-  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument, onOpenSettings } = props;
+  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument } = props;
   const recentFiles = props.recentFiles || [];
   const drafts = props.drafts || [];
   return (
@@ -395,9 +641,6 @@ function FilePane(props: RibbonProps) {
           </RibbonGroup>
           <RibbonGroup label={t('ribbon.print')}>
             <RibbonButton title={t('ribbon.print')} label={t('ribbon.print')} icon={<Printer size={16} />} onClick={onPrint} />
-          </RibbonGroup>
-          <RibbonGroup label={t('ribbon.settings')}>
-            <RibbonButton title={t('ribbon.settings')} label={t('ribbon.settings')} icon={<SettingsIcon size={16} />} onClick={onOpenSettings} />
           </RibbonGroup>
         </>,
       )}
@@ -454,42 +697,21 @@ function clip(editor: any, command: 'cut' | 'copy' | 'paste') {
   document.execCommand(command);
 }
 
-function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) {
+function DocumentHome({
+  editor,
+  onFind,
+  keyTipMode,
+}: {
+  editor: any;
+  onFind?: () => void;
+  keyTipMode?: KeyTipMode;
+}) {
   useEditorTick(editor);
-  const [bandFocus, setBandFocus] = useState<ActiveBandFocus | null>(() => bandState.getFocus());
-
-  useEffect(() => {
-    return bandState.subscribe((focus) => {
-      setBandFocus(focus ? { ...focus } : null);
-    });
-  }, []);
-
-  const inBand = Boolean(bandFocus);
-  const markOn = (name: string, attrs?: Record<string, unknown>) => {
-    if (inBand && bandFocus) {
-      if (name === 'bold') return Boolean(bandFocus.marks.bold);
-      if (name === 'italic') return Boolean(bandFocus.marks.italic);
-      if (name === 'underline') return Boolean(bandFocus.marks.underline);
-      return false;
-    }
-    return Boolean(editor?.isActive?.(name, attrs));
-  };
-
-  const alignOn = (align: string) => {
-    if (inBand && bandFocus) {
-      return bandFocus.align === align;
-    }
-    return Boolean(editor?.isActive?.({ textAlign: align }));
-  };
-
-  const fontSize = inBand && bandFocus?.marks.fontSize
-    ? `${bandFocus.marks.fontSize}pt`
-    : editor?.getAttributes('textStyle')?.fontSize || '11pt';
-
-  const fontFamily = inBand && bandFocus?.marks.fontFamily
-    ? bandFocus.marks.fontFamily
-    : editor?.getAttributes('textStyle')?.fontFamily || 'Georgia, serif';
-
+  const painterState = useFormatPainter();
+  const markOn = (name: string, attrs?: Record<string, unknown>) => Boolean(editor?.isActive?.(name, attrs));
+  const alignOn = (align: string) => Boolean(editor?.isActive?.({ textAlign: align }));
+  const fontSize = editor?.getAttributes('textStyle')?.fontSize || '11pt';
+  const fontFamily = editor?.getAttributes('textStyle')?.fontFamily || 'Georgia, serif';
   const families: Array<[string, string]> = [
     ['Georgia, serif', 'Georgia'],
     ['system-ui, sans-serif', 'Segoe UI'],
@@ -498,13 +720,14 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
   if (fontFamily && !families.some(([value]) => value === fontFamily)) {
     families.unshift([fontFamily, fontFamily]);
   }
-  const styleName = markOn('heading', { level: 1 })
+  const currentStyleAttr = editor?.getAttributes('paragraph')?.styleName || editor?.getAttributes('heading')?.styleName;
+  const styleName = currentStyleAttr || (markOn('heading', { level: 1 })
     ? 'Heading 1'
     : markOn('heading', { level: 2 })
       ? 'Heading 2'
       : markOn('heading', { level: 3 })
         ? 'Heading 3'
-        : 'Paragraph';
+        : 'Paragraph');
 
   return commandRow(
     <>
@@ -514,6 +737,17 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
           <RibbonButton title={t('ribbon.cut')} label={t('ribbon.cut')} icon={<Scissors size={14} />} disabled={!editor} onClick={() => clip(editor, 'cut')} />
           <RibbonButton title={t('ribbon.copy')} label={t('ribbon.copy')} icon={<Copy size={14} />} disabled={!editor} onClick={() => clip(editor, 'copy')} />
         </div>
+        <RibbonButton
+          title={t('ribbon.formatPainter')}
+          label={t('ribbon.formatPainter')}
+          icon={<Paintbrush size={14} />}
+          pressed={painterState.armed}
+          disabled={!editor}
+          onClick={() => {
+            const payload = captureDocumentFormat(editor);
+            formatPainter.arm({ doc: payload });
+          }}
+        />
         <RibbonButton title={t('ribbon.undo')} icon={<Undo2 size={16} />} disabled={!editor?.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
         <RibbonButton title={t('ribbon.redo')} icon={<Redo2 size={16} />} disabled={!editor?.can().redo()} onClick={() => editor.chain().focus().redo().run()} />
       </RibbonGroup>
@@ -521,11 +755,8 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
         <select
           aria-label={t('ribbon.font')}
           value={fontFamily}
-          disabled={!editor && !inBand}
-          onChange={(e) => {
-            if (inBand) bandState.setFontFamily(e.target.value);
-            else editor.chain().focus().setFontFamily(e.target.value).run();
-          }}
+          disabled={!editor}
+          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
           style={{ ...ribbonFieldStyle, maxWidth: 140 }}
         >
           {families.map(([value, label]) => (
@@ -538,12 +769,8 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
           aria-label={t('ribbon.fontSize')}
           title={t('ribbon.fontSize')}
           value={DOC_FONT_SIZES.includes(fontSize) ? fontSize : '11pt'}
-          disabled={!editor && !inBand}
-          onChange={(e) => {
-            const pt = parseInt(e.target.value, 10);
-            if (inBand) bandState.setFontSize(pt);
-            else editor.chain().focus().setFontSize(e.target.value).run();
-          }}
+          disabled={!editor}
+          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
           style={{ ...ribbonFieldStyle, width: 72 }}
         >
           {DOC_FONT_SIZES.map((size) => (
@@ -556,88 +783,86 @@ function DocumentHome({ editor, onFind }: { editor: any; onFind?: () => void }) 
           title={t('ribbon.bold')}
           icon={<Bold size={16} />}
           pressed={markOn('bold')}
-          disabled={!editor && !inBand}
-          onClick={() => {
-            if (inBand) bandState.toggleMark('bold');
-            else editor.chain().focus().toggleBold().run();
-          }}
+          disabled={!editor}
+          keyTip={keyTipMode === 'commands' ? 'B' : undefined}
+          onClick={() => editor.chain().focus().toggleBold().run()}
         />
         <RibbonButton
           title={t('ribbon.italic')}
           icon={<Italic size={16} />}
           pressed={markOn('italic')}
-          disabled={!editor && !inBand}
-          onClick={() => {
-            if (inBand) bandState.toggleMark('italic');
-            else editor.chain().focus().toggleItalic().run();
-          }}
+          disabled={!editor}
+          keyTip={keyTipMode === 'commands' ? 'I' : undefined}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
         />
         <RibbonButton
           title={t('ribbon.underline')}
           icon={<Underline size={16} />}
           pressed={markOn('underline')}
-          disabled={!editor && !inBand}
-          onClick={() => {
-            if (inBand) bandState.toggleMark('underline');
-            else editor.chain().focus().toggleUnderline().run();
-          }}
+          disabled={!editor}
+          keyTip={keyTipMode === 'commands' ? 'U' : undefined}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
         />
-        <RibbonButton title={t('ribbon.strike')} icon={<Strikethrough size={16} />} pressed={markOn('strike')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleStrike().run()} />
+        <RibbonButton title={t('ribbon.strike')} icon={<Strikethrough size={16} />} pressed={markOn('strike')} disabled={!editor} onClick={() => editor.chain().focus().toggleStrike().run()} />
+        <RibbonButton
+          title={t('ribbon.superscript')}
+          icon={<Superscript size={16} />}
+          pressed={markOn('superscript')}
+          disabled={!editor}
+          onClick={() => editor.chain().focus().toggleSuperscript().run()}
+        />
+        <RibbonButton
+          title={t('ribbon.subscript')}
+          icon={<Subscript size={16} />}
+          pressed={markOn('subscript')}
+          disabled={!editor}
+          onClick={() => editor.chain().focus().toggleSubscript().run()}
+        />
+        <RibbonButton
+          title={t('ribbon.clearFormatting')}
+          icon={<RemoveFormatting size={16} />}
+          disabled={!editor}
+          onClick={() => clearFormatting(editor)}
+        />
         <input
           type="color"
           title={t('ribbon.textColor')}
           aria-label={t('ribbon.textColor')}
-          disabled={!editor && !inBand}
-          onChange={(e) => {
-            if (inBand) bandState.setColor(e.target.value);
-            else editor.chain().focus().setColor(e.target.value).run();
-          }}
+          disabled={!editor}
+          onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
           style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
-        <RibbonButton title={t('ribbon.highlight')} icon={<Highlighter size={16} />} pressed={markOn('highlight')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()} />
+        <RibbonButton title={t('ribbon.highlight')} icon={<Highlighter size={16} />} pressed={markOn('highlight')} disabled={!editor} onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.paragraph')}>
-        <RibbonButton
-          title={t('ribbon.alignLeft')}
-          icon={<AlignLeft size={16} />}
-          pressed={alignOn('left')}
-          disabled={!editor && !inBand}
-          onClick={() => {
-            if (inBand) bandState.setAlign('left');
-            else editor.chain().focus().setTextAlign('left').run();
-          }}
-        />
-        <RibbonButton
-          title={t('ribbon.alignCenter')}
-          icon={<AlignCenter size={16} />}
-          pressed={alignOn('center')}
-          disabled={!editor && !inBand}
-          onClick={() => {
-            if (inBand) bandState.setAlign('center');
-            else editor.chain().focus().setTextAlign('center').run();
-          }}
-        />
-        <RibbonButton
-          title={t('ribbon.alignRight')}
-          icon={<AlignRight size={16} />}
-          pressed={alignOn('right')}
-          disabled={!editor && !inBand}
-          onClick={() => {
-            if (inBand) bandState.setAlign('right');
-            else editor.chain().focus().setTextAlign('right').run();
-          }}
-        />
-        <RibbonButton title={t('ribbon.alignJustify')} icon={<AlignJustify size={16} />} pressed={alignOn('justify')} disabled={!editor || inBand} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
-        <RibbonButton title={t('ribbon.bullets')} icon={<List size={16} />} pressed={markOn('bulletList')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleBulletList().run()} />
-        <RibbonButton title={t('ribbon.numbered')} icon={<ListOrdered size={16} />} pressed={markOn('orderedList')} disabled={!editor || inBand} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
-        <RibbonButton title={t('ribbon.outdent')} icon={<OutdentIcon size={16} />} disabled={!editor || inBand} onClick={() => editor.chain().focus().outdent().run()} />
-        <RibbonButton title={t('ribbon.indent')} icon={<IndentIcon size={16} />} disabled={!editor || inBand} onClick={() => editor.chain().focus().indent().run()} />
+        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={alignOn('left')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('left').run()} />
+        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={alignOn('center')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('center').run()} />
+        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={alignOn('right')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('right').run()} />
+        <RibbonButton title={t('ribbon.alignJustify')} icon={<AlignJustify size={16} />} pressed={alignOn('justify')} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
+        <RibbonButton title={t('ribbon.bullets')} icon={<List size={16} />} pressed={markOn('bulletList')} disabled={!editor} onClick={() => editor.chain().focus().toggleBulletList().run()} />
+        <RibbonButton title={t('ribbon.numbered')} icon={<ListOrdered size={16} />} pressed={markOn('orderedList')} disabled={!editor} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+        <RibbonButton title={t('ribbon.outdent')} icon={<OutdentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().outdent().run()} />
+        <RibbonButton title={t('ribbon.indent')} icon={<IndentIcon size={16} />} disabled={!editor} onClick={() => editor.chain().focus().indent().run()} />
+        <select
+          aria-label={t('ribbon.lineSpacing')}
+          title={t('ribbon.lineSpacing')}
+          value={editor?.getAttributes('paragraph')?.lineSpacing || '1.15'}
+          disabled={!editor}
+          onChange={(e) => editor?.chain().focus().setLineSpacing(e.target.value).run()}
+          style={{ ...ribbonFieldStyle, width: 62 }}
+        >
+          <option value="1">1.0</option>
+          <option value="1.15">1.15</option>
+          <option value="1.5">1.5</option>
+          <option value="2">2.0</option>
+        </select>
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.styles')}>
-        <StyleChip name="Paragraph" active={styleName === 'Paragraph'} onClick={() => editor?.chain().focus().setParagraph().run()} />
-        <StyleChip name="Heading 1" active={styleName === 'Heading 1'} onClick={() => editor?.chain().focus().setHeading({ level: 1 }).run()} style={{ fontSize: 15, fontWeight: 700 }} />
-        <StyleChip name="Heading 2" active={styleName === 'Heading 2'} onClick={() => editor?.chain().focus().setHeading({ level: 2 }).run()} style={{ fontSize: 13, fontWeight: 700 }} />
-        <StyleChip name="Heading 3" active={styleName === 'Heading 3'} onClick={() => editor?.chain().focus().setHeading({ level: 3 }).run()} style={{ fontSize: 12, fontWeight: 650, color: 'var(--folio-teal)' }} />
+        <StyleChip name="Paragraph" active={styleName === 'Paragraph' || styleName === 'Normal'} onClick={() => applyDocumentStyle(editor, 'Normal')} />
+        <StyleChip name="Title" active={styleName === 'Title'} onClick={() => applyDocumentStyle(editor, 'Title')} style={{ fontSize: 16, fontWeight: 700 }} />
+        <StyleChip name="Heading 1" active={styleName === 'Heading 1'} onClick={() => applyDocumentStyle(editor, 'Heading 1')} style={{ fontSize: 14, fontWeight: 700 }} />
+        <StyleChip name="Heading 2" active={styleName === 'Heading 2'} onClick={() => applyDocumentStyle(editor, 'Heading 2')} style={{ fontSize: 13, fontWeight: 700 }} />
+        <StyleChip name="Heading 3" active={styleName === 'Heading 3'} onClick={() => applyDocumentStyle(editor, 'Heading 3')} style={{ fontSize: 12, fontWeight: 650, color: 'var(--folio-teal)' }} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.editing')}>
         <RibbonButton large title={t('ribbon.find')} label={t('ribbon.find')} icon={<Search size={20} />} disabled={!editor} onClick={onFind} />
@@ -659,9 +884,12 @@ function StyleChip({
 }) {
   const labels: Record<string, string> = {
     Paragraph: t('ribbon.paragraph'),
+    Normal: t('ribbon.styleNormal'),
+    Title: t('ribbon.styleTitle'),
     'Heading 1': t('ribbon.heading1'),
     'Heading 2': t('ribbon.heading2'),
     'Heading 3': t('ribbon.heading3'),
+    Quote: t('ribbon.styleQuote'),
   };
   const shown = labels[name] || name;
   return (
@@ -748,6 +976,22 @@ function DocumentInsert({ editor }: { editor: any }) {
       <RibbonGroup label={t('ribbon.pages')}>
         <RibbonButton title={t('ribbon.pageBreak')} label={t('ribbon.pageBreak')} icon={<SeparatorHorizontal size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setPageBreak().run()} />
       </RibbonGroup>
+      <RibbonGroup label={t('ribbon.references')}>
+        <RibbonButton
+          title={t('ribbon.toc')}
+          label={t('ribbon.toc')}
+          icon={<FileText size={16} />}
+          disabled={!editor}
+          onClick={() => editor.chain().focus().insertTableOfContents().run()}
+        />
+        <RibbonButton
+          title={t('ribbon.footnote')}
+          label={t('ribbon.footnote')}
+          icon={<FilePlus size={16} />}
+          disabled={!editor}
+          onClick={() => (editor.commands as any)?.addFootnote()}
+        />
+      </RibbonGroup>
     </>,
   );
 }
@@ -764,16 +1008,9 @@ function DocumentLayout({
   onZoomChange: (zoom: number) => void;
 }) {
   const setup = pageSetupFromDoc(documentContent);
-  const chrome = chromeFromDoc(documentContent);
-
   const commit = (partial: Partial<PageSetup>) => {
     editor?.commands.setPageSetup(partial);
   };
-
-  const toggleDiffFirst = () => {
-    editor?.commands.setDocumentChrome({ differentFirstPage: !chrome.differentFirstPage });
-  };
-
   return commandRow(
     <>
       <RibbonGroup label={t('ribbon.page')}>
@@ -786,46 +1023,31 @@ function DocumentLayout({
           <option value="letter">{t('ribbon.letter')}</option>
           <option value="a4">{t('ribbon.a4')}</option>
         </select>
+        <select
+          aria-label={t('ribbon.orientation')}
+          value={setup.orientation || 'portrait'}
+          onChange={(e) => commit({ orientation: e.target.value as PageSetup['orientation'] })}
+          style={ribbonFieldStyle}
+        >
+          <option value="portrait">{t('ribbon.portrait')}</option>
+          <option value="landscape">{t('ribbon.landscape')}</option>
+        </select>
+        <select
+          aria-label={t('ribbon.columns')}
+          value={String(setup.columns || 1)}
+          onChange={(e) => commit({ columns: parseInt(e.target.value, 10) as PageSetup['columns'] })}
+          style={ribbonFieldStyle}
+        >
+          <option value="1">{t('ribbon.columnOne')}</option>
+          <option value="2">{t('ribbon.columnTwo')}</option>
+          <option value="3">{t('ribbon.columnThree')}</option>
+        </select>
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.margins')}>
         <MarginField label={t('ribbon.marginTop')} mm={setup.marginTop} onCommit={(marginTop) => commit({ marginTop })} />
         <MarginField label={t('ribbon.marginBottom')} mm={setup.marginBottom} onCommit={(marginBottom) => commit({ marginBottom })} />
         <MarginField label={t('ribbon.marginLeft')} mm={setup.marginLeft} onCommit={(marginLeft) => commit({ marginLeft })} />
         <MarginField label={t('ribbon.marginRight')} mm={setup.marginRight} onCommit={(marginRight) => commit({ marginRight })} />
-      </RibbonGroup>
-      <RibbonGroup label={t('ribbon.headerFooterGroup')}>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 12,
-            color: 'var(--folio-ink)',
-            cursor: 'pointer',
-            padding: '2px 4px',
-            userSelect: 'none',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={Boolean(chrome.differentFirstPage)}
-            onChange={toggleDiffFirst}
-            style={{ cursor: 'pointer' }}
-          />
-          {t('ribbon.differentFirstPage')}
-        </label>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <RibbonButton
-            title={t('ribbon.pageNumber')}
-            label={t('ribbon.pageNumberDigit')}
-            onClick={() => bandState.insertPageNumber('page')}
-          />
-          <RibbonButton
-            title={t('ribbon.pageNumber')}
-            label={t('ribbon.pageNumberOfTotal')}
-            onClick={() => bandState.insertPageNumber('pageOfTotal')}
-          />
-        </div>
       </RibbonGroup>
       <ZoomGroup zoom={zoom} onZoomChange={onZoomChange} />
     </>,
@@ -848,11 +1070,8 @@ function MarginField({ label, mm, onCommit }: { label: string; mm: number; onCom
           onChange={(e) => setText(e.target.value)}
           onBlur={() => {
             const parsed = parseMargin(text, i18n.language);
-            if (parsed == null || formatMargin(parsed, i18n.language) === formatMargin(mm, i18n.language)) {
-              setText(formatMargin(mm, i18n.language));
-              return;
-            }
-            onCommit(parsed);
+            if (parsed == null) setText(formatMargin(mm, i18n.language));
+            else onCommit(parsed);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
@@ -889,15 +1108,100 @@ function ZoomGroup({ zoom, onZoomChange }: { zoom: number; onZoomChange: (zoom: 
   );
 }
 
+function DocumentView({
+  showOutline,
+  onToggleOutline,
+  zoom,
+  onZoomChange,
+}: {
+  showOutline?: boolean;
+  onToggleOutline?: () => void;
+  zoom: number;
+  onZoomChange: (zoom: number) => void;
+}) {
+  return commandRow(
+    <>
+      <RibbonGroup label={t('ribbon.view')}>
+        <RibbonButton
+          large
+          title={t('document.headings')}
+          label={t('document.headings')}
+          icon={<ListFilter size={22} />}
+          pressed={showOutline}
+          onClick={onToggleOutline}
+        />
+      </RibbonGroup>
+      <ZoomGroup zoom={zoom} onZoomChange={onZoomChange} />
+    </>,
+  );
+}
+
+function TableTab({ editor }: { editor: any }) {
+  useEditorTick(editor);
+  return commandRow(
+    <>
+      <RibbonGroup label={t('ribbon.rows')}>
+        <RibbonButton title={t('ribbon.addRowAbove')} label={t('ribbon.addRowAbove')} icon={<Plus size={14} />} disabled={!editor} onClick={() => editor.chain().focus().addRowBefore().run()} />
+        <RibbonButton title={t('ribbon.addRowBelow')} label={t('ribbon.addRowBelow')} icon={<Plus size={14} />} disabled={!editor} onClick={() => editor.chain().focus().addRowAfter().run()} />
+        <RibbonButton title={t('ribbon.deleteRow')} label={t('ribbon.deleteRow')} icon={<Trash2 size={14} />} disabled={!editor} onClick={() => editor.chain().focus().deleteRow().run()} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.columns')}>
+        <RibbonButton title={t('ribbon.addColumnLeft')} label={t('ribbon.addColumnLeft')} icon={<Plus size={14} />} disabled={!editor} onClick={() => editor.chain().focus().addColumnBefore().run()} />
+        <RibbonButton title={t('ribbon.addColumnRight')} label={t('ribbon.addColumnRight')} icon={<Plus size={14} />} disabled={!editor} onClick={() => editor.chain().focus().addColumnAfter().run()} />
+        <RibbonButton title={t('ribbon.deleteColumn')} label={t('ribbon.deleteColumn')} icon={<Trash2 size={14} />} disabled={!editor} onClick={() => editor.chain().focus().deleteColumn().run()} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.tables')}>
+        <RibbonButton title={t('ribbon.mergeCells')} label={t('ribbon.mergeCells')} icon={<Merge size={14} />} disabled={!editor} onClick={() => editor.chain().focus().mergeCells().run()} />
+        <RibbonButton title={t('ribbon.splitCell')} label={t('ribbon.splitCell')} icon={<Split size={14} />} disabled={!editor} onClick={() => editor.chain().focus().splitCell().run()} />
+        <RibbonButton title={t('ribbon.deleteTable')} label={t('ribbon.deleteTable')} icon={<Trash2 size={14} />} disabled={!editor} onClick={() => editor.chain().focus().deleteTable().run()} />
+      </RibbonGroup>
+    </>,
+  );
+}
+
+function PictureTab({ editor }: { editor: any }) {
+  useEditorTick(editor);
+  return commandRow(
+    <>
+      <RibbonGroup label={t('ribbon.alignment')}>
+        <RibbonButton title={t('ribbon.alignPictureLeft')} label={t('ribbon.alignPictureLeft')} icon={<AlignLeft size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('left').run()} />
+        <RibbonButton title={t('ribbon.alignPictureCenter')} label={t('ribbon.alignPictureCenter')} icon={<AlignCenter size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('center').run()} />
+        <RibbonButton title={t('ribbon.alignPictureRight')} label={t('ribbon.alignPictureRight')} icon={<AlignRight size={16} />} disabled={!editor} onClick={() => editor.chain().focus().setTextAlign('right').run()} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.picture')}>
+        <RibbonButton title={t('ribbon.deletePicture')} label={t('ribbon.deletePicture')} icon={<Trash2 size={16} />} disabled={!editor} onClick={() => editor.chain().focus().deleteSelection().run()} />
+      </RibbonGroup>
+    </>,
+  );
+}
+
 function sheetFrom(apiRef?: React.RefObject<WorkbookInstance | null>) {
   return () => apiRef?.current || null;
 }
 
-function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) {
+function SheetHome({
+  api,
+  onFind,
+}: {
+  api?: React.RefObject<WorkbookInstance | null>;
+  onFind?: () => void;
+}) {
   const book = sheetFrom(api);
+  const painterState = useFormatPainter();
   return commandRow(
     <>
       <RibbonGroup label={t('ribbon.clipboard')}>
+        <RibbonButton
+          title={t('ribbon.formatPainter')}
+          label={t('ribbon.formatPainter')}
+          icon={<Paintbrush size={14} />}
+          pressed={painterState.armed}
+          onClick={() => {
+            const sheet = book();
+            const payload = captureSheetFormat(sheet);
+            formatPainter.arm({ sheet: payload });
+          }}
+        />
         <RibbonButton title={t('ribbon.undoShort')} icon={<Undo2 size={16} />} onClick={() => book()?.handleUndo()} />
         <RibbonButton title={t('ribbon.redoShort')} icon={<Redo2 size={16} />} onClick={() => book()?.handleRedo()} />
       </RibbonGroup>
@@ -976,6 +1280,11 @@ function SheetHome({ api }: { api?: React.RefObject<WorkbookInstance | null> }) 
         <RibbonButton title={t('ribbon.sortDesc')} label={t('ribbon.sortDesc')} icon={<ArrowDownZA size={14} />} onClick={() => { const sheet = book(); if (sheet) sortSheetSelection(sheet, false); }} />
         <RibbonButton title={t('ribbon.filter')} label={t('ribbon.filter')} icon={<ListFilter size={14} />} onClick={() => { const sheet = book(); if (sheet) toggleSheetFilter(sheet); }} />
         <RibbonButton title={t('ribbon.autoSum')} label={t('ribbon.autoSum')} icon={<Sigma size={14} />} onClick={() => { const sheet = book(); if (sheet) autoSumSheet(sheet); }} />
+        <RibbonButton title={t('ribbon.fill')} label={t('ribbon.fill')} icon={<Plus size={14} />} onClick={() => { const sheet = book(); if (sheet) fillSheetSelection(sheet); }} />
+        <RibbonButton title={t('ribbon.dataValidation')} label={t('ribbon.dataValidation')} icon={<List size={14} />} onClick={() => { const sheet = book(); if (sheet) addSheetDataValidation(sheet); }} />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.editing')}>
+        <RibbonButton large title={t('ribbon.find')} label={t('ribbon.find')} icon={<Search size={20} />} onClick={onFind} />
       </RibbonGroup>
     </>,
   );
@@ -989,53 +1298,229 @@ function SheetInsert({ api }: { api?: React.RefObject<WorkbookInstance | null> }
   );
 }
 
+function SheetLayout({ api }: { api?: React.RefObject<WorkbookInstance | null> }) {
+  const [printSetupOpen, setPrintSetupOpen] = useState(false);
+  const book = sheetFrom(api);
+  const currentSetup = (book()?.getSheet?.() as any)?.printSetup || defaultPrintSetup;
+
+  return commandRow(
+    <>
+      <RibbonGroup label={t('ribbon.page')}>
+        <RibbonButton
+          large
+          data-testid="folio-sheet-print-setup"
+          title={t('ribbon.printSetup')}
+          label={t('ribbon.printSetup')}
+          icon={<Printer size={22} />}
+          onClick={() => setPrintSetupOpen(true)}
+        />
+      </RibbonGroup>
+      {printSetupOpen && (
+        <PrintSetupDialog
+          open={printSetupOpen}
+          currentSetup={currentSetup}
+          onConfirm={(setup) => {
+            const sheet = book();
+            if (sheet) setSheetPrintSetup(sheet, setup);
+            setPrintSetupOpen(false);
+          }}
+          onCancel={() => setPrintSetupOpen(false)}
+        />
+      )}
+    </>,
+  );
+}
+
+function slideText(state?: SlideCommandState) {
+  return state?.element?.type === 'text' ? state.element : null;
+}
+
 function SlideHome({
   commands,
   state,
+  onStartSlideshow,
 }: {
   commands?: React.RefObject<SlideEditorHandle | null>;
   state?: SlideCommandState;
+  onStartSlideshow?: (mode: 'beginning' | 'current') => void;
 }) {
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const api = commands?.current;
-  const elem = state?.element;
-  const isText = elem?.type === 'text';
-  const isShape = elem?.type === 'rect';
-  const isTable = elem?.type === 'table';
-  const isLine = isShape && elem?.shape === 'line';
-  const hasTextFormatting = isText || (isShape && !isLine);
+  const text = slideText(state);
   const count = state?.slideCount || 0;
   const index = state?.slideIndex || 0;
   const patch = (updates: Partial<SlideElement>) => {
     commands?.current?.patchSelected(updates);
   };
-
   return commandRow(
     <>
+      <RibbonGroup label={t('ribbon.slideshow')}>
+        <RibbonButton
+          large
+          title={`${t('ribbon.fromBeginning')} (F5)`}
+          label={t('ribbon.fromBeginning')}
+          icon={<Presentation size={22} />}
+          disabled={!api}
+          onClick={() => onStartSlideshow?.('beginning')}
+        />
+        <RibbonButton
+          title={`${t('ribbon.fromCurrent')} (Shift+F5)`}
+          label={t('ribbon.fromCurrentShort')}
+          icon={<Presentation size={14} />}
+          disabled={!api}
+          onClick={() => onStartSlideshow?.('current')}
+        />
+      </RibbonGroup>
       <RibbonGroup label={t('ribbon.slides')}>
-        <RibbonButton large title={t('ribbon.newSlide')} label={t('ribbon.newSlide')} icon={<Plus size={22} />} disabled={!api} onClick={() => commands?.current?.addSlide()} />
-        <RibbonButton title={t('ribbon.duplicateSlide')} label={t('ribbon.duplicate')} icon={<Copy size={14} />} disabled={!api} onClick={() => commands?.current?.duplicateSlide()} />
-        <RibbonButton title={t('ribbon.deleteSlide')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!api || count <= 1} onClick={() => commands?.current?.deleteSlide()} />
-        <RibbonButton title={t('ribbon.moveEarlier')} icon={<ChevronUp size={16} />} disabled={!api || index <= 0} onClick={() => commands?.current?.moveSlide('up')} />
-        <RibbonButton title={t('ribbon.moveLater')} icon={<ChevronDown size={16} />} disabled={!api || index >= count - 1} onClick={() => commands?.current?.moveSlide('down')} />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch' }}>
+          <RibbonButton
+            large
+            title={t('ribbon.newSlide')}
+            label={t('ribbon.newSlide')}
+            icon={<Plus size={22} />}
+            disabled={!api}
+            onClick={() => commands?.current?.addSlide()}
+          />
+          <button
+            type="button"
+            aria-label="Choose Slide Layout"
+            data-testid="folio-slide-layout-dropdown"
+            disabled={!api}
+            onClick={() => setLayoutMenuOpen((prev) => !prev)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '0 4px',
+              cursor: api ? 'pointer' : 'default',
+              display: 'flex',
+              alignItems: 'center',
+              color: 'var(--folio-text-muted)',
+              borderRadius: 4,
+            }}
+          >
+            <ChevronDown size={14} />
+          </button>
+          {layoutMenuOpen && (
+            <div
+              data-testid="folio-slide-layout-menu"
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: 4,
+                backgroundColor: 'var(--folio-panel)',
+                border: '1px solid var(--folio-border)',
+                borderRadius: 4,
+                boxShadow: 'var(--folio-shadow-popup)',
+                zIndex: 100,
+                minWidth: 160,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '4px 0',
+              }}
+            >
+              <button
+                type="button"
+                data-testid="folio-layout-title"
+                onClick={() => {
+                  setLayoutMenuOpen(false);
+                  commands?.current?.addSlide('title');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: 'var(--folio-text)',
+                }}
+              >
+                {t('ribbon.layoutTitle')}
+              </button>
+              <button
+                type="button"
+                data-testid="folio-layout-titleContent"
+                onClick={() => {
+                  setLayoutMenuOpen(false);
+                  commands?.current?.addSlide('titleContent');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: 'var(--folio-text)',
+                }}
+              >
+                {t('ribbon.layoutTitleContent')}
+              </button>
+              <button
+                type="button"
+                data-testid="folio-layout-twoContent"
+                onClick={() => {
+                  setLayoutMenuOpen(false);
+                  commands?.current?.addSlide('twoContent');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: 'var(--folio-text)',
+                }}
+              >
+                {t('ribbon.layoutTwoContent')}
+              </button>
+              <button
+                type="button"
+                data-testid="folio-layout-blank"
+                onClick={() => {
+                  setLayoutMenuOpen(false);
+                  commands?.current?.addSlide('blank');
+                }}
+                style={{
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: 'var(--folio-text)',
+                }}
+              >
+                {t('ribbon.layoutBlank')}
+              </button>
+            </div>
+          )}
+        </div>
         <select
           aria-label={t('ribbon.slideSize')}
           title={t('ribbon.slideSize')}
           value={state?.slideSize || '16:9'}
           disabled={!api}
           onChange={(e) => commands?.current?.setSlideSize(e.target.value as '16:9' | '16:10' | '4:3')}
-          style={{ ...ribbonFieldStyle, width: 68 }}
+          style={{ ...ribbonFieldStyle, width: 76 }}
         >
           <option value="16:9">16:9</option>
           <option value="16:10">16:10</option>
           <option value="4:3">4:3</option>
         </select>
+        <RibbonButton title={t('ribbon.duplicateSlide')} label={t('ribbon.duplicate')} icon={<Copy size={14} />} disabled={!api} onClick={() => commands?.current?.duplicateSlide()} />
+        <RibbonButton title={t('ribbon.deleteSlide')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!api || count <= 1} onClick={() => commands?.current?.deleteSlide()} />
+        <RibbonButton title={t('ribbon.moveEarlier')} icon={<ChevronUp size={16} />} disabled={!api || index <= 0} onClick={() => commands?.current?.moveSlide('up')} />
+        <RibbonButton title={t('ribbon.moveLater')} icon={<ChevronDown size={16} />} disabled={!api || index >= count - 1} onClick={() => commands?.current?.moveSlide('down')} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.font')}>
         <select
           aria-label={t('ribbon.fontSize')}
           title={t('ribbon.fontSize')}
-          value={elem?.fontSize || 18}
-          disabled={!hasTextFormatting}
+          value={text?.fontSize || 18}
+          disabled={!text}
           onChange={(e) => patch({ fontSize: parseInt(e.target.value, 10) })}
           style={{ ...ribbonFieldStyle, width: 68 }}
         >
@@ -1045,80 +1530,131 @@ function SlideHome({
             </option>
           ))}
         </select>
-        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={Boolean(elem?.bold)} disabled={!hasTextFormatting} onClick={() => elem && patch({ bold: !elem.bold })} />
-        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={Boolean(elem?.italic)} disabled={!hasTextFormatting} onClick={() => elem && patch({ italic: !elem.italic })} />
-        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={Boolean(elem?.underline)} disabled={!hasTextFormatting} onClick={() => elem && patch({ underline: !elem.underline })} />
+        <RibbonButton title={t('ribbon.bold')} icon={<Bold size={16} />} pressed={Boolean(text?.bold)} disabled={!text} onClick={() => text && patch({ bold: !text.bold })} />
+        <RibbonButton title={t('ribbon.italic')} icon={<Italic size={16} />} pressed={Boolean(text?.italic)} disabled={!text} onClick={() => text && patch({ italic: !text.italic })} />
+        <RibbonButton title={t('ribbon.underline')} icon={<Underline size={16} />} pressed={Boolean(text?.underline)} disabled={!text} onClick={() => text && patch({ underline: !text.underline })} />
         <input
           type="color"
           title={t('ribbon.textColor')}
           aria-label={t('ribbon.textColor')}
-          value={elem?.color || '#1e2022'}
-          disabled={!hasTextFormatting}
+          value={text?.color || '#1e2022'}
+          disabled={!text}
           onChange={(e) => patch({ color: e.target.value })}
-          style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: hasTextFormatting ? 'pointer' : 'default', opacity: hasTextFormatting ? 1 : 0.4 }}
+          style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
         />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.paragraph')}>
-        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={elem?.align === 'left'} disabled={!hasTextFormatting} onClick={() => patch({ align: 'left' })} />
-        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={elem?.align === 'center'} disabled={!hasTextFormatting} onClick={() => patch({ align: 'center' })} />
-        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={elem?.align === 'right'} disabled={!hasTextFormatting} onClick={() => patch({ align: 'right' })} />
+        <RibbonButton title={t('ribbon.alignLeft')} icon={<AlignLeft size={16} />} pressed={text?.align === 'left'} disabled={!text} onClick={() => patch({ align: 'left' })} />
+        <RibbonButton title={t('ribbon.alignCenter')} icon={<AlignCenter size={16} />} pressed={text?.align === 'center'} disabled={!text} onClick={() => patch({ align: 'center' })} />
+        <RibbonButton title={t('ribbon.alignRight')} icon={<AlignRight size={16} />} pressed={text?.align === 'right'} disabled={!text} onClick={() => patch({ align: 'right' })} />
       </RibbonGroup>
-      {isShape && (
-        <RibbonGroup label={t('ribbon.illustrations')}>
-          {!isLine && (
-            <input
-              type="color"
-              title={t('ribbon.fillColor')}
-              aria-label={t('ribbon.fillColor')}
-              value={elem?.fill || '#d6f3ef'}
-              onChange={(e) => patch({ fill: e.target.value })}
-              style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
-            />
-          )}
-          <input
-            type="color"
-            title={t('ribbon.outlineColor')}
-            aria-label={t('ribbon.outlineColor')}
-            value={elem?.borderColor || '#0f766e'}
-            onChange={(e) => patch({ borderColor: e.target.value })}
-            style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
-          />
-        </RibbonGroup>
-      )}
-      {isTable && (
-        <RibbonGroup label={t('ribbon.tables')}>
-          <RibbonButton
-            title={t('ribbon.addRow')}
-            label={t('ribbon.row')}
-            icon={<Plus size={14} />}
-            onClick={() => commands?.current?.addTableRow()}
-          />
-          <RibbonButton
-            title={t('ribbon.addColumn')}
-            label={t('ribbon.column')}
-            icon={<Plus size={14} />}
-            onClick={() => commands?.current?.addTableColumn()}
-          />
-          <RibbonButton
-            title={t('ribbon.deleteRow')}
-            label={t('ribbon.deleteRow')}
-            icon={<Trash2 size={14} />}
-            disabled={(elem?.rows?.length || 0) <= 1}
-            onClick={() => commands?.current?.deleteTableRow()}
-          />
-          <RibbonButton
-            title={t('ribbon.deleteColumn')}
-            label={t('ribbon.deleteColumn')}
-            icon={<Trash2 size={14} />}
-            disabled={(elem?.rows?.[0]?.length || 0) <= 1}
-            onClick={() => commands?.current?.deleteTableColumn()}
-          />
-        </RibbonGroup>
-      )}
       <RibbonGroup label={t('ribbon.arrange')}>
+        <RibbonButton
+          title={t('ribbon.bringForward')}
+          label={t('ribbon.bringForward')}
+          icon={<BringToFront size={14} />}
+          disabled={!state?.canReorder}
+          onClick={() => commands?.current?.bringForward?.()}
+        />
+        <RibbonButton
+          title={t('ribbon.sendBackward')}
+          label={t('ribbon.sendBackward')}
+          icon={<SendToBack size={14} />}
+          disabled={!state?.canReorder}
+          onClick={() => commands?.current?.sendBackward?.()}
+        />
+        <RibbonButton
+          title={t('ribbon.alignLeft')}
+          icon={<AlignStartHorizontal size={14} />}
+          disabled={!state?.canAlign}
+          onClick={() => commands?.current?.alignSelected?.('left')}
+        />
+        <RibbonButton
+          title={t('ribbon.alignCenter')}
+          icon={<AlignCenterHorizontal size={14} />}
+          disabled={!state?.canAlign}
+          onClick={() => commands?.current?.alignSelected?.('center')}
+        />
+        <RibbonButton
+          title={t('ribbon.alignRight')}
+          icon={<AlignEndHorizontal size={14} />}
+          disabled={!state?.canAlign}
+          onClick={() => commands?.current?.alignSelected?.('right')}
+        />
+        <RibbonButton
+          title={t('ribbon.alignTop')}
+          icon={<AlignStartVertical size={14} />}
+          disabled={!state?.canAlign}
+          onClick={() => commands?.current?.alignSelected?.('top')}
+        />
+        <RibbonButton
+          title={t('ribbon.alignMiddle')}
+          icon={<AlignCenterVertical size={14} />}
+          disabled={!state?.canAlign}
+          onClick={() => commands?.current?.alignSelected?.('middle')}
+        />
+        <RibbonButton
+          title={t('ribbon.alignBottom')}
+          icon={<AlignEndVertical size={14} />}
+          disabled={!state?.canAlign}
+          onClick={() => commands?.current?.alignSelected?.('bottom')}
+        />
+        <RibbonButton
+          title={t('ribbon.distributeHorizontally')}
+          icon={<AlignHorizontalDistributeCenter size={14} />}
+          disabled={!state?.canDistribute}
+          onClick={() => commands?.current?.distributeSelected?.('horizontal')}
+        />
+        <RibbonButton
+          title={t('ribbon.distributeVertically')}
+          icon={<AlignVerticalDistributeCenter size={14} />}
+          disabled={!state?.canDistribute}
+          onClick={() => commands?.current?.distributeSelected?.('vertical')}
+        />
+        <RibbonButton
+          title={t('ribbon.snapToGrid')}
+          icon={<Grid size={14} />}
+          pressed={Boolean(state?.snapToGrid)}
+          disabled={!api}
+          onClick={() => commands?.current?.toggleSnapToGrid?.()}
+        />
         <RibbonButton title={t('ribbon.undoMove')} label={t('ribbon.undoShort')} icon={<Undo2 size={14} />} disabled={!state?.canUndo} onClick={() => commands?.current?.undo()} />
         <RibbonButton title={t('ribbon.delete')} label={t('ribbon.delete')} icon={<Trash2 size={14} />} disabled={!state?.element} onClick={() => commands?.current?.deleteSelected()} />
       </RibbonGroup>
+      {state?.element?.type === 'rect' && (
+        <RibbonGroup label={t('ribbon.illustrations')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--folio-text-muted)' }}>{t('ribbon.fill')}</span>
+            <input
+              type="color"
+              title={t('ribbon.fill')}
+              aria-label={t('ribbon.fill')}
+              value={state.element.fill || '#e2e8f0'}
+              onChange={(e) => patch({ fill: e.target.value })}
+              style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--folio-text-muted)' }}>{t('ribbon.outlineColor')}</span>
+            <input
+              type="color"
+              title={t('ribbon.outlineColor')}
+              aria-label={t('ribbon.outlineColor')}
+              value={state.element.borderColor || '#94a3b8'}
+              onChange={(e) => patch({ borderColor: e.target.value })}
+              style={{ width: 28, height: 28, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+            />
+          </div>
+        </RibbonGroup>
+      )}
+      {state?.element?.type === 'table' && (
+        <RibbonGroup label={t('ribbon.table')}>
+          <RibbonButton title={t('ribbon.addRow')} label={t('ribbon.addRow')} icon={<Plus size={14} />} disabled={!api} onClick={() => commands?.current?.addTableRow()} />
+          <RibbonButton title={t('ribbon.deleteRow')} label={t('ribbon.deleteRow')} icon={<Trash2 size={14} />} disabled={!api} onClick={() => commands?.current?.deleteTableRow()} />
+          <RibbonButton title={t('ribbon.addColumn')} label={t('ribbon.addColumn')} icon={<Plus size={14} />} disabled={!api} onClick={() => commands?.current?.addTableColumn()} />
+          <RibbonButton title={t('ribbon.deleteColumn')} label={t('ribbon.deleteColumn')} icon={<Trash2 size={14} />} disabled={!api} onClick={() => commands?.current?.deleteTableColumn()} />
+        </RibbonGroup>
+      )}
     </>,
   );
 }
@@ -1131,16 +1667,79 @@ function SlideInsert({ commands }: { commands?: React.RefObject<SlideEditorHandl
         <RibbonButton large title={t('ribbon.textBox')} label={t('ribbon.textBox')} icon={<Type size={22} />} disabled={!ready} onClick={() => commands?.current?.addText()} />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.tables')}>
-        <RibbonButton large title={t('ribbon.tableHint')} label={t('ribbon.table')} icon={<TableIcon size={22} />} disabled={!ready} onClick={() => commands?.current?.addTable()} />
+        <RibbonButton
+          large
+          title={t('ribbon.tableHint')}
+          label={t('ribbon.table')}
+          icon={<TableIcon size={22} />}
+          disabled={!ready}
+          onClick={() => commands?.current?.addTable()}
+        />
       </RibbonGroup>
       <RibbonGroup label={t('ribbon.illustrations')}>
         <RibbonButton title={t('ribbon.picture')} label={t('ribbon.picture')} icon={<ImageIcon size={16} />} disabled={!ready} onClick={() => commands?.current?.addImage()} />
         <RibbonButton title={t('ribbon.video')} label={t('ribbon.video')} icon={<Video size={16} />} disabled={!ready} onClick={() => commands?.current?.addVideo()} />
         <RibbonButton title={t('ribbon.rectangle')} label={t('ribbon.rectangle')} icon={<Square size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('rect')} />
-        <RibbonButton title={t('ribbon.rounded')} label={t('ribbon.rounded')} icon={<Square size={16} style={{ borderRadius: 4 }} />} disabled={!ready} onClick={() => commands?.current?.addShape('roundRect')} />
+        <RibbonButton title={t('ribbon.rounded')} label={t('ribbon.rounded')} icon={<Square size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('roundRect')} />
         <RibbonButton title={t('ribbon.oval')} label={t('ribbon.oval')} icon={<Circle size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('ellipse')} />
         <RibbonButton title={t('ribbon.triangle')} label={t('ribbon.triangle')} icon={<Triangle size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('triangle')} />
         <RibbonButton title={t('ribbon.line')} label={t('ribbon.line')} icon={<Minus size={16} />} disabled={!ready} onClick={() => commands?.current?.addShape('line')} />
+      </RibbonGroup>
+    </>,
+  );
+}
+
+function SlideView({
+  commands,
+  state,
+}: {
+  commands?: React.RefObject<SlideEditorHandle | null>;
+  state?: SlideCommandState;
+}) {
+  const api = commands?.current;
+  return commandRow(
+    <>
+      <RibbonGroup label={t('ribbon.view')}>
+        <RibbonButton
+          large
+          title={state?.viewMode === 'sorter' ? t('ribbon.normalView') : t('ribbon.slideSorter')}
+          label={state?.viewMode === 'sorter' ? t('ribbon.normalView') : t('ribbon.slideSorter')}
+          icon={<LayoutGrid size={22} />}
+          pressed={state?.viewMode === 'sorter'}
+          disabled={!api}
+          onClick={() => commands?.current?.toggleViewMode?.()}
+        />
+        <RibbonButton
+          title={t('ribbon.snapToGrid')}
+          label={t('ribbon.snapToGrid')}
+          icon={<Grid size={14} />}
+          pressed={Boolean(state?.snapToGrid)}
+          disabled={!api}
+          onClick={() => commands?.current?.toggleSnapToGrid?.()}
+        />
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.palettes')}>
+        <RibbonButton
+          title={t('ribbon.palettePaper')}
+          label={t('ribbon.palettePaper')}
+          icon={<Palette size={14} />}
+          disabled={!api}
+          onClick={() => commands?.current?.applyPalette?.('paper')}
+        />
+        <RibbonButton
+          title={t('ribbon.paletteInk')}
+          label={t('ribbon.paletteInk')}
+          icon={<Palette size={14} />}
+          disabled={!api}
+          onClick={() => commands?.current?.applyPalette?.('ink')}
+        />
+        <RibbonButton
+          title={t('ribbon.paletteTeal')}
+          label={t('ribbon.paletteTeal')}
+          icon={<Palette size={14} />}
+          disabled={!api}
+          onClick={() => commands?.current?.applyPalette?.('teal')}
+        />
       </RibbonGroup>
     </>,
   );

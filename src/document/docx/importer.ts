@@ -691,6 +691,7 @@ export async function importDocx(
   report: ImportReport;
   pageSetup?: PageSetup | null;
   chrome?: DocumentChrome | null;
+  footnotes?: Array<{ id: string; text: string }>;
 }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
@@ -841,9 +842,54 @@ export async function importDocx(
       }
     }
 
+    // Parse footnotes.xml if present
+    const footnotes: Array<{ id: string; text: string }> = [];
+    const fnFile = zip.file('word/footnotes.xml');
+    if (fnFile) {
+      try {
+        const fnXml = await fnFile.async('text');
+        const parsedFn = xmlParser.parse(fnXml);
+        const rootFn = parsedFn?.footnotes || parsedFn?.['w:footnotes'];
+        const fnList = rootFn?.footnote || rootFn?.['w:footnote'] || [];
+        const fnArray = Array.isArray(fnList) ? fnList : [fnList];
+        for (const fn of fnArray) {
+          const id = fn['@_w:id'] || fn['@_id'];
+          const numId = id !== undefined ? parseInt(id, 10) : -1;
+          if (numId > 0) {
+            const pList = Array.isArray(fn.p || fn['w:p'])
+              ? (fn.p || fn['w:p'])
+              : (fn.p || fn['w:p']) ? [fn.p || fn['w:p']] : [];
+            let fnText = '';
+            for (const p of pList) {
+              const rList = Array.isArray(p.r || p['w:r'])
+                ? (p.r || p['w:r'])
+                : (p.r || p['w:r']) ? [p.r || p['w:r']] : [];
+              for (const r of rList) {
+                const t = r.t || r['w:t'];
+                if (t) {
+                  const tVal = typeof t === 'string' ? t : t['#text'] || '';
+                  fnText += tVal;
+                }
+              }
+            }
+            footnotes.push({ id: String(numId), text: fnText.trim() });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     // Helper to render text runs
     const renderRun = async (r: any, paraStyleName?: string): Promise<string> => {
       if (!r) return '';
+
+      const fnRef = r.footnoteReference || r['w:footnoteReference'];
+      if (fnRef) {
+        const id = fnRef['@_w:id'] || fnRef['@_id'] || '';
+        return `<sup data-footnote-id="${id}" class="folio-footnote-ref">[${id}]</sup>`;
+      }
+
       const rPr = r.rPr || {};
       let text = '';
 
@@ -1022,13 +1068,27 @@ export async function importDocx(
       const pPr = p.pPr || {};
       const pStyle = pPr.pStyle?.['@_val'] || '';
 
-      let alignStyle = '';
+      const styleDeclarations: string[] = [];
       if (pPr.jc) {
         const jcVal = pPr.jc['@_val'];
-        if (jcVal === 'center') alignStyle = ' style="text-align: center;"';
-        else if (jcVal === 'right') alignStyle = ' style="text-align: right;"';
-        else if (jcVal === 'both') alignStyle = ' style="text-align: justify;"';
+        if (jcVal === 'center') styleDeclarations.push('text-align: center;');
+        else if (jcVal === 'right') styleDeclarations.push('text-align: right;');
+        else if (jcVal === 'both') styleDeclarations.push('text-align: justify;');
       }
+      if (pPr.spacing) {
+        const lineRule = pPr.spacing['@_lineRule'] || 'auto';
+        const lineVal = pPr.spacing['@_line'];
+        if (lineVal && lineRule === 'auto') {
+          const twips = parseInt(lineVal, 10);
+          if (!isNaN(twips) && twips > 0) {
+            const factor = Math.round((twips / 240) * 100) / 100;
+            if (Math.abs(factor - 1.15) >= 0.05) {
+              styleDeclarations.push(`line-height: ${factor};`);
+            }
+          }
+        }
+      }
+      const alignStyle = styleDeclarations.length > 0 ? ` style="${styleDeclarations.join(' ')}"` : '';
 
       // Check page break inside paragraph
       let hasPageBreak = false;
@@ -1072,13 +1132,19 @@ export async function importDocx(
       const headingMatch = pStyle.match(/Heading\s*([1-6])/i);
       if (headingMatch) {
         const level = headingMatch[1];
-        return `<h${level}${alignStyle}>${innerContent}</h${level}>`;
+        return `<h${level} data-style-name="Heading ${level}"${alignStyle}>${innerContent}</h${level}>`;
       }
       if (/Title/i.test(pStyle)) {
-        return `<h1${alignStyle}>${innerContent}</h1>`;
+        return `<h1 data-style-name="Title"${alignStyle}>${innerContent}</h1>`;
       }
       if (/Subtitle/i.test(pStyle)) {
-        return `<h2${alignStyle}>${innerContent}</h2>`;
+        return `<h2 data-style-name="Heading 2"${alignStyle}>${innerContent}</h2>`;
+      }
+      if (/Quote|Blockquote/i.test(pStyle)) {
+        return `<blockquote data-style-name="Quote"${alignStyle}><p>${innerContent}</p></blockquote>`;
+      }
+      if (/Normal/i.test(pStyle)) {
+        return `<p data-style-name="Normal"${alignStyle}>${innerContent}</p>`;
       }
 
       // Check list item
@@ -1177,6 +1243,7 @@ export async function importDocx(
       html: sanitized,
       pageSetup: section?.setup ?? null,
       chrome: hasChromeContent(chrome) ? chrome : null,
+      footnotes,
       report: {
         fileName,
         format: 'docx',

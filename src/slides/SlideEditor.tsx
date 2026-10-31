@@ -1,13 +1,30 @@
 import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { PresentationModel, Slide, SlideElement } from '../types';
-import { createEmptySlide } from './pptxAdapter';
-import { Box, ResizeDir, minPercents, moveBox, resizeBox } from './geometry';
+import { createEmptySlide, createSlideLayout, type SlideLayoutType } from './pptxAdapter';
+import {
+  Box,
+  ResizeDir,
+  minPercents,
+  moveBox,
+  resizeBox,
+  alignBoxes,
+  distributeBoxes,
+  reorder,
+  snapBox,
+  type Alignment,
+  type DistributionAxis,
+  type ZOrderAction,
+} from './geometry';
 import { VIDEO_MSG, bytesToBase64, probeVideoPlayable, sniffMp4 } from './videoFile';
 import { Plus, Trash2, Copy, ChevronUp, ChevronDown, Play, Pause } from 'lucide-react';
 import { t } from '../i18n/instance';
+import { FindPanel } from '../shell/FindPanel';
+import { ContextMenu, getContextMenuItems } from '../shell/ContextMenu';
+import { findInPresentation, findNextIndex, findPreviousIndex, type SlideMatch } from './findSlides';
+import { applyPalette } from './palettes';
 
 export interface SlideEditorHandle {
-  addSlide: () => void;
+  addSlide: (layout?: SlideLayoutType) => void;
   duplicateSlide: () => void;
   deleteSlide: () => void;
   moveSlide: (direction: 'up' | 'down') => void;
@@ -23,7 +40,20 @@ export interface SlideEditorHandle {
   setSlideSize: (size: '16:9' | '16:10' | '4:3') => void;
   undo: () => void;
   deleteSelected: () => void;
+  duplicateSelected?: () => void;
   patchSelected: (updates: Partial<SlideElement>) => void;
+  alignSelected?: (alignment: Alignment) => void;
+  distributeSelected?: (axis: DistributionAxis) => void;
+  reorderSelected?: (action: ZOrderAction) => void;
+  bringForward?: () => void;
+  sendBackward?: () => void;
+  bringToFront?: () => void;
+  sendToBack?: () => void;
+  toggleSnapToGrid?: () => void;
+  setSnapToGrid?: (snap: boolean) => void;
+  setViewMode?: (mode: 'normal' | 'sorter') => void;
+  toggleViewMode?: () => void;
+  applyPalette?: (paletteName: 'paper' | 'ink' | 'teal') => void;
 }
 
 export interface SlideCommandState {
@@ -46,6 +76,12 @@ export interface SlideCommandState {
     | 'borderWidth'
     | 'rows'
   > | null;
+  selectedCount?: number;
+  canAlign?: boolean;
+  canDistribute?: boolean;
+  canReorder?: boolean;
+  snapToGrid?: boolean;
+  viewMode?: 'normal' | 'sorter';
   slideSize?: '16:9' | '16:10' | '4:3';
 }
 
@@ -63,6 +99,7 @@ interface SlideEditorProps {
   onSaveShortcut?: () => void;
   onActiveSlideChange?: (index: number) => void;
   onSelectionChange?: (state: SlideCommandState) => void;
+  findSignal?: number;
 }
 
 interface UndoSlot {
@@ -142,14 +179,37 @@ function boxOf(elem: SlideElement): Box {
 }
 
 export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>(function SlideEditor(
-  { presentation, onChange, onSaveShortcut, onActiveSlideChange, onSelectionChange },
+  { presentation, onChange, onSaveShortcut, onActiveSlideChange, onSelectionChange, findSignal = 0 },
   ref,
 ) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [undoSlot, setUndoSlot] = useState<UndoSlot | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [viewMode, setViewMode] = useState<'normal' | 'sorter'>('normal');
+  const [activeGuides, setActiveGuides] = useState<{ vertical: boolean; horizontal: boolean }>({
+    vertical: false,
+    horizontal: false,
+  });
+
+  const [showFind, setShowFind] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [matchCase, setMatchCase] = useState(false);
+  const [matchCount, setMatchCount] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const matchesRef = useRef<SlideMatch[]>([]);
+  const seenFindSignal = useRef(findSignal);
+
+  useEffect(() => {
+    if (findSignal !== seenFindSignal.current) {
+      seenFindSignal.current = findSignal;
+      setShowFind(true);
+    }
+  }, [findSignal]);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -254,12 +314,14 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
 
   const focusShell = () => shellRef.current?.focus({ preventScroll: true });
 
-  const handleAddSlide = () => {
+  const handleAddSlide = (layout: SlideLayoutType = 'titleContent') => {
     clearUndo();
-    const next = [...(presentationRef.current.slides || []), createEmptySlide((presentationRef.current.slides || []).length + 1)];
+    const count = (presentationRef.current.slides || []).length;
+    const next = [...(presentationRef.current.slides || []), createSlideLayout(layout, count + 1)];
     commit(next);
     setActiveSlideIndex(next.length - 1);
     setSelectedElementId(null);
+    setSelectedElementIds([]);
     setEditingId(null);
   };
 
@@ -505,19 +567,125 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
     onChangeRef.current(updated);
   };
 
-  const handleDeleteSelectedElement = () => {
-    if (!selectedElementId) return;
-    const id = selectedElementId;
+  const handleApplyPalette = (paletteName: 'paper' | 'ink' | 'teal') => {
     clearUndo();
-    mapActive((elements) => elements.filter((el) => el.id !== id));
-    const cached = urlCacheRef.current.get(id);
-    if (cached) {
-      URL.revokeObjectURL(cached);
-      urlCacheRef.current.delete(id);
+    const updated = applyPalette(presentationRef.current, paletteName);
+    presentationRef.current = updated;
+    onChangeRef.current(updated);
+  };
+
+  const handleDeleteSelectedElement = () => {
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length === 0) return;
+    clearUndo();
+    const idSet = new Set(ids);
+    mapActive((elements) => elements.filter((el) => !idSet.has(el.id)));
+    for (const id of ids) {
+      const cached = urlCacheRef.current.get(id);
+      if (cached) {
+        URL.revokeObjectURL(cached);
+        urlCacheRef.current.delete(id);
+      }
+      delete playheadsRef.current[id];
     }
-    delete playheadsRef.current[id];
     setSelectedElementId(null);
+    setSelectedElementIds([]);
     setEditingId(null);
+  };
+
+  const handleDuplicateSelectedElement = () => {
+    const slide = presentation.slides[activeSlideIndex];
+    if (!slide) return;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length === 0) return;
+    const toDuplicate = slide.elements.filter((el) => ids.includes(el.id));
+    if (toDuplicate.length === 0) return;
+    const newElements: SlideElement[] = [];
+    const newIds: string[] = [];
+    toDuplicate.forEach((elem) => {
+      const newId = `el_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      newIds.push(newId);
+      newElements.push({
+        ...JSON.parse(JSON.stringify(elem)),
+        id: newId,
+        x: Math.min(elem.x + 2, 90),
+        y: Math.min(elem.y + 2, 90),
+      });
+    });
+    mapActive((elements) => [...elements, ...newElements]);
+    setSelectedElementIds(newIds);
+    setSelectedElementId(newIds[0]);
+  };
+
+  const handleAlign = (alignment: Alignment) => {
+    const slide = (presentationRef.current.slides || [])[indexRef.current];
+    if (!slide) return;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length === 0) return;
+
+    clearUndo();
+    if (ids.length === 1) {
+      const id = ids[0];
+      mapActive((elements) =>
+        elements.map((el) => {
+          if (el.id !== id) return el;
+          let x = el.x;
+          let y = el.y;
+          switch (alignment) {
+            case 'left': x = 0; break;
+            case 'center': x = (100 - el.width) / 2; break;
+            case 'right': x = 100 - el.width; break;
+            case 'top': y = 0; break;
+            case 'middle': y = (100 - el.height) / 2; break;
+            case 'bottom': y = 100 - el.height; break;
+          }
+          return { ...el, x, y };
+        })
+      );
+    } else {
+      const targetElements = slide.elements.filter((el) => ids.includes(el.id));
+      const boxes = targetElements.map(boxOf);
+      const aligned = alignBoxes(boxes, alignment);
+      const boxMap = new Map<string, Box>();
+      targetElements.forEach((el, i) => boxMap.set(el.id, aligned[i]));
+
+      mapActive((elements) =>
+        elements.map((el) => {
+          const newBox = boxMap.get(el.id);
+          if (!newBox) return el;
+          return { ...el, x: newBox.x, y: newBox.y };
+        })
+      );
+    }
+  };
+
+  const handleDistribute = (axis: DistributionAxis) => {
+    const slide = (presentationRef.current.slides || [])[indexRef.current];
+    if (!slide) return;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length < 3) return;
+
+    clearUndo();
+    const targetElements = slide.elements.filter((el) => ids.includes(el.id));
+    const boxes = targetElements.map(boxOf);
+    const distributed = distributeBoxes(boxes, axis);
+    const boxMap = new Map<string, Box>();
+    targetElements.forEach((el, i) => boxMap.set(el.id, distributed[i]));
+
+    mapActive((elements) =>
+      elements.map((el) => {
+        const newBox = boxMap.get(el.id);
+        if (!newBox) return el;
+        return { ...el, x: newBox.x, y: newBox.y };
+      })
+    );
+  };
+
+  const handleReorder = (action: ZOrderAction) => {
+    const id = selectedElementId || selectedElementIds[0];
+    if (!id) return;
+    clearUndo();
+    mapActive((elements) => reorder(elements, id, action));
   };
 
   const beginGesture = (
@@ -544,7 +712,18 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       canvasH: rect.height,
     };
     gesturingRef.current = true;
-    setSelectedElementId(elem.id);
+    const isMulti = event.shiftKey || event.ctrlKey || event.metaKey;
+    if (isMulti) {
+      setSelectedElementIds((prev) =>
+        prev.includes(elem.id) ? prev.filter((id) => id !== elem.id) : [...prev, elem.id]
+      );
+      setSelectedElementId(elem.id);
+    } else {
+      setSelectedElementIds((prev) =>
+        prev.includes(elem.id) && prev.length > 1 ? prev : [elem.id]
+      );
+      setSelectedElementId(elem.id);
+    }
     if (!((elem.type === 'text' || elem.type === 'rect') && selectedElementId === elem.id)) {
       setEditingId(null);
     }
@@ -564,9 +743,20 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
         gesture.mode === 'move'
           ? moveBox(gesture.orig, dx, dy, minWidth, minHeight)
           : resizeBox(gesture.orig, gesture.dir || 'se', dx, dy, minWidth, minHeight);
-      updateElementBox(gesture.id, next);
+      if (gesture.mode === 'move' && snapToGrid) {
+        const snapped = snapBox(next, 2, true);
+        updateElementBox(gesture.id, snapped.box);
+        setActiveGuides({
+          vertical: snapped.snappedVerticalCenter,
+          horizontal: snapped.snappedHorizontalCenter,
+        });
+      } else {
+        updateElementBox(gesture.id, next);
+        setActiveGuides({ vertical: false, horizontal: false });
+      }
     };
     const end = (ev: PointerEvent) => {
+      setActiveGuides({ vertical: false, horizontal: false });
       const gesture = gestureRef.current;
       if (!gesture || ev.pointerId !== gesture.pointerId) return;
       stopGestureRef.current?.();
@@ -590,6 +780,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       }
     };
     const stop = () => {
+      setActiveGuides({ vertical: false, horizontal: false });
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
     };
@@ -620,18 +811,32 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       setSlideSize: handleSetSlideSize,
       undo: applyUndo,
       deleteSelected: handleDeleteSelectedElement,
+      duplicateSelected: handleDuplicateSelectedElement,
+      alignSelected: handleAlign,
+      distributeSelected: handleDistribute,
+      reorderSelected: handleReorder,
+      bringForward: () => handleReorder('forward'),
+      sendBackward: () => handleReorder('backward'),
+      bringToFront: () => handleReorder('front'),
+      sendToBack: () => handleReorder('back'),
+      toggleSnapToGrid: () => setSnapToGrid((prev) => !prev),
+      setSnapToGrid: (snap: boolean) => setSnapToGrid(snap),
+      setViewMode,
+      toggleViewMode: () => setViewMode((prev) => (prev === 'normal' ? 'sorter' : 'normal')),
+      applyPalette: handleApplyPalette,
       patchSelected: (updates) => {
         const id = selectedElementId;
         if (!id) return;
         patchElement(id, updates, true);
       },
     }),
-    [selectedElementId],
+    [selectedElementId, selectedElementIds, activeSlideIndex, viewMode],
   );
 
   useEffect(() => {
     const slide = (presentationRef.current.slides || [])[indexRef.current];
     const el = slide?.elements.find((item) => item.id === selectedElementId) || null;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
     onSelectionChangeRef.current?.({
       canUndo: Boolean(undoSlot),
       slideCount: (presentationRef.current.slides || []).length,
@@ -653,9 +858,72 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
             rows: el.rows,
           }
         : null,
+      selectedCount: ids.length,
+      canAlign: ids.length >= 1,
+      canDistribute: ids.length >= 3,
+      canReorder: ids.length >= 1,
+      snapToGrid,
+      viewMode,
       slideSize: presentationRef.current.slideSize || '16:9',
     });
-  }, [selectedElementId, undoSlot, presentation, activeSlideIndex]);
+  }, [selectedElementId, selectedElementIds, undoSlot, presentation, activeSlideIndex, snapToGrid, viewMode]);
+
+  const selectMatch = (idx: number, matches: SlideMatch[]) => {
+    const match = matches[idx];
+    if (!match) return;
+    setActiveSlideIndex(match.slideIndex);
+    if (match.elementId) {
+      setSelectedElementId(match.elementId);
+    } else {
+      setSelectedElementId(null);
+    }
+  };
+
+  const handleFind = () => {
+    if (!findText) {
+      setMatchCount(0);
+      setCurrentIndex(-1);
+      matchesRef.current = [];
+      return;
+    }
+    const matches = findInPresentation(presentation, findText, { matchCase });
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    if (matches.length > 0) {
+      setCurrentIndex(0);
+      selectMatch(0, matches);
+    } else {
+      setCurrentIndex(-1);
+    }
+  };
+
+  const handleFindNext = () => {
+    if (!findText) return;
+    const matches = findInPresentation(presentation, findText, { matchCase });
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    if (matches.length === 0) {
+      setCurrentIndex(-1);
+      return;
+    }
+    const nextIdx = findNextIndex(matches.length, currentIndex);
+    setCurrentIndex(nextIdx);
+    selectMatch(nextIdx, matches);
+  };
+
+  const handleFindPrevious = () => {
+    if (!findText) return;
+    const matches = findInPresentation(presentation, findText, { matchCase });
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    if (matches.length === 0) {
+      setCurrentIndex(-1);
+      return;
+    }
+    const prevIdx = findPreviousIndex(matches.length, currentIndex);
+    setCurrentIndex(prevIdx);
+    selectMatch(prevIdx, matches);
+  };
 
   return (
     <div
@@ -691,10 +959,132 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           e.preventDefault();
           handleDeleteSelectedElement();
         }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          setShowFind(true);
+        }
       }}
     >
-      <div
-        className="folio-slides-sidebar"
+      <FindPanel
+        open={showFind}
+        onClose={() => setShowFind(false)}
+        supportsReplace={false}
+        findText={findText}
+        setFindText={setFindText}
+        matchCase={matchCase}
+        setMatchCase={(mc) => {
+          setMatchCase(mc);
+          if (findText) {
+            const matches = findInPresentation(presentation, findText, { matchCase: mc });
+            matchesRef.current = matches;
+            setMatchCount(matches.length);
+            if (matches.length > 0) {
+              setCurrentIndex(0);
+              selectMatch(0, matches);
+            } else {
+              setCurrentIndex(-1);
+            }
+          }
+        }}
+        matchCount={matchCount}
+        currentIndex={currentIndex}
+        onFind={handleFind}
+        onFindNext={handleFindNext}
+        onFindPrevious={handleFindPrevious}
+      />
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          commandIds={getContextMenuItems('slideObject')}
+          context={{
+            kind: 'presentation',
+            duplicate: handleDuplicateSelectedElement,
+            delete: handleDeleteSelectedElement,
+            bringForward: () => handleReorder('forward'),
+            sendBackward: () => handleReorder('backward'),
+            bringToFront: () => handleReorder('front'),
+            sendToBack: () => handleReorder('back'),
+          }}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+      {viewMode === 'sorter' ? (
+        <div
+          className="folio-slide-sorter"
+          data-testid="folio-slide-sorter"
+          style={{
+            flex: 1,
+            padding: 24,
+            overflowY: 'auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: 24,
+            alignContent: 'start',
+            backgroundColor: 'var(--folio-bg)',
+          }}
+        >
+          {presentation.slides.map((slide, idx) => {
+            const isCurrent = idx === activeSlideIndex;
+            return (
+              <div
+                key={slide.id}
+                data-testid={`sorter-slide-${idx}`}
+                onClick={() => {
+                  setActiveSlideIndex(idx);
+                  setSelectedElementId(null);
+                  setSelectedElementIds([]);
+                  setViewMode('normal');
+                }}
+                style={{
+                  aspectRatio: slideSize === '4:3' ? '4 / 3' : slideSize === '16:10' ? '16 / 10' : '16 / 9',
+                  backgroundColor: slide.background || '#ffffff',
+                  borderRadius: 6,
+                  boxShadow: isCurrent ? '0 0 0 3px var(--folio-teal)' : 'var(--folio-shadow-paper)',
+                  border: isCurrent ? '1px solid var(--folio-teal)' : '1px solid var(--folio-border)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  padding: 12,
+                  transition: 'box-shadow 0.15s ease',
+                }}
+              >
+                <div style={{ fontSize: 12, color: 'var(--folio-text-muted)', fontWeight: 600 }}>
+                  {idx + 1}. {slide.title || `Slide ${idx + 1}`}
+                </div>
+                <div style={{ position: 'relative', flex: 1, width: '100%' }}>
+                  {slide.elements.slice(0, 6).map((el) => (
+                    <div
+                      key={el.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${el.x}%`,
+                        top: `${el.y}%`,
+                        width: `${el.width}%`,
+                        height: `${Math.min(el.height || 10, 35)}%`,
+                        backgroundColor: el.type === 'rect' ? (el.fill || '#ccc') : 'transparent',
+                        border: el.borderColor ? `1px solid ${el.borderColor}` : undefined,
+                        overflow: 'hidden',
+                        fontSize: 8,
+                        color: el.color || '#333',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {el.text ? el.text.slice(0, 24) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div
+            className="folio-slides-sidebar"
         style={{
           width: '220px',
           backgroundColor: 'var(--folio-panel)',
@@ -718,7 +1108,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           </span>
           <button
             type="button"
-            onClick={handleAddSlide}
+            onClick={() => handleAddSlide()}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -871,16 +1261,54 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setSelectedElementId(null);
+              setSelectedElementIds([]);
               setEditingId(null);
             }
           }}
         >
+          {activeGuides.vertical && (
+            <div
+              data-testid="snap-guide-vertical"
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: 0,
+                bottom: 0,
+                width: 1,
+                borderLeft: '1px dashed #ef4444',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+          {activeGuides.horizontal && (
+            <div
+              data-testid="snap-guide-horizontal"
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: 0,
+                right: 0,
+                height: 1,
+                borderTop: '1px dashed #ef4444',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
           {currentSlide?.elements.map((elem, elemIndex) => {
-            const isSelected = elem.id === selectedElementId;
+            const isSelected = selectedElementIds.includes(elem.id) || elem.id === selectedElementId;
             const isEditing = editingId === elem.id;
             return (
               <div
                 key={elem.id}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelectedElementId(elem.id);
+                  setSelectedElementIds((prev) => (prev.includes(elem.id) ? prev : [elem.id]));
+                  setContextMenu({ x: e.clientX, y: e.clientY });
+                }}
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
                   if (target.closest('[data-folio-no-drag]')) {
@@ -1235,6 +1663,8 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           />
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 });

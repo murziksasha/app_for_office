@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { EditorView } from '@tiptap/pm/view';
 import { mmToPx, PAGE_MM, pageSetupFromDoc } from '../pageSetup';
+import { computeDocumentPagination } from '../pagination';
 import {
   chromeFromDoc,
   resolveStoryForPage,
@@ -43,35 +44,18 @@ function createGapElement(
 function measureGaps(view: EditorView): { set: DecorationSet; sig: string } {
   const setup = pageSetupFromDoc({ type: 'doc', attrs: view.state.doc.attrs });
   const chrome = chromeFromDoc(view.state.doc);
-  const page = PAGE_MM[setup.size];
-  const inner = Math.max(1, mmToPx(page.height - setup.marginTop - setup.marginBottom));
   const topPx = mmToPx(setup.marginTop);
   const bottomPx = mmToPx(setup.marginBottom);
 
-  const gapPositions: number[] = [];
-  const heights: number[] = [];
-  let used = 0;
-
-  view.state.doc.forEach((node, offset) => {
-    const pos = node.type.name === 'pageBreak' ? offset + node.nodeSize : offset;
-    if (node.type.name === 'pageBreak') {
-      gapPositions.push(pos);
-      heights.push(-1);
-      used = 0;
-      return;
+  const { gapPositions, totalPages, heights, innerPx } = computeDocumentPagination(
+    view.state.doc,
+    setup,
+    (offset) => {
+      const dom = view.nodeDOM(offset);
+      return dom instanceof HTMLElement ? dom.offsetHeight : 0;
     }
-    const dom = view.nodeDOM(offset);
-    const height = dom instanceof HTMLElement ? dom.offsetHeight : 0;
-    heights.push(Math.round(height));
-    if (used > 0 && used + height > inner + 0.5) {
-      gapPositions.push(pos);
-      used = height;
-    } else {
-      used += height;
-    }
-  });
+  );
 
-  const totalPages = gapPositions.length + 1;
   const widgets: Decoration[] = [];
 
   // Top margin of Page 1: pos 0
@@ -184,7 +168,7 @@ function measureGaps(view: EditorView): { set: DecorationSet; sig: string } {
     )
   );
 
-  const sig = `${setup.size}:${setup.marginTop}:${setup.marginBottom}:${setup.marginLeft}:${setup.marginRight}:${Math.round(inner)}:${heights.join(',')}:${JSON.stringify(chrome)}`;
+  const sig = `${setup.size}:${setup.marginTop}:${setup.marginBottom}:${setup.marginLeft}:${setup.marginRight}:${Math.round(innerPx)}:${heights.join(',')}:${JSON.stringify(chrome)}`;
   return { set: DecorationSet.create(view.state.doc, widgets), sig };
 }
 

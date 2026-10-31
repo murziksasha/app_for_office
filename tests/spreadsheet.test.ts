@@ -55,6 +55,62 @@ describe('Spreadsheet Adapters (XLSX, CSV, TSV)', () => {
     expect(sheets[0].data[1][1]?.v).toBe(50);
   });
 
+  it('preserves thousands number format across xlsx export and import', async () => {
+    const originalSheets = [
+      {
+        name: 'Numbers',
+        id: 's1',
+        status: 1,
+        order: 0,
+        row: 10,
+        column: 5,
+        data: [
+          [{ v: 1234567, ct: { fa: '#,##0', t: 'n' } }],
+        ],
+      },
+    ];
+
+    const blob = await exportXlsx(originalSheets);
+    const { sheets } = await importXlsx(await blob.arrayBuffer(), 'thousands.xlsx');
+
+    expect(sheets[0].data[0][0]?.v).toBe(1234567);
+    expect(sheets[0].data[0][0]?.ct?.fa).toBe('#,##0');
+  });
+
+  it('preserves sheet color and tab order across xlsx export and import', async () => {
+    const originalSheets = [
+      {
+        name: 'First',
+        id: 's1',
+        status: 1,
+        order: 0,
+        row: 10,
+        column: 5,
+        color: '#10b981',
+        data: [[{ v: 'A' }]],
+      },
+      {
+        name: 'Second',
+        id: 's2',
+        status: 0,
+        order: 1,
+        row: 10,
+        column: 5,
+        color: '#ef4444',
+        data: [[{ v: 'B' }]],
+      },
+    ];
+
+    const blob = await exportXlsx(originalSheets);
+    const { sheets } = await importXlsx(await blob.arrayBuffer(), 'colors.xlsx');
+
+    expect(sheets.length).toBe(2);
+    expect(sheets[0].name).toBe('First');
+    expect(sheets[0].color?.toLowerCase()).toBe('#10b981');
+    expect(sheets[1].name).toBe('Second');
+    expect(sheets[1].color?.toLowerCase()).toBe('#ef4444');
+  });
+
   it('round-trips merge, freeze, border, wrap, underline, autofilter, and SUM', async () => {
     const workbook = new ExcelJS.Workbook();
     const ws = workbook.addWorksheet('Budget');

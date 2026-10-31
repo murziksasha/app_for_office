@@ -165,5 +165,15 @@ describe('DOCX Importer and Exporter', () => {
     expect(pageSetup?.marginRight).toBeCloseTo(20, 1);
     expect(report.warnings).toHaveLength(0);
   });
+
+  it('round-trips a 1.5-spaced paragraph', async () => {
+    const inputHtml = '<p style="line-height: 1.5;">Paragraph with 1.5 line spacing.</p>';
+    const blob = await exportDocx(inputHtml);
+    const arrayBuffer = await blob.arrayBuffer();
+    const { html } = await importDocx(arrayBuffer, 'spacing.docx');
+
+    expect(html).toContain('line-height: 1.5');
+    expect(html).toContain('Paragraph with 1.5 line spacing.');
+  });
 });
 

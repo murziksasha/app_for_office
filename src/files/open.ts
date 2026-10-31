@@ -16,11 +16,15 @@ import { stampClean } from './tabs';
 function documentWithSetup(
   html: string,
   pageSetup?: PageSetup | null,
-  chrome?: DocumentChrome | null
+  chrome?: DocumentChrome | null,
+  footnotes?: Array<{ id: string; text: string }> | null
 ) {
   let doc = htmlToDocument(html);
   if (pageSetup) doc = applyPageSetup(doc, pageSetup);
   if (chrome) doc = applyDocChrome(doc, chrome);
+  if (footnotes && footnotes.length) {
+    doc.attrs = { ...(doc.attrs || {}), footnotes };
+  }
   return doc;
 }
 
@@ -87,12 +91,12 @@ export async function loadFileToEditor(
   switch (detection.kind) {
     case 'document': {
       if (detection.format === 'docx' || detection.format === 'tmdx') {
-        const { html, report, pageSetup, chrome } = await importDocx(buffer, fileName);
-        editorState.documentContent = documentWithSetup(html, pageSetup, chrome);
+        const { html, report, pageSetup, chrome, footnotes } = await importDocx(buffer, fileName);
+        editorState.documentContent = documentWithSetup(html, pageSetup, chrome, footnotes);
         editorState.importReport = report;
       } else if (detection.format === 'odt') {
-        const { html, report, pageSetup } = await importOdt(buffer, fileName);
-        editorState.documentContent = documentWithSetup(html, pageSetup);
+        const { html, report, pageSetup, footnotes } = await importOdt(buffer, fileName);
+        editorState.documentContent = documentWithSetup(html, pageSetup, null, footnotes);
         editorState.importReport = report;
       } else if (detection.format === 'rtf') {
         const text = textDecoder.decode(buffer);

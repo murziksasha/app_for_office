@@ -1,6 +1,9 @@
 import type { JSONContent } from '@tiptap/core';
 
 export type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'pdf';
+export type SupportedDocumentKind = 'document' | 'spreadsheet' | 'presentation';
+export type RecentFileRecord = RecentItem;
+export type RecoveredDraft = DraftItem;
 
 export type SupportedFormat =
   | 'docx'
@@ -102,8 +105,10 @@ export interface EditorState {
   fileName: string;
   format: SupportedFormat;
   filePath?: string;
+  path?: string;
   fileHandle?: FileSystemFileHandle;
   isDirty: boolean;
+  dirty?: boolean;
   cleanHash?: string;
   contentHash?: string;
   diskStamp?: { modifiedMs: number; len: number } | null;

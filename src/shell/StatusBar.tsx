@@ -1,25 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { EditorState } from '../types';
 import { ZoomIn, ZoomOut, Check, HardDrive, AlertCircle } from 'lucide-react';
 import { t } from '../i18n/instance';
 import { pageSetupFromDoc } from '../document/pageSetup';
+import type { SheetSelectionStats } from '../spreadsheet/sheetCommands';
+import { ZoomPopover } from './ZoomPopover';
+
+export interface PageInfo {
+  page: number;
+  totalPages: number;
+}
+
+export type SaveState = 'clean' | 'saving' | 'dirty' | 'error';
 
 interface StatusBarProps {
   editorState: EditorState;
   documentEditor?: any;
+  pageInfo?: PageInfo;
+  sheetStats?: SheetSelectionStats | null;
   zoom: number;
   onZoomChange: (newZoom: number) => void;
+  saveState?: SaveState;
+  lastSavedTime?: string | null;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
   editorState,
   documentEditor,
+  pageInfo,
+  sheetStats,
   zoom,
   onZoomChange,
+  saveState,
+  lastSavedTime,
 }) => {
   const isDoc = editorState.kind === 'document';
   const wordCount = documentEditor?.storage?.characterCount?.words?.() ?? 0;
   const charCount = documentEditor?.storage?.characterCount?.characters?.() ?? 0;
+  const [showZoomPopover, setShowZoomPopover] = useState(false);
+
+  const isSaving = saveState === 'saving';
+  const isDirty = saveState === 'dirty' || (saveState === undefined && editorState.isDirty);
 
   return (
     <footer
@@ -35,6 +56,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         fontSize: '11px',
         color: 'var(--folio-ink-muted)',
         userSelect: 'none',
+        position: 'relative',
       }}
     >
       {/* Left items */}
@@ -49,12 +71,42 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <span>
               {t(wordCount === 1 ? 'status.wordOne' : 'status.wordMany', { count: wordCount, chars: charCount })}
             </span>
+            <span>{t('status.pageNumber', { page: pageInfo?.page || 1, total: pageInfo?.totalPages || 1 })}</span>
             <span>{t('status.page', { size: pageSetupFromDoc(editorState.documentContent).size === 'a4' ? 'A4' : 'LETTER' })}</span>
+            <button
+              type="button"
+              onClick={() => documentEditor?.commands?.toggleSpellCheck?.()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: 'var(--folio-ink-muted)',
+                padding: '2px 4px',
+                borderRadius: '3px',
+              }}
+              title={t('ribbon.spellCheck')}
+            >
+              <Check size={12} color="var(--folio-teal)" />
+              <span>{t('ribbon.spellCheck')}</span>
+            </button>
           </>
         )}
 
         {editorState.kind === 'spreadsheet' && (
-          <span>{t('status.spreadsheet', { count: editorState.spreadsheetData?.length || 1 })}</span>
+          <>
+            <span>{t('status.spreadsheet', { count: editorState.spreadsheetData?.length || 1 })}</span>
+            {sheetStats && (
+              <>
+                <span>{t('status.sheetCount', { count: sheetStats.count })}</span>
+                <span>{t('status.sheetSum', { sum: Number(sheetStats.sum.toFixed(4)).toString() })}</span>
+                <span>{t('status.sheetAverage', { avg: Number(sheetStats.average.toFixed(4)).toString() })}</span>
+              </>
+            )}
+          </>
         )}
 
         {editorState.kind === 'presentation' && (
@@ -65,8 +117,21 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       {/* Right items */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
         {/* Save status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          {editorState.isDirty ? (
+        <div data-testid="status-save-indicator" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {isSaving ? (
+            <>
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--folio-teal)',
+                  display: 'inline-block',
+                }}
+              />
+              <span style={{ color: 'var(--folio-teal)' }}>{t('status.saving')}</span>
+            </>
+          ) : isDirty ? (
             <>
               <AlertCircle size={13} color="var(--folio-amber)" />
               <span style={{ color: 'var(--folio-amber)' }}>{t('status.unsaved')}</span>
@@ -74,7 +139,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           ) : (
             <>
               <Check size={13} color="var(--folio-teal)" />
-              <span style={{ color: 'var(--folio-teal)' }}>{t('status.saved')}</span>
+              <span style={{ color: 'var(--folio-teal)' }}>
+                {lastSavedTime ? t('status.savedAt', { time: lastSavedTime }) : t('status.saved')}
+              </span>
             </>
           )}
         </div>
@@ -83,9 +150,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         {isDoc && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <button
+              type="button"
               onClick={() => onZoomChange(Math.max(50, zoom - 10))}
-              style={{ padding: '2px', color: 'inherit' }}
+              style={{ padding: '2px', color: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer' }}
               title={t('status.zoomOut')}
+              aria-label={t('status.zoomOut')}
             >
               <ZoomOut size={12} />
             </button>
@@ -101,19 +170,47 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                 accentColor: 'var(--folio-teal)',
                 cursor: 'pointer',
               }}
+              aria-label={t('status.zoomPresets')}
             />
             <button
+              type="button"
               onClick={() => onZoomChange(Math.min(200, zoom + 10))}
-              style={{ padding: '2px', color: 'inherit' }}
+              style={{ padding: '2px', color: 'inherit', background: 'transparent', border: 'none', cursor: 'pointer' }}
               title={t('status.zoomIn')}
+              aria-label={t('status.zoomIn')}
             >
               <ZoomIn size={12} />
             </button>
-            <span style={{ minWidth: '32px', textAlign: 'right' }}>{zoom}%</span>
+            <button
+              type="button"
+              onClick={() => setShowZoomPopover((v) => !v)}
+              data-testid="status-zoom-btn"
+              style={{
+                minWidth: '36px',
+                textAlign: 'right',
+                border: 'none',
+                background: showZoomPopover ? 'var(--folio-teal-light)' : 'transparent',
+                color: showZoomPopover ? 'var(--folio-teal)' : 'inherit',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                borderRadius: '3px',
+                fontSize: '11px',
+              }}
+              title={t('status.zoomPresets')}
+            >
+              {zoom}%
+            </button>
+            {showZoomPopover && (
+              <ZoomPopover
+                zoom={zoom}
+                onSelectZoom={onZoomChange}
+                onClose={() => setShowZoomPopover(false)}
+                isDoc={isDoc}
+              />
+            )}
           </div>
         )}
       </div>
     </footer>
   );
 };
-
