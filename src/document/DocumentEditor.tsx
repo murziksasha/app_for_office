@@ -627,8 +627,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           box-shadow: var(--folio-shadow-paper);
           border: 1px solid var(--folio-border-light);
           box-sizing: border-box;
-          color: var(--folio-ink);
-          font-family: Georgia, 'Times New Roman', Cambria, serif;
+          color: #1f2328;
+          font-family: "Noto Serif", "Noto Sans", serif;
+          font-synthesis: weight style;
           font-size: 11pt;
           line-height: 1.6;
           column-count: var(--folio-column-count, 1);
@@ -685,7 +686,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           margin-bottom: 0.8em;
         }
         .folio-prose .ProseMirror [data-style-name="Title"] {
-          font-family: system-ui, -apple-system, sans-serif;
+          font-family: "Noto Serif", "Noto Sans", serif;
           font-size: 26pt !important;
           font-weight: 700 !important;
           line-height: 1.2;
@@ -693,34 +694,34 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           margin-bottom: 0.4em;
         }
         .folio-prose .ProseMirror blockquote {
-          border-left: 3px solid var(--folio-teal);
+          border-left: 3px solid #c4c4c4;
           padding-left: 16px;
           margin-left: 0;
           margin-right: 0;
-          color: var(--folio-ink-muted);
+          color: #5c6370;
           font-style: italic;
         }
         .folio-prose .ProseMirror h1 {
-          font-family: system-ui, -apple-system, sans-serif;
+          font-family: "Noto Serif", "Noto Sans", serif;
           font-size: 24pt;
           font-weight: 700;
-          color: var(--folio-ink);
+          color: #1f2328;
           margin-top: 1em;
           margin-bottom: 0.4em;
         }
         .folio-prose .ProseMirror h2 {
-          font-family: system-ui, -apple-system, sans-serif;
+          font-family: "Noto Serif", "Noto Sans", serif;
           font-size: 18pt;
           font-weight: 600;
-          color: var(--folio-ink);
+          color: #1f2328;
           margin-top: 0.9em;
           margin-bottom: 0.3em;
         }
         .folio-prose .ProseMirror h3 {
-          font-family: system-ui, -apple-system, sans-serif;
+          font-family: "Noto Serif", "Noto Sans", serif;
           font-size: 14pt;
           font-weight: 600;
-          color: var(--folio-ink);
+          color: #1f2328;
           margin-top: 0.8em;
           margin-bottom: 0.3em;
         }
@@ -740,24 +741,24 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         }
         .folio-prose .ProseMirror th,
         .folio-prose .ProseMirror td {
-          border: 1px solid var(--folio-border);
+          border: 1px solid #d0d0d0;
           padding: 8px 12px;
           vertical-align: top;
           position: relative;
         }
         .folio-prose .ProseMirror th {
-          background-color: var(--folio-bg);
+          background-color: #f5f5f5;
           font-weight: 600;
         }
         .folio-prose .ProseMirror hr {
           border: none;
-          border-top: 1px solid var(--folio-border);
+          border-top: 1px solid #d0d0d0;
           margin: 1.5em 0;
         }
         .folio-prose .ProseMirror blockquote {
-          border-left: 3px solid var(--folio-teal);
+          border-left: 3px solid #c4c4c4;
           padding-left: 14px;
-          color: var(--folio-ink-muted);
+          color: #5c6370;
           margin: 1em 0;
         }
         .folio-prose .ProseMirror img {
@@ -767,7 +768,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           margin: 8px 0;
         }
         .folio-link {
-          color: var(--folio-teal);
+          color: #0b5cab;
           text-decoration: underline;
           cursor: pointer;
         }
@@ -775,7 +776,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           break-after: page;
           page-break-after: always;
           height: 1px;
-          border-top: 1px dashed var(--folio-teal);
+          border-top: 1px dashed #b0b0b0;
           margin: 24px 0;
           position: relative;
         }
@@ -786,7 +787,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           right: 12px;
           font-size: 10px;
           font-weight: 600;
-          color: var(--folio-teal);
+          color: #6b7280;
           background: #ffffff;
           padding: 0 4px;
         }

@@ -5,6 +5,7 @@ import { t } from '../i18n/instance';
 import { pageSetupFromDoc } from '../document/pageSetup';
 import type { SheetSelectionStats } from '../spreadsheet/sheetCommands';
 import { ZoomPopover } from './ZoomPopover';
+import type { FontPackState } from '../fonts/load';
 
 export interface PageInfo {
   page: number;
@@ -22,6 +23,9 @@ interface StatusBarProps {
   onZoomChange: (newZoom: number) => void;
   saveState?: SaveState;
   lastSavedTime?: string | null;
+  missingFonts?: string[];
+  fontPack?: FontPackState;
+  onRetryFontPack?: () => void;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -33,6 +37,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onZoomChange,
   saveState,
   lastSavedTime,
+  missingFonts = [],
+  fontPack,
+  onRetryFontPack,
 }) => {
   const isDoc = editorState.kind === 'document';
   const wordCount = documentEditor?.storage?.characterCount?.words?.() ?? 0;
@@ -111,6 +118,30 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
         {editorState.kind === 'presentation' && (
           <span>{t('status.presentation', { count: editorState.presentationData?.slides?.length || 1 })}</span>
+        )}
+
+        {missingFonts.length > 0 && (
+          <span
+            data-testid="status-missing-font"
+            title={t('fonts.missing', { names: missingFonts.join(', ') })}
+            style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--folio-amber)' }}
+          >
+            {t('fonts.missing', { names: missingFonts.join(', ') })}
+          </span>
+        )}
+        {fontPack?.status === 'running' && (
+          <span data-testid="status-font-pack">{t('fonts.packProgress', { done: fontPack.done, total: fontPack.total })}</span>
+        )}
+        {fontPack?.status === 'error' && (
+          <button
+            type="button"
+            data-testid="status-font-pack-retry"
+            onClick={onRetryFontPack}
+            title={fontPack.message || t('fonts.packFailed')}
+            style={{ border: 'none', background: 'transparent', color: 'var(--folio-amber)', cursor: 'pointer', fontSize: 11 }}
+          >
+            {t('fonts.packRetry')}
+          </button>
         )}
       </div>
 

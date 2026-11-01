@@ -248,6 +248,34 @@ export class DesktopPlatformAdapter implements PlatformAdapter {
       if (unlisten) unlisten();
     };
   }
+
+  async pickFontFiles(): Promise<PlatformFileResult[]> {
+    const rows = await tauriInvoke<RustFilePayload[]>('folio_pick_fonts');
+    return (rows || []).map(payloadToFile);
+  }
+
+  async fontList(): Promise<string> {
+    return tauriInvoke<string>('folio_font_list');
+  }
+
+  async fontPut(indexJson: string, files: Array<{ fileName: string; bytes: Uint8Array }>): Promise<void> {
+    await tauriInvoke('folio_font_put', {
+      indexJson,
+      files: files.map((file) => ({
+        fileName: file.fileName,
+        bytes: Array.from(file.bytes),
+      })),
+    });
+  }
+
+  async fontRead(fileName: string): Promise<Uint8Array> {
+    const bytes = await tauriInvoke<number[]>('folio_font_read', { fileName });
+    return new Uint8Array(bytes);
+  }
+
+  async fontRemove(family: string): Promise<void> {
+    await tauriInvoke('folio_font_remove', { family });
+  }
 }
 
 export const desktopAdapter = new DesktopPlatformAdapter();

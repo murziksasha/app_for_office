@@ -8,6 +8,60 @@ interface RtfState {
   strike: boolean;
   fontSize?: number; // pt
   color?: string;
+  fontFamily?: string;
+}
+
+function readRtfFontTable(rtfText: string): Map<number, string> {
+  const start = rtfText.indexOf('{\\fonttbl');
+  const fonts = new Map<number, string>();
+  if (start < 0) return fonts;
+  let depth = 0;
+  let i = start;
+  let id: number | null = null;
+  let name = '';
+  while (i < rtfText.length) {
+    const ch = rtfText[i];
+    if (ch === '{') {
+      depth += 1;
+      id = null;
+      name = '';
+      i += 1;
+      continue;
+    }
+    if (ch === '}') {
+      if (id !== null && name.trim()) fonts.set(id, name.trim());
+      depth -= 1;
+      if (depth <= 0) break;
+      i += 1;
+      continue;
+    }
+    if (ch === '\\') {
+      i += 1;
+      let word = '';
+      while (i < rtfText.length && /[a-zA-Z]/.test(rtfText[i])) {
+        word += rtfText[i];
+        i += 1;
+      }
+      let param = '';
+      if (i < rtfText.length && rtfText[i] === '-') i += 1;
+      while (i < rtfText.length && /[0-9]/.test(rtfText[i])) {
+        param += rtfText[i];
+        i += 1;
+      }
+      if (i < rtfText.length && rtfText[i] === ' ') i += 1;
+      if (word === 'f' && param) id = parseInt(param, 10);
+      continue;
+    }
+    if (ch === ';') {
+      if (id !== null && name.trim()) fonts.set(id, name.trim());
+      name = '';
+      i += 1;
+      continue;
+    }
+    if (id !== null && ch !== '\r' && ch !== '\n') name += ch;
+    i += 1;
+  }
+  return fonts;
 }
 
 export function importRtf(
@@ -41,6 +95,7 @@ export function importRtf(
   }
 
   // Tokenize / parse
+  const fontTable = readRtfFontTable(rtfText);
   const stateStack: RtfState[] = [
     { bold: false, italic: false, underline: false, strike: false },
   ];
@@ -67,6 +122,9 @@ export function importRtf(
     }
     if (activeRunState.fontSize) {
       safe = `<span style="font-size: ${activeRunState.fontSize}pt">${safe}</span>`;
+    }
+    if (activeRunState.fontFamily) {
+      safe = `<span style="font-family: '${activeRunState.fontFamily.replace(/'/g, '')}'">${safe}</span>`;
     }
     if (activeRunState.bold) safe = `<strong>${safe}</strong>`;
     if (activeRunState.italic) safe = `<em>${safe}</em>`;
@@ -201,6 +259,12 @@ export function importRtf(
       } else if (word === 'strike') {
         flushRun();
         getCurState().strike = param === undefined || param !== 0;
+        activeRunState = { ...getCurState() };
+      } else if (word === 'f') {
+        flushRun();
+        if (param !== undefined && fontTable.get(param)) {
+          getCurState().fontFamily = fontTable.get(param);
+        }
         activeRunState = { ...getCurState() };
       } else if (word === 'fs') {
         flushRun();

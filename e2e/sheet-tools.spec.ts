@@ -63,6 +63,7 @@ test.describe('Spreadsheet Tools E2E', () => {
     await page.mouse.up();
 
     const ribbon = page.locator('.folio-ribbon');
+    await ribbon.getByRole('button', { name: 'Data', exact: true }).click();
     const fillButton = ribbon.getByRole('button', { name: 'Fill', exact: true });
     await expect(fillButton).toBeVisible();
     await fillButton.click();
@@ -110,8 +111,9 @@ test.describe('Spreadsheet Tools E2E', () => {
     const a1 = { x: box.x + 30, y: box.y + 10 };
     await page.mouse.click(a1.x, a1.y);
 
-    // Click Data Validation on Ribbon
+    // Click Data Validation on the Data tab
     const ribbon = page.locator('.folio-ribbon');
+    await ribbon.getByRole('button', { name: 'Data', exact: true }).click();
     const dvBtn = ribbon.getByRole('button', { name: 'Data Validation' });
     await expect(dvBtn).toBeVisible();
     await dvBtn.click();

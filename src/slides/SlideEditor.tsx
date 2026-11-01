@@ -22,6 +22,7 @@ import { FindPanel } from '../shell/FindPanel';
 import { ContextMenu, getContextMenuItems } from '../shell/ContextMenu';
 import { findInPresentation, findNextIndex, findPreviousIndex, type SlideMatch } from './findSlides';
 import { applyPalette } from './palettes';
+import { cssFamily } from '../fonts/names';
 
 export interface SlideEditorHandle {
   addSlide: (layout?: SlideLayoutType) => void;
@@ -69,6 +70,7 @@ export interface SlideCommandState {
     | 'italic'
     | 'underline'
     | 'fontSize'
+    | 'fontFamily'
     | 'color'
     | 'align'
     | 'fill'
@@ -106,6 +108,7 @@ interface UndoSlot {
   slideIndex: number;
   elementId: string;
   box: Box;
+  props?: Partial<SlideElement>;
 }
 
 interface Gesture {
@@ -274,7 +277,9 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       if (i !== slot.slideIndex) return slide;
       return {
         ...slide,
-        elements: slide.elements.map((el) => (el.id === slot.elementId ? { ...el, ...slot.box } : el)),
+        elements: slide.elements.map((el) =>
+          el.id === slot.elementId ? { ...el, ...slot.box, ...slot.props } : el
+        ),
       };
     });
     commit(next);
@@ -380,6 +385,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       height: 20,
       text: 'Click to edit text',
       fontSize: 22,
+      fontFamily: 'Noto Sans',
       color: '#1e2022',
       align: 'left',
     };
@@ -827,7 +833,15 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
       patchSelected: (updates) => {
         const id = selectedElementId;
         if (!id) return;
-        patchElement(id, updates, true);
+        const slide = (presentationRef.current.slides || [])[indexRef.current];
+        const current = slide?.elements.find((item) => item.id === id);
+        if (!current) return;
+        const before: Partial<SlideElement> = {};
+        for (const key of Object.keys(updates) as Array<keyof SlideElement>) {
+          before[key] = current[key] as never;
+        }
+        setUndoSlot({ slideIndex: indexRef.current, elementId: id, box: boxOf(current), props: before });
+        patchElement(id, updates, false);
       },
     }),
     [selectedElementId, selectedElementIds, activeSlideIndex, viewMode],
@@ -850,6 +864,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
             italic: el.italic,
             underline: el.underline,
             fontSize: el.fontSize,
+            fontFamily: el.fontFamily,
             color: el.color,
             align: el.align,
             fill: el.fill,
@@ -1359,7 +1374,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                       border: 'none',
                       outline: 'none',
                       resize: 'none',
-                      fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                      fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                       fontSize: `${elem.fontSize || 18}px`,
                       fontWeight: elem.bold ? 700 : 400,
                       fontStyle: elem.italic ? 'italic' : 'normal',
@@ -1480,7 +1495,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                           border: 'none',
                           outline: 'none',
                           resize: 'none',
-                          fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                          fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                           fontSize: `${elem.fontSize || 18}px`,
                           fontWeight: elem.bold ? 700 : 400,
                           fontStyle: elem.italic ? 'italic' : 'normal',
@@ -1506,7 +1521,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                           alignItems: 'center',
                           justifyContent: elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
                           textAlign: elem.align || 'center',
-                          fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                          fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                           fontSize: `${elem.fontSize || 18}px`,
                           fontWeight: elem.bold ? 700 : 400,
                           fontStyle: elem.italic ? 'italic' : 'normal',
@@ -1571,7 +1586,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                                   resize: 'none',
                                   background: 'transparent',
                                   fontSize: '13px',
-                                  fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                                  fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                                   color: elem.color || '#1e2022',
                                   padding: '2px 4px',
                                   boxSizing: 'border-box',

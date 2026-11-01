@@ -61,7 +61,7 @@ describe('PDF Export', () => {
 
     // Omissions must record the missing glyphs
     expect(omissions.length).toBeGreaterThan(0);
-    expect(omissions.some((o) => o.includes('Dropped unsupported character'))).toBe(true);
+    expect(omissions.some((o) => o.includes('No bundled font contains U+4E16'))).toBe(true);
 
     // Read bytes back with pdfjs
     const extracted = await extractTextWordsFromBytes(bytes);

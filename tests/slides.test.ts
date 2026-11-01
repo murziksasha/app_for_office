@@ -61,6 +61,7 @@ describe('Slides / PPTX Importer and Exporter', () => {
               height: 20,
               text: 'Modern Office App',
               fontSize: 28,
+              fontFamily: 'Manrope',
               bold: true,
             },
           ],
@@ -76,6 +77,7 @@ describe('Slides / PPTX Importer and Exporter', () => {
 
     expect(presentation.slides.length).toBe(1);
     expect(presentation.slides[0].elements[0].text).toContain('Modern Office App');
+    expect(presentation.slides[0].elements[0].fontFamily).toBe('Manrope');
   });
 
   it('moves and resizes a box without leaving the slide', () => {

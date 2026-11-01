@@ -73,6 +73,10 @@ import { SlideEditor, emptySlideCommandState, type SlideCommandState, type Slide
 import { Slideshow } from './slides/Slideshow';
 import type { WorkbookInstance } from '@fortune-sheet/react';
 import { PdfViewer } from './pdf/PdfViewer';
+import { applyStoredTheme, readThemePreference, watchSystemTheme } from './shell/theme';
+import { familiesInState, defaultFontFor, missingFontNames } from './fonts/collect';
+import { ensureFamilies, getFontPackState, retryFontPackCache, startFontPackCache, subscribeFontPack } from './fonts/load';
+import { loadCustomFonts, subscribeFonts } from './fonts/registry';
 
 interface ChoiceState {
   title: string;
@@ -115,6 +119,8 @@ export const App: React.FC = () => {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [uiLanguage, setUiLanguage] = useState(i18n.language);
+  const [fontPack, setFontPack] = useState(getFontPackState);
+  const [fontRevision, setFontRevision] = useState(0);
   const slideCommands = useRef<SlideEditorHandle>(null);
   const sheetApi = useRef<WorkbookInstance | null>(null);
   const handleWorkbookReady = useCallback((api: WorkbookInstance | null) => {
@@ -209,6 +215,33 @@ export const App: React.FC = () => {
   };
 
   const activeTab = tabs.find((tab) => tab.id === activeId) || null;
+
+  useEffect(() => {
+    applyStoredTheme();
+    return watchSystemTheme(() => {
+      if (readThemePreference() === 'system') applyStoredTheme();
+    });
+  }, []);
+
+  useEffect(() => {
+    void loadCustomFonts().then(() => startFontPackCache());
+    return subscribeFontPack(() => setFontPack(getFontPackState()));
+  }, []);
+
+  useEffect(() => subscribeFonts(() => setFontRevision((value) => value + 1)), []);
+
+  const activeFontKey = activeTab
+    ? `${activeTab.id}:${defaultFontFor(activeTab.kind)}:${familiesInState(activeTab).join('\n')}`
+    : '';
+
+  useEffect(() => {
+    if (!activeFontKey || !activeTab) return;
+    void ensureFamilies([defaultFontFor(activeTab.kind), ...familiesInState(activeTab)]);
+  }, [activeFontKey, activeTab]);
+
+  useEffect(() => {
+    document.documentElement.dataset.folioKind = activeTab?.kind || 'home';
+  }, [activeTab?.kind]);
 
   useEffect(() => {
     const title = activeTab ? `Folio — ${activeTab.fileName}${activeTab.isDirty ? ' *' : ''}` : 'Folio';
@@ -1309,6 +1342,9 @@ export const App: React.FC = () => {
             zoom={zoom}
             onZoomChange={setZoom}
             lastSavedTime={lastSavedTime}
+            missingFonts={fontRevision >= 0 ? missingFontNames(familiesInState(activeTab)) : []}
+            fontPack={fontPack}
+            onRetryFontPack={retryFontPackCache}
           />
         </>
       )}

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings, X } from 'lucide-react';
 import { LanguageButton } from './LanguageButton';
@@ -11,6 +11,8 @@ import {
   AUTHOR_PHONE,
   getAuthorPlace,
 } from './about';
+import { readThemePreference, setThemePreference, type ThemePreference } from './theme';
+import { FontSettings } from '../fonts/FontSettings';
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -21,6 +23,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ onClose }) => {
   const currentLang = i18n.resolvedLanguage || i18n.language || '';
   const isUkrainian = currentLang.toLowerCase().startsWith('uk');
   const place = getAuthorPlace(currentLang);
+  const [theme, setTheme] = useState<ThemePreference>(() => readThemePreference());
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -218,7 +221,54 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ onClose }) => {
               </div>
               <LanguageButton />
             </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '10px 14px',
+                backgroundColor: 'var(--folio-bg)',
+                borderRadius: 'var(--folio-radius-md)',
+                border: '1px solid var(--folio-border-light)',
+              }}
+            >
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--folio-ink)' }}>
+                {t('settings.appearance')}
+              </span>
+              <div role="radiogroup" aria-label={t('settings.appearance')} style={{ display: 'flex', gap: 4 }}>
+                {([
+                  ['system', t('settings.themeSystem')],
+                  ['light', t('settings.themeLight')],
+                  ['dark', t('settings.themeDark')],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={theme === value}
+                    data-testid={`theme-${value}`}
+                    onClick={() => {
+                      setTheme(value);
+                      setThemePreference(value);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      border: theme === value ? '1px solid var(--folio-accent)' : '1px solid var(--folio-border)',
+                      background: theme === value ? 'var(--folio-accent-light)' : 'transparent',
+                      fontWeight: theme === value ? 650 : 500,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </section>
+
+          <FontSettings />
         </div>
 
         {/* Footer */}

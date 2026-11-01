@@ -15,6 +15,7 @@ describe('Slide layouts', () => {
     const [title, subtitle] = slide.elements;
     expect(title.type).toBe('text');
     expect(title.fontSize).toBe(44);
+    expect(title.fontFamily).toBe('Noto Sans');
     expect(title.bold).toBe(true);
     expect(title.align).toBe('center');
 

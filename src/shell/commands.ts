@@ -26,6 +26,10 @@ export interface FolioCommand {
   run: (context?: CommandContext) => void | Promise<void>;
   shortcut?: string;
   keyTip?: string;
+  /** When omitted, the command stays available. */
+  enabled?: (context?: CommandContext) => boolean;
+  /** Ribbon and search show a pressed or checked state when this returns true. */
+  checked?: (context?: CommandContext) => boolean;
 }
 
 export const commands: FolioCommand[] = [
@@ -34,7 +38,8 @@ export const commands: FolioCommand[] = [
     labelKey: 'ribbon.save',
     kinds: ['any'],
     run: (ctx) => {
-      ctx?.save?.();
+      const save = ctx?.save || ctx?.onSave;
+      save?.();
     },
     shortcut: 'Ctrl+S',
   },
@@ -59,9 +64,16 @@ export const commands: FolioCommand[] = [
   {
     id: 'redo',
     labelKey: 'ribbon.redoShort',
-    kinds: ['document', 'spreadsheet', 'presentation'],
+    kinds: ['document', 'spreadsheet'],
+    enabled: (ctx) => {
+      if (ctx?.kind === 'presentation') return false;
+      if (ctx?.kind === 'document') return Boolean(ctx.editor?.can?.().redo?.());
+      return true;
+    },
     run: (ctx) => {
-      ctx?.redo?.();
+      if (ctx?.kind === 'presentation') return;
+      const redo = ctx?.redo || ctx?.onRedo;
+      redo?.();
     },
     shortcut: 'Ctrl+Y',
   },
@@ -70,7 +82,8 @@ export const commands: FolioCommand[] = [
     labelKey: 'ribbon.print',
     kinds: ['any'],
     run: (ctx) => {
-      ctx?.print?.();
+      const print = ctx?.print || ctx?.onPrint;
+      print?.();
     },
     shortcut: 'Ctrl+P',
   },
@@ -102,6 +115,8 @@ export const commands: FolioCommand[] = [
     id: 'bold',
     labelKey: 'ribbon.boldShort',
     kinds: ['document'],
+    enabled: (ctx) => (ctx?.kind === 'document' ? Boolean(ctx.editor) : true),
+    checked: (ctx) => Boolean(ctx?.editor?.isActive?.('bold')),
     run: (ctx) => {
       if (ctx?.toggleBold) ctx.toggleBold();
       else ctx?.editor?.chain().focus().toggleBold().run();
@@ -147,11 +162,7 @@ export const commands: FolioCommand[] = [
     labelKey: 'ribbon.link',
     kinds: ['document'],
     run: (ctx) => {
-      if (ctx?.insertLink) ctx.insertLink();
-      else if (ctx?.editor) {
-        const url = window.prompt('Enter link URL:');
-        if (url) ctx.editor.chain().focus().setLink({ href: url }).run();
-      }
+      ctx?.insertLink?.();
     },
   },
   {
@@ -374,6 +385,15 @@ export function getCommandsForKind(kind: DocumentKind): FolioCommand[] {
 
 export function getCommandById(id: string): FolioCommand | undefined {
   return commands.find((cmd) => cmd.id === id);
+}
+
+export function commandIsEnabled(cmd: FolioCommand, context?: CommandContext): boolean {
+  if (!cmd.enabled) return true;
+  return cmd.enabled(context) !== false;
+}
+
+export function commandIsChecked(cmd: FolioCommand, context?: CommandContext): boolean {
+  return Boolean(cmd.checked?.(context));
 }
 
 export function searchCommands(query: string, kind: DocumentKind): FolioCommand[] {

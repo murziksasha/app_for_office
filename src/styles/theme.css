@@ -1,28 +1,111 @@
-:root {
-  --folio-bg: #f5f3ed;
-  --folio-bg-alt: #eae7df;
+:root,
+[data-theme='light'] {
+  --folio-bg: #f3f3f3;
+  --folio-bg-alt: #e8e8e8;
+  --folio-bg-subtle: #f3f3f3;
   --folio-panel: #ffffff;
-  --folio-ribbon-bg: #fbfaf7;
-  --folio-ribbon-border: #ded9cf;
-  --folio-ink: #1f2328;
-  --folio-ink-muted: #656d76;
-  --folio-ink-faint: #8d95a0;
-  --folio-border: #d8d3c8;
-  --folio-border-light: #ece8e0;
-  --folio-teal: #0f766e;
-  --folio-teal-hover: #0d9488;
-  --folio-teal-light: #ccfbf1;
-  --folio-teal-tint: #f0fdfa;
-  --folio-amber: #b45309;
-  --folio-amber-light: #fef3c7;
-  --folio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --folio-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --folio-shadow-paper: 0 4px 20px rgba(35, 30, 20, 0.08), 0 1px 3px rgba(35, 30, 20, 0.04);
-  --folio-radius-sm: 4px;
-  --folio-radius-md: 6px;
-  --folio-radius-lg: 10px;
-  --folio-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --folio-ribbon-bg: #fafafa;
+  --folio-ribbon-border: #d6d6d6;
+  --folio-ink: #242424;
+  --folio-ink-muted: #616161;
+  --folio-ink-faint: #8a8a8a;
+  --folio-border: #d1d1d1;
+  --folio-border-light: #ececec;
+  --folio-accent: #0f6cbd;
+  --folio-accent-hover: #115ea3;
+  --folio-accent-light: #deecf9;
+  --folio-accent-tint: #f5f9fd;
+  --folio-focus: #0f6cbd;
+  --folio-teal: var(--folio-accent);
+  --folio-teal-hover: var(--folio-accent-hover);
+  --folio-teal-light: var(--folio-accent-light);
+  --folio-teal-tint: var(--folio-accent-tint);
+  --folio-amber: #8a5a00;
+  --folio-amber-light: #fff4ce;
+  --folio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --folio-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --folio-shadow-paper: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --folio-shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.14);
+  --folio-radius-sm: 2px;
+  --folio-radius-md: 4px;
+  --folio-radius-lg: 6px;
+  --folio-font: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
   --folio-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --folio-bg: #1f1f1f;
+  --folio-bg-alt: #161616;
+  --folio-bg-subtle: #252525;
+  --folio-panel: #2b2b2b;
+  --folio-ribbon-bg: #2b2b2b;
+  --folio-ribbon-border: #3f3f3f;
+  --folio-ink: #f3f3f3;
+  --folio-ink-muted: #d0d0d0;
+  --folio-ink-faint: #9d9d9d;
+  --folio-border: #454545;
+  --folio-border-light: #3a3a3a;
+  --folio-accent: #4ea3f1;
+  --folio-accent-hover: #6cb4f5;
+  --folio-accent-light: #0e3a5f;
+  --folio-accent-tint: #12324a;
+  --folio-focus: #4ea3f1;
+  --folio-amber: #fde047;
+  --folio-amber-light: #3f3508;
+  --folio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --folio-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --folio-shadow-paper: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.35);
+  --folio-shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+[data-folio-kind='document'] {
+  --folio-accent: #0f6cbd;
+  --folio-accent-hover: #115ea3;
+  --folio-accent-light: #deecf9;
+  --folio-accent-tint: #f5f9fd;
+  --folio-focus: #0f6cbd;
+}
+
+[data-folio-kind='spreadsheet'] {
+  --folio-accent: #107c41;
+  --folio-accent-hover: #0b5c30;
+  --folio-accent-light: #dff6dd;
+  --folio-accent-tint: #f3faf4;
+  --folio-focus: #107c41;
+}
+
+[data-folio-kind='presentation'] {
+  --folio-accent: #c43e1c;
+  --folio-accent-hover: #a33316;
+  --folio-accent-light: #fde7e0;
+  --folio-accent-tint: #fff6f3;
+  --folio-focus: #c43e1c;
+}
+
+[data-theme='dark'][data-folio-kind='document'] {
+  --folio-accent: #4ea3f1;
+  --folio-accent-hover: #6cb4f5;
+  --folio-accent-light: #0e3a5f;
+  --folio-accent-tint: #12324a;
+  --folio-focus: #4ea3f1;
+}
+
+[data-theme='dark'][data-folio-kind='spreadsheet'] {
+  --folio-accent: #54b054;
+  --folio-accent-hover: #6ec46e;
+  --folio-accent-light: #0e3b1c;
+  --folio-accent-tint: #14301c;
+  --folio-focus: #54b054;
+}
+
+[data-theme='dark'][data-folio-kind='presentation'] {
+  --folio-accent: #f07a55;
+  --folio-accent-hover: #f5997a;
+  --folio-accent-light: #5a2416;
+  --folio-accent-tint: #3a1c14;
+  --folio-focus: #f07a55;
 }
 
 * {
@@ -74,6 +157,20 @@ button {
   border: none;
   background: transparent;
   color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--folio-focus);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  cursor: default;
 }
 
 input, select, textarea {
@@ -138,6 +235,83 @@ input, select, textarea {
   body[data-folio-print='extra'] .folio-print-root {
     display: block !important;
   }
+}
+
+.folio-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 2px 10px;
+  background: var(--folio-ribbon-bg);
+  border-bottom: 1px solid var(--folio-border-light);
+  font-size: 12px;
+}
+
+.folio-titlebar .folio-command-search {
+  flex: 1 1 180px;
+  max-width: 360px;
+  margin-left: auto;
+}
+
+.folio-quick-access {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.folio-ribbon-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 96px;
+  flex-wrap: nowrap;
+  background: var(--folio-panel);
+  container-type: inline-size;
+  container-name: folio-ribbon;
+}
+
+.folio-ribbon-tools {
+  flex: 1;
+  display: flex;
+  flex-flow: column wrap;
+  align-content: flex-start;
+  align-items: center;
+  justify-content: center;
+  gap: 0 2px;
+  max-height: 72px;
+  max-width: 440px;
+}
+
+.folio-ribbon-tools.is-gallery {
+  flex-flow: row nowrap;
+  max-height: none;
+  max-width: 460px;
+  overflow-x: auto;
+}
+
+@container folio-ribbon (max-width: 980px) {
+  .folio-ribbon-tools.is-gallery {
+    max-width: 240px;
+  }
+}
+
+.folio-tab-strip button[data-active='true'] {
+  background: var(--folio-panel);
+}
+
+.folio-prose,
+.folio-paper-sheet,
+.folio-slide-canvas {
+  color-scheme: light;
+}
+
+.folio-prose .ProseMirror {
+  color: #1f2328;
+}
+
+.folio-prose .folio-page-break::after {
+  background: #ffffff;
+  color: #6b7280;
 }
 
 /* Page break styling in editor screen */

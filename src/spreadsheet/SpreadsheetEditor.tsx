@@ -10,6 +10,7 @@ import { findInSheetData, findNextIndex, findPreviousIndex, type SheetMatch } fr
 import { selectionStats, type SheetSelectionStats } from './sheetCommands';
 import { SheetTabBar } from './SheetTabBar';
 import { findValidationForCell, isValidationValueValid } from './dataValidation';
+import { installSheetDefaultFont } from './defaultFont';
 
 // FortuneSheet rebuilds its imperative API on every internal change, and the
 // getters close over that render's context. A handle captured once keeps
@@ -61,6 +62,19 @@ export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = memo(({
   const seenFindSignal = useRef(findSignal);
   const [focusedCell, setFocusedCell] = useState<{ row: number; col: number } | null>(null);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    installSheetDefaultFont();
+    const redraw = () => {
+      window.setTimeout(() => {
+        const api = workbookRef.current;
+        const sel = api?.getSelection?.();
+        if (api && sel?.length) api.setSelection(sel);
+      }, 150);
+    };
+    document.fonts?.addEventListener?.('loadingdone', redraw);
+    return () => document.fonts?.removeEventListener?.('loadingdone', redraw);
+  }, []);
 
   const activeSheet = sheets.find((s) => s.status === 1) || sheets[0];
   const activeValidation = focusedCell && activeSheet?.dataValidations
@@ -298,7 +312,7 @@ export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = memo(({
         width: '100%',
         height: '100%',
         position: 'relative',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--folio-bg)',
       }}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -372,7 +386,7 @@ export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = memo(({
         onChange={handleChange}
         showToolbar={false}
         showFormulaBar={true}
-        showSheetTabs={true}
+        showSheetTabs={false}
         forceCalculation={true}
         cellContextMenu={[]}
         headerContextMenu={[]}
@@ -389,7 +403,7 @@ export const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = memo(({
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            backgroundColor: '#ffffff',
+            backgroundColor: 'var(--folio-panel)',
             padding: '2px 8px',
             borderRadius: 4,
             border: isCellInvalid ? '2px solid #f59e0b' : '1px solid var(--folio-border, #d1d5db)',

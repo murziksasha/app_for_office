@@ -220,6 +220,7 @@ export const PageGaps = Extension.create({
 
           const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => schedule()) : null;
           observer?.observe(view.dom);
+          document.fonts?.addEventListener?.('loadingdone', schedule);
           schedule();
 
           return {
@@ -228,6 +229,7 @@ export const PageGaps = Extension.create({
               dead = true;
               cancelAnimationFrame(frame);
               observer?.disconnect();
+              document.fonts?.removeEventListener?.('loadingdone', schedule);
             },
           };
         },

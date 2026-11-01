@@ -13,6 +13,7 @@ import {
 } from './chrome';
 import { bandState } from './bandState';
 import { t } from '../i18n/instance';
+import { cssFamily } from '../fonts/names';
 
 export interface BandRenderOptions {
   storyTarget: ChromeStoryTarget;
@@ -160,6 +161,7 @@ export function createBandElement(options: BandRenderOptions): HTMLElement {
     zoneEl.style.minHeight = '18px';
     zoneEl.style.padding = '2px 4px';
     zoneEl.style.fontSize = '10pt';
+    zoneEl.style.fontFamily = '"Noto Serif", "Noto Sans", serif';
 
     // Populate runs
     for (const run of zone.runs) {
@@ -179,7 +181,7 @@ export function createBandElement(options: BandRenderOptions): HTMLElement {
         span.style.padding = '1px 4px';
         span.style.borderRadius = '2px';
         span.style.backgroundColor = 'rgba(15, 118, 110, 0.08)';
-        span.style.color = 'var(--folio-teal, #0f766e)';
+        span.style.color = '#1f2328';
         span.style.fontWeight = run.bold ? 'bold' : 'normal';
         span.style.fontStyle = run.italic ? 'italic' : 'normal';
         span.textContent = formatFieldRun(run.field, pageIndex, totalPages);
@@ -192,7 +194,7 @@ export function createBandElement(options: BandRenderOptions): HTMLElement {
         if (run.underline) span.style.textDecoration = 'underline';
         if (run.color) span.style.color = run.color;
         if (run.fontSize) span.style.fontSize = `${run.fontSize}pt`;
-        if (run.fontFamily) span.style.fontFamily = run.fontFamily;
+        if (run.fontFamily) span.style.fontFamily = cssFamily(run.fontFamily, 'Noto Serif');
         zoneEl.appendChild(span);
       }
     }
@@ -261,6 +263,7 @@ export function createBandElement(options: BandRenderOptions): HTMLElement {
     lineEl.style.minHeight = '18px';
     lineEl.style.padding = '2px 4px';
     lineEl.style.fontSize = '10pt';
+    lineEl.style.fontFamily = '"Noto Serif", "Noto Sans", serif';
 
     for (const run of line.runs) {
       if (run.type === 'image') {
@@ -279,7 +282,7 @@ export function createBandElement(options: BandRenderOptions): HTMLElement {
         span.style.padding = '1px 4px';
         span.style.borderRadius = '2px';
         span.style.backgroundColor = 'rgba(15, 118, 110, 0.08)';
-        span.style.color = 'var(--folio-teal, #0f766e)';
+        span.style.color = '#1f2328';
         span.style.fontWeight = run.bold ? 'bold' : 'normal';
         span.style.fontStyle = run.italic ? 'italic' : 'normal';
         span.textContent = formatFieldRun(run.field, pageIndex, totalPages);
@@ -292,7 +295,7 @@ export function createBandElement(options: BandRenderOptions): HTMLElement {
         if (run.underline) span.style.textDecoration = 'underline';
         if (run.color) span.style.color = run.color;
         if (run.fontSize) span.style.fontSize = `${run.fontSize}pt`;
-        if (run.fontFamily) span.style.fontFamily = run.fontFamily;
+        if (run.fontFamily) span.style.fontFamily = cssFamily(run.fontFamily, 'Noto Serif');
         lineEl.appendChild(span);
       }
     }

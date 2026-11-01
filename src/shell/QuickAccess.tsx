@@ -1,6 +1,7 @@
 import React from 'react';
 import { Save, Undo2, Redo2, Printer } from 'lucide-react';
 import { t } from '../i18n/instance';
+import { commandIsEnabled, getCommandById } from './commands';
 import type { EditorState } from '../types';
 import type { SlideEditorHandle } from '../slides/SlideEditor';
 import type { WorkbookInstance } from '@fortune-sheet/react';
@@ -26,18 +27,39 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
     if (editorState.kind === 'document') {
       documentEditor?.chain?.().focus?.().undo?.().run?.();
     } else if (editorState.kind === 'spreadsheet') {
-      (sheetApi?.current as any)?.undo?.();
+      const sheet = sheetApi?.current as { handleUndo?: () => void; undo?: () => void } | null;
+      sheet?.handleUndo?.();
+      if (!sheet?.handleUndo) sheet?.undo?.();
     } else if (editorState.kind === 'presentation') {
       slideCommands?.current?.undo?.();
     }
   };
 
-  const handleRedo = () => {
-    if (editorState.kind === 'document') {
-      documentEditor?.chain?.().focus?.().redo?.().run?.();
-    } else if (editorState.kind === 'spreadsheet') {
-      (sheetApi?.current as any)?.redo?.();
-    }
+  const commandContext = {
+    kind: editorState.kind,
+    editor: documentEditor,
+    save: onSave,
+    onSave,
+    print: onPrint,
+    onPrint,
+    undo: handleUndo,
+    redo: () => {
+      if (editorState.kind === 'document') {
+        documentEditor?.chain?.().focus?.().redo?.().run?.();
+      } else if (editorState.kind === 'spreadsheet') {
+        const sheet = sheetApi?.current as { handleRedo?: () => void; redo?: () => void } | null;
+        sheet?.handleRedo?.();
+        if (!sheet?.handleRedo) sheet?.redo?.();
+      }
+    },
+  };
+  const redoCommand = getCommandById('redo');
+  const redoEnabled = editorState.kind !== 'presentation' && (redoCommand ? commandIsEnabled(redoCommand, commandContext) : false);
+
+  const runCommand = (id: 'save' | 'undo' | 'print' | 'redo') => {
+    const command = getCommandById(id);
+    if (!command || !commandIsEnabled(command, commandContext)) return;
+    void command.run(commandContext);
   };
 
   return (
@@ -48,11 +70,8 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '4px',
-        padding: '3px 12px',
-        backgroundColor: 'var(--folio-ribbon-bg)',
-        borderBottom: '1px solid var(--folio-border-light, #e2e8f0)',
-        fontSize: '12px',
+        gap: 2,
+        fontSize: 12,
       }}
     >
       <button
@@ -60,7 +79,7 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
         className="folio-qa-save"
         title={`${t('ribbon.save')} (Ctrl+S)`}
         aria-label={t('ribbon.save')}
-        onClick={onSave}
+        onClick={() => runCommand('save')}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -81,7 +100,7 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
         className="folio-qa-undo"
         title={`${t('ribbon.undoShort')} (Ctrl+Z)`}
         aria-label={t('ribbon.undoShort')}
-        onClick={handleUndo}
+        onClick={() => runCommand('undo')}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -102,7 +121,8 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
         className="folio-qa-redo"
         title={`${t('ribbon.redoShort')} (Ctrl+Y)`}
         aria-label={t('ribbon.redoShort')}
-        onClick={handleRedo}
+        disabled={!redoEnabled}
+        onClick={() => runCommand('redo')}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -111,8 +131,9 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
           borderRadius: '4px',
           border: 'none',
           background: 'none',
-          cursor: 'pointer',
+          cursor: redoEnabled ? 'pointer' : 'default',
           color: 'var(--folio-ink)',
+          opacity: redoEnabled ? 1 : 0.35,
         }}
       >
         <Redo2 size={14} />
@@ -123,7 +144,7 @@ export const QuickAccess: React.FC<QuickAccessProps> = ({
         className="folio-qa-print"
         title={`${t('ribbon.print')} (Ctrl+P)`}
         aria-label={t('ribbon.print')}
-        onClick={onPrint}
+        onClick={() => runCommand('print')}
         style={{
           display: 'flex',
           alignItems: 'center',

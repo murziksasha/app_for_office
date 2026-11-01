@@ -20,6 +20,7 @@ interface StyleDef {
   strike?: boolean;
   color?: string;
   fontSize?: string;
+  fontFamily?: string;
 }
 
 export async function importOdt(
@@ -92,6 +93,7 @@ export async function importOdt(
         strike: tp['@_text-line-through-style'] === 'solid',
         color: tp['@_color'],
         fontSize: tp['@_font-size'],
+        fontFamily: tp['@_font-family'] || tp['@_font-name'],
       };
     }
     const pp = st['paragraph-properties'];
@@ -152,6 +154,7 @@ export async function importOdt(
 
     let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     if (sDef) {
+      if (sDef.fontFamily) html = `<span style="font-family: '${String(sDef.fontFamily).replace(/'/g, '')}'">${html}</span>`;
       if (sDef.color) html = `<span style="color: ${sDef.color}">${html}</span>`;
       if (sDef.bold) html = `<strong>${html}</strong>`;
       if (sDef.italic) html = `<em>${html}</em>`;

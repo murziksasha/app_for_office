@@ -23,7 +23,8 @@ test.describe('Presentation Editing Tools Verification', () => {
     expect(box?.width).toBe(960);
     expect(box?.height).toBe(540);
 
-    // 2. Switch to 4:3 in Ribbon Home Slides group
+    // 2. Switch to 4:3 on the Design tab
+    await page.getByRole('button', { name: 'Design', exact: true }).click();
     const sizeSelect = page.locator('select[title="Slide size"]');
     await expect(sizeSelect).toBeVisible();
     await sizeSelect.selectOption('4:3');

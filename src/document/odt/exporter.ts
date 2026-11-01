@@ -10,7 +10,16 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function processInlineNodes(node: Node, footnoteMap: Map<string, string>): string {
+function fontStyleId(name: string): string {
+  return `F_${name.replace(/[^A-Za-z0-9]+/g, '_')}`;
+}
+
+function fontFromElement(el: HTMLElement): string {
+  const match = (el.getAttribute('style') || '').match(/font-family:\s*['"]?([^'";,]+)/i);
+  return match?.[1]?.trim() || '';
+}
+
+function processInlineNodes(node: Node, footnoteMap: Map<string, string>, families: Set<string>): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return escapeXml(node.textContent || '');
   }
@@ -27,23 +36,29 @@ function processInlineNodes(node: Node, footnoteMap: Map<string, string>): strin
 
     if (tag === 'br') return '<text:line-break/>';
 
-    const childContent = Array.from(el.childNodes).map((child) => processInlineNodes(child, footnoteMap)).join('');
+    const childContent = Array.from(el.childNodes).map((child) => processInlineNodes(child, footnoteMap, families)).join('');
+    const family = fontFromElement(el);
+    const withFont = (inner: string) => {
+      if (!family) return inner;
+      families.add(family);
+      return `<text:span text:style-name="${fontStyleId(family)}">${inner}</text:span>`;
+    };
 
     if (tag === 'strong' || tag === 'b') {
-      return `<text:span text:style-name="Bold">${childContent}</text:span>`;
+      return withFont(`<text:span text:style-name="Bold">${childContent}</text:span>`);
     }
     if (tag === 'em' || tag === 'i') {
-      return `<text:span text:style-name="Italic">${childContent}</text:span>`;
+      return withFont(`<text:span text:style-name="Italic">${childContent}</text:span>`);
     }
     if (tag === 'u') {
-      return `<text:span text:style-name="Underline">${childContent}</text:span>`;
+      return withFont(`<text:span text:style-name="Underline">${childContent}</text:span>`);
     }
     if (tag === 'a') {
       const href = escapeXml(el.getAttribute('href') || '#');
-      return `<text:a xlink:type="simple" xlink:href="${href}">${childContent}</text:a>`;
+      return withFont(`<text:a xlink:type="simple" xlink:href="${href}">${childContent}</text:a>`);
     }
 
-    return childContent;
+    return withFont(childContent);
   }
 
   return '';
@@ -65,6 +80,7 @@ export async function exportOdt(
     }
   }
 
+  const fontFamilies = new Set<string>();
   let textXml = '';
 
   const processBlockNode = (node: Node) => {
@@ -74,10 +90,10 @@ export async function exportOdt(
 
     if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6') {
       const level = tag.replace('h', '');
-      const content = Array.from(el.childNodes).map((child) => processInlineNodes(child, footnoteMap)).join('');
+      const content = Array.from(el.childNodes).map((child) => processInlineNodes(child, footnoteMap, fontFamilies)).join('');
       textXml += `<text:h text:outline-level="${level}">${content}</text:h>`;
     } else if (tag === 'p') {
-      const content = Array.from(el.childNodes).map((child) => processInlineNodes(child, footnoteMap)).join('');
+      const content = Array.from(el.childNodes).map((child) => processInlineNodes(child, footnoteMap, fontFamilies)).join('');
       const lhStr = el.style.lineHeight;
       let pStyleAttr = '';
       if (lhStr) {
@@ -97,7 +113,7 @@ export async function exportOdt(
       textXml += '<text:list>';
       const items = Array.from(el.querySelectorAll(':scope > li'));
       items.forEach((li) => {
-        const itemContent = Array.from(li.childNodes).map((child) => processInlineNodes(child, footnoteMap)).join('');
+        const itemContent = Array.from(li.childNodes).map((child) => processInlineNodes(child, footnoteMap, fontFamilies)).join('');
         textXml += `<text:list-item><text:p>${itemContent}</text:p></text:list-item>`;
       });
       textXml += '</text:list>';
@@ -108,7 +124,7 @@ export async function exportOdt(
         textXml += '<table:table-row>';
         const cells = Array.from(r.querySelectorAll('th, td'));
         cells.forEach((c) => {
-          const cellContent = Array.from(c.childNodes).map((child) => processInlineNodes(child, footnoteMap)).join('');
+          const cellContent = Array.from(c.childNodes).map((child) => processInlineNodes(child, footnoteMap, fontFamilies)).join('');
           textXml += `<table:table-cell office:value-type="string"><text:p>${cellContent}</text:p></table:table-cell>`;
         });
         textXml += '</table:table-row>';
@@ -131,8 +147,14 @@ export async function exportOdt(
   xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
   xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
   xmlns:xlink="http://www.w3.org/1999/xlink"
+  xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"
   office:version="1.2">
+  <office:font-face-decls>
+    ${['Noto Serif', ...fontFamilies].filter((name, index, all) => all.indexOf(name) === index).map((name) => `<style:font-face style:name="${escapeXml(name)}" svg:font-family="${escapeXml(name)}"/>`).join('')}
+  </office:font-face-decls>
   <office:automatic-styles>
+    <style:style style:name="Font_Noto_Serif" style:family="text"><style:text-properties style:font-name="Noto Serif" fo:font-family="Noto Serif"/></style:style>
+    ${[...fontFamilies].map((name) => `<style:style style:name="${fontStyleId(name)}" style:family="text"><style:text-properties style:font-name="${escapeXml(name)}" fo:font-family="${escapeXml(name)}"/></style:style>`).join('')}
     <style:style style:name="Bold" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style>
     <style:style style:name="Italic" style:family="text"><style:text-properties fo:font-style="italic"/></style:style>
     <style:style style:name="Underline" style:family="text"><style:text-properties style:text-underline-style="solid"/></style:style>

@@ -1,6 +1,8 @@
 import { PDFDocument, PDFPage, rgb, RGB, PDFImage } from 'pdf-lib';
 import { EditorState } from '../types';
-import { embedNotoFonts, EmbeddedFonts } from './fonts';
+import { createFontBook, type PdfFontBook } from './fontBook';
+import { familiesInState, defaultFontFor } from '../fonts/collect';
+import { loadCustomFonts } from '../fonts/registry';
 import { getActiveSheet } from '../files/session';
 import { defaultPrintSetup, calculateFitWidthScale } from '../spreadsheet/sheetPrint';
 import { mmToPt, PAGE_MM, pageSetupFromDoc } from '../document/pageSetup';
@@ -101,30 +103,11 @@ interface TextToken {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  fontFamily?: string;
 }
 
-function filterGlyphs(
-  token: TextToken,
-  fonts: EmbeddedFonts,
-  recordOmission: (msg: string) => void
-): TextToken {
-  let clean = '';
-  for (const ch of token.text) {
-    const cp = ch.codePointAt(0)!;
-    if (fonts.hasGlyph(cp)) {
-      clean += ch;
-    } else {
-      recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-    }
-  }
-  return { ...token, text: clean };
-}
-
-function selectFont(bold: boolean, italic: boolean, fonts: EmbeddedFonts) {
-  if (bold && italic) return fonts.boldItalic;
-  if (bold) return fonts.bold;
-  if (italic) return fonts.italic;
-  return fonts.regular;
+function tokenWidth(token: TextToken, size: number, fonts: PdfFontBook, record: (msg: string) => void) {
+  return fonts.measure(token.text, size, token.bold, token.italic, token.fontFamily, record);
 }
 
 /**
@@ -142,7 +125,8 @@ export async function exportPdf(
   };
 
   const doc = await PDFDocument.create();
-  const fonts = await embedNotoFonts(doc);
+  await loadCustomFonts();
+  const fonts = await createFontBook(doc, familiesInState(state), defaultFontFor(state.kind));
 
   if (state.kind === 'document') {
     await exportDocument(doc, state, fonts, recordOmission);
@@ -171,7 +155,7 @@ export async function exportPdf(
 async function exportDocument(
   doc: PDFDocument,
   state: EditorState,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void
 ) {
   const setup = pageSetupFromDoc(state.documentContent);
@@ -367,15 +351,20 @@ async function exportDocument(
           for (const line of lines) {
             let lineX = cellX + 4;
             for (const token of line) {
-              const font = selectFont(token.bold, token.italic, fonts);
-              currentPage.drawText(token.text, {
-                x: lineX,
-                y: lineY,
-                size: 10,
-                font,
-                color: rgb(0, 0, 0),
-              });
-              const w = font.widthOfTextAtSize(token.text, 10);
+              const w = fonts.draw(
+                currentPage,
+                token.text,
+                {
+                  x: lineX,
+                  y: lineY,
+                  size: 10,
+                  bold: token.bold,
+                  italic: token.italic,
+                  family: token.fontFamily,
+                  color: rgb(0, 0, 0),
+                },
+                recordOmission
+              );
               if (token.underline) {
                 currentPage.drawLine({
                   start: { x: lineX, y: lineY - 1 },
@@ -452,7 +441,7 @@ async function renderPdfStory(
   contentWidth: number,
   marginBoundY: number,
   marginHeight: number,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void
 ) {
   if (!story) return;
@@ -498,6 +487,7 @@ async function renderPdfStory(
           bold: Boolean(run.bold),
           italic: Boolean(run.italic),
           underline: Boolean(run.underline),
+          fontFamily: run.fontFamily,
         };
         const fontSize = run.fontSize || defaultFontSize;
         const color = run.color ? parseColor(run.color) : rgb(0, 0, 0);
@@ -509,10 +499,8 @@ async function renderPdfStory(
     const filteredRuns: { token: TextToken; fontSize: number; font: any; width: number; color?: RGB }[] = [];
 
     for (const r of textRuns) {
-      const font = selectFont(r.token.bold, r.token.italic, fonts);
-      const filtered = filterGlyphs(r.token, fonts, recordOmission);
-      const w = font.widthOfTextAtSize(filtered.text, r.fontSize);
-      filteredRuns.push({ token: filtered, fontSize: r.fontSize, font, width: w, color: r.color });
+      const w = tokenWidth(r.token, r.fontSize, fonts, recordOmission);
+      filteredRuns.push({ token: r.token, fontSize: r.fontSize, font: fonts.regular, width: w, color: r.color });
       totalTextWidth += w;
     }
 
@@ -552,13 +540,20 @@ async function renderPdfStory(
     }
 
     for (const r of filteredRuns) {
-      page.drawText(r.token.text, {
-        x: currentX,
-        y: currentY,
-        size: r.fontSize,
-        font: r.font,
-        color: r.color || rgb(0, 0, 0),
-      });
+      fonts.draw(
+        page,
+        r.token.text,
+        {
+          x: currentX,
+          y: currentY,
+          size: r.fontSize,
+          bold: r.token.bold,
+          italic: r.token.italic,
+          family: r.token.fontFamily,
+          color: r.color || rgb(0, 0, 0),
+        },
+        recordOmission
+      );
 
       if (r.token.underline) {
         page.drawLine({
@@ -594,7 +589,8 @@ function extractTokens(node: any, forceBold = false): TextToken[] {
       const bold = forceBold || marks.some((m: any) => m.type === 'bold');
       const italic = marks.some((m: any) => m.type === 'italic');
       const underline = marks.some((m: any) => m.type === 'underline');
-      tokens.push({ text: n.text, bold, italic, underline });
+      const textStyle = marks.find((m: any) => m.type === 'textStyle');
+      tokens.push({ text: n.text, bold, italic, underline, fontFamily: textStyle?.attrs?.fontFamily });
       return;
     }
     if (n.content && Array.isArray(n.content)) {
@@ -611,12 +607,10 @@ function wrapTokensToLines(
   tokens: TextToken[],
   maxWidth: number,
   fontSize: number,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void
 ): TextToken[][] {
-  const cleanTokens = tokens
-    .map((t) => filterGlyphs(t, fonts, recordOmission))
-    .filter((t) => t.text.length > 0);
+  const cleanTokens = tokens.filter((t) => t.text.length > 0);
 
   if (cleanTokens.length === 0) return [[]];
 
@@ -625,13 +619,11 @@ function wrapTokensToLines(
   let currentLineWidth = 0;
 
   for (const token of cleanTokens) {
-    const font = selectFont(token.bold, token.italic, fonts);
-    // Split token into words
     const words = token.text.split(/(\s+)/);
 
     for (const word of words) {
       if (!word) continue;
-      const wordWidth = font.widthOfTextAtSize(word, fontSize);
+      const wordWidth = tokenWidth({ ...token, text: word }, fontSize, fonts, recordOmission);
 
       if (currentLineWidth + wordWidth <= maxWidth || currentLine.length === 0) {
         currentLine.push({ ...token, text: word });
@@ -668,7 +660,7 @@ function renderParagraph(
   fontSize: number,
   lineHeight: number,
   gapAfter: number,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void,
   firstLineOffset = 0
 ): number {
@@ -687,16 +679,20 @@ function renderParagraph(
     const baselineY = y - fontSize;
 
     for (const token of line) {
-      const font = selectFont(token.bold, token.italic, fonts);
-      page.drawText(token.text, {
-        x: lineX,
-        y: baselineY,
-        size: fontSize,
-        font,
-        color: rgb(0, 0, 0),
-      });
-
-      const w = font.widthOfTextAtSize(token.text, fontSize);
+      const w = fonts.draw(
+        page,
+        token.text,
+        {
+          x: lineX,
+          y: baselineY,
+          size: fontSize,
+          bold: token.bold,
+          italic: token.italic,
+          family: token.fontFamily,
+          color: rgb(0, 0, 0),
+        },
+        recordOmission
+      );
       if (token.underline) {
         page.drawLine({
           start: { x: lineX, y: baselineY - 2 },
@@ -720,7 +716,7 @@ function renderParagraph(
 async function exportSpreadsheet(
   doc: PDFDocument,
   state: EditorState,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   scope: 'current' | 'all',
   recordOmission: (msg: string) => void
 ) {
@@ -807,21 +803,20 @@ async function exportSpreadsheet(
             }
             const htext = hcell?.m != null ? String(hcell.m) : hcell?.v != null ? String(hcell.v) : '';
             if (htext.length > 0) {
-              const hfont = selectFont(Boolean(hcell?.bl === 1), Boolean(hcell?.it === 1), fonts);
-              let hclean = '';
-              for (const ch of htext) {
-                if (fonts.hasGlyph(ch.codePointAt(0)!)) hclean += ch;
-              }
-              if (hclean.length > 0) {
-                page.drawText(hclean, {
+              fonts.draw(
+                page,
+                htext,
+                {
                   x: hX + 2 * scale,
                   y: cursorY - rowHeight + 3.5 * scale,
                   size: fontSize,
-                  font: hfont,
+                  bold: Boolean(hcell?.bl === 1),
+                  italic: Boolean(hcell?.it === 1),
+                  family: typeof hcell?.ff === 'string' ? hcell.ff : undefined,
                   color: rgb(0, 0, 0),
-                  maxWidth: Math.max(1, hw - 4 * scale),
-                });
-              }
+                },
+                recordOmission
+              );
             }
             hX += hw;
           }
@@ -852,32 +847,20 @@ async function exportSpreadsheet(
         const rawText = cell?.m != null ? String(cell.m) : cell?.v != null ? String(cell.v) : '';
 
         if (rawText.length > 0) {
-          const isBold = Boolean(cell?.bl === 1);
-          const isItalic = Boolean(cell?.it === 1);
-          const font = selectFont(isBold, isItalic, fonts);
-
-          // Drop unsupported glyphs
-          let clean = '';
-          for (const ch of rawText) {
-            const cp = ch.codePointAt(0)!;
-            if (fonts.hasGlyph(cp)) {
-              clean += ch;
-            } else {
-              recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-            }
-          }
-
-          if (clean.length > 0) {
-            // Clip / single line inside cell
-            page.drawText(clean, {
+          fonts.draw(
+            page,
+            rawText,
+            {
               x: cellX + 2 * scale,
               y: cursorY - rowHeight + 3.5 * scale,
               size: fontSize,
-              font,
+              bold: Boolean(cell?.bl === 1),
+              italic: Boolean(cell?.it === 1),
+              family: typeof cell?.ff === 'string' ? cell.ff : undefined,
               color: rgb(0, 0, 0),
-              maxWidth: Math.max(1, w - 4 * scale),
-            });
-          }
+            },
+            recordOmission
+          );
         }
 
         cellX += w;
@@ -894,7 +877,7 @@ async function exportSpreadsheet(
 async function exportPresentation(
   doc: PDFDocument,
   state: EditorState,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   scope: 'current' | 'all',
   slideIndex: number,
   recordOmission: (msg: string) => void
@@ -1030,40 +1013,32 @@ async function exportPresentation(
         }
 
         if (elem.text && shape !== 'line') {
-          const isBold = Boolean(elem.bold);
-          const isItalic = Boolean(elem.italic);
-          const font = selectFont(isBold, isItalic, fonts);
           const textColor = elem.color ? parseColor(elem.color) : rgb(0, 0, 0);
           const baseSize = elem.fontSize || 18;
           const fontSize = Math.max(6, (baseSize * frameWidth) / 960);
           const lineHeight = fontSize * 1.25;
-
-          let cleanText = '';
-          for (const ch of elem.text) {
-            const cp = ch.codePointAt(0)!;
-            if (fonts.hasGlyph(cp)) {
-              cleanText += ch;
-            } else {
-              recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-            }
-          }
-
-          const rawLines = cleanText.split('\n');
+          const rawLines = elem.text.split('\n');
           const totalTextHeight = rawLines.length * lineHeight;
           let textY = elemY + (elemH + totalTextHeight) / 2 - fontSize;
-
           for (const rawLine of rawLines) {
-            const w = font.widthOfTextAtSize(rawLine, fontSize);
+            const w = fonts.measure(rawLine, fontSize, Boolean(elem.bold), Boolean(elem.italic), elem.fontFamily, recordOmission);
             let lineX = elemX + (elemW - w) / 2;
             if (elem.align === 'left') lineX = elemX + 8;
             else if (elem.align === 'right') lineX = elemX + elemW - w - 8;
-            page.drawText(rawLine, {
-              x: Math.max(elemX, lineX),
-              y: textY,
-              size: fontSize,
-              font,
-              color: textColor,
-            });
+            fonts.draw(
+              page,
+              rawLine,
+              {
+                x: Math.max(elemX, lineX),
+                y: textY,
+                size: fontSize,
+                bold: Boolean(elem.bold),
+                italic: Boolean(elem.italic),
+                family: elem.fontFamily,
+                color: textColor,
+              },
+              recordOmission
+            );
             textY -= lineHeight;
           }
         }
@@ -1092,32 +1067,24 @@ async function exportPresentation(
 
             const rawText = elem.rows[r]?.[c] || '';
             if (rawText) {
-              let cleanText = '';
-              for (const ch of rawText) {
-                const cp = ch.codePointAt(0)!;
-                if (fonts.hasGlyph(cp)) {
-                  cleanText += ch;
-                } else {
-                  recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-                }
-              }
-
-              if (cleanText) {
-                let fontSize = Math.max(6, (12 * frameWidth) / 960);
-                const textW = fonts.regular.widthOfTextAtSize(cleanText, fontSize);
-                const maxW = Math.max(1, cellW - 4);
-                if (textW > maxW) {
-                  fontSize = Math.max(4, fontSize * (maxW / textW));
-                }
-                page.drawText(cleanText, {
+              let fontSize = Math.max(6, (12 * frameWidth) / 960);
+              const textW = fonts.measure(rawText, fontSize, Boolean(elem.bold), Boolean(elem.italic), elem.fontFamily, recordOmission);
+              const maxW = Math.max(1, cellW - 4);
+              if (textW > maxW) fontSize = Math.max(4, fontSize * (maxW / textW));
+              fonts.draw(
+                page,
+                rawText,
+                {
                   x: cellX + 2,
                   y: cellY + (cellH - fontSize) / 2,
                   size: fontSize,
-                  font: fonts.regular,
+                  bold: Boolean(elem.bold),
+                  italic: Boolean(elem.italic),
+                  family: elem.fontFamily,
                   color: rgb(0, 0, 0),
-                  maxWidth: maxW,
-                });
-              }
+                },
+                recordOmission
+              );
             }
           }
         }
@@ -1147,65 +1114,43 @@ async function exportPresentation(
       }
 
       if (elem.type === 'text' && elem.text) {
-        const isBold = Boolean(elem.bold);
-        const isItalic = Boolean(elem.italic);
-        const font = selectFont(isBold, isItalic, fonts);
         const textColor = elem.color ? parseColor(elem.color) : rgb(0, 0, 0);
-
-        // Scale font size according to slide frame ratio
         const baseSize = elem.fontSize || 18;
         const fontSize = Math.max(6, (baseSize * frameWidth) / 960);
         const lineHeight = fontSize * 1.25;
-
-        // Clean text of unsupported glyphs
-        let cleanText = '';
-        for (const ch of elem.text) {
-          const cp = ch.codePointAt(0)!;
-          if (fonts.hasGlyph(cp)) {
-            cleanText += ch;
-          } else {
-            recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-          }
-        }
-
-        // Split text by lines and wrap
-        const rawLines = cleanText.split('\n');
+        const rawLines = elem.text.split('\n');
         let textY = elemY + elemH - fontSize;
-
-        for (const rawLine of rawLines) {
-          const words = rawLine.split(/(\s+)/);
-          let currentLine = '';
-
-          for (const word of words) {
-            const testLine = currentLine + word;
-            const w = font.widthOfTextAtSize(testLine, fontSize);
-            if (w <= elemW || !currentLine) {
-              currentLine = testLine;
-            } else {
-              if (textY >= elemY) {
-                page.drawText(currentLine, {
-                  x: elemX,
-                  y: textY,
-                  size: fontSize,
-                  font,
-                  color: textColor,
-                });
-                textY -= lineHeight;
-              }
-              currentLine = word.trimStart();
-            }
-          }
-
-          if (currentLine && textY >= elemY) {
-            page.drawText(currentLine, {
+        const paint = (line: string) => {
+          fonts.draw(
+            page,
+            line,
+            {
               x: elemX,
               y: textY,
               size: fontSize,
-              font,
+              bold: Boolean(elem.bold),
+              italic: Boolean(elem.italic),
+              family: elem.fontFamily,
               color: textColor,
-            });
-            textY -= lineHeight;
+            },
+            recordOmission
+          );
+          textY -= lineHeight;
+        };
+        for (const rawLine of rawLines) {
+          const words = rawLine.split(/(\s+)/);
+          let currentLine = '';
+          for (const word of words) {
+            const testLine = currentLine + word;
+            const w = fonts.measure(testLine, fontSize, Boolean(elem.bold), Boolean(elem.italic), elem.fontFamily, recordOmission);
+            if (w <= elemW || !currentLine) {
+              currentLine = testLine;
+            } else {
+              if (textY >= elemY) paint(currentLine);
+              currentLine = word.trimStart();
+            }
           }
+          if (currentLine && textY >= elemY) paint(currentLine);
         }
       }
     }

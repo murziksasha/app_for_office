@@ -1,19 +1,17 @@
 # UI & Styling Specification
 
-## 1. Visual Theme: Warm Paper & Ink
+## 1. Visual Theme: Neutral Chrome
 
 ### The Rule
-Folio employs a warm editorial aesthetic inspired by physical paper and book design:
-- **Background**: Warm ivory/stone gray canvas (`--folio-bg: #f8fafc; --folio-page: #ffffff`).
-- **Typography (Ink)**: High-contrast, readable dark gray ink (`--folio-ink: #1e293b; --folio-ink-muted: #64748b; --folio-ink-faint: #94a3b8`).
-- **Brand Accent (Teal)**: Primary brand color is deep teal (`--folio-teal: #0f766e; --folio-teal-light: #ccfbf1; --folio-teal-hover: #115e59`).
-- **Paper Sheet Elevation**: Documents sit on an elevated white paper sheet (`box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)`).
+Interface chrome uses neutral surfaces, hairline borders, and one editor accent. Document is blue (`#0f6cbd`), Spreadsheet is green (`#107c41`), and Presentation is orange (`#c43e1c`). Home and PDF use the document blue. `--folio-accent` carries the active accent. `--folio-teal` is an alias of that accent so older chrome rules follow the open editor.
+
+A `ThemePreference` of `system`, `light`, or `dark` is stored as `folio_theme`. The default is `system`. `src/shell/theme.ts` writes `data-theme` on the document element. Settings offers the three choices. Theme changes recolor chrome only: document pages, cell values, slide artwork, and exported files keep their authored colors. The page surface stays white.
 
 ### The Reason
-Prevents screen fatigue during extended document editing sessions and emphasizes content over flashy UI chrome.
+The refreshed office chrome stays quiet so the file, not the frame, carries the color. Light and dark themes match the system without recoloring saved work.
 
 ### The Check
-`src/styles/theme.css` variables define `--folio-teal: #0f766e` and `--folio-ink: #1e293b`.
+`tests/theme.test.ts` resolves `system` from the system color scheme and keeps an explicit `light` or `dark` choice. `src/styles/theme.css` defines the light and dark token sets and the three editor accents.
 
 ---
 
@@ -42,16 +40,16 @@ The ribbon is a tab row plus a strip of labeled instrument groups. Each group sh
 
 Tabs follow the open file:
 
-- Document: File, Home, Insert, Layout, View.
-- Spreadsheet: File, Home, Insert. FortuneSheet’s own toolbar stays hidden. The formula bar and sheet tabs stay.
-- Presentation: File, Home, Insert. Slide, text, picture, video, shape, and table commands live here. Home's Slides group includes a slide size selector (16:9, 16:10, 4:3). Home also offers shape fill and outline colors, and table row and column commands when selected. Insert offers text box, table (3x3), picture, video, and five shapes: Rectangle, Rounded, Oval, Triangle, and Line. Double-clicking a shape edits optional text. A Notes field below the canvas allows typing speaker notes. The thumbnail rail stays beside the canvas and reflects the slide aspect ratio.
+- Document: File, Home, Insert, Layout, References, View. References holds the table of contents and footnote commands.
+- Spreadsheet: File, Home, Insert, Layout, Data, View. FortuneSheet’s own toolbar and its sheet tabs stay hidden. Folio’s formula bar area and one sheet-tab bar stay. Data holds sort, filter, fill, AutoSum, and validation. View holds freeze and unfreeze.
+- Presentation: File, Home, Insert, Design, Slide Show, View. Home holds slide, font, paragraph, and arrange commands, plus shape fill and outline colors and table row and column commands when selected. Design holds slide size (16:9, 16:10, 4:3) and the color palettes. Slide Show holds From Beginning and From Current. Insert offers text box, table (3x3), picture, video, and five shapes: Rectangle, Rounded, Oval, Triangle, and Line. Double-clicking a shape edits optional text. A Notes field below the canvas allows typing speaker notes. The thumbnail rail stays beside the canvas and reflects the slide aspect ratio. Redo stays disabled until the presentation editor has a redo history.
 - PDF: File only. Page navigation stays on the viewer.
 
 File groups are New, Open, Save, Print, and Settings. Save as PDF is absent on a PDF tab. Edit as Document is present on a PDF tab. Drafts and recent files stay listed under the File groups.
 
-A chevron at the right of the tab row collapses the tool strip. Tab names stay. Clicking the active tab also collapses it. Clicking any tab while the strip is hidden selects that tab and shows its tools. PDF’s only tab is File, so collapsing hides the File pane until File is clicked again. The choice is stored on this machine as `folio_ribbon_collapsed` (`1` or `0`) and restored the next time the ribbon mounts.
+A chevron at the right of the tab row, Ctrl+F1, or a double-click on a ribbon tab collapses or expands the tool strip. A single click selects that tab. When the strip is hidden, a single click also shows that tab’s tools. Tab names stay. PDF’s only tab is File, so collapsing hides the File pane until File is clicked again. The choice is stored on this machine as `folio_ribbon_collapsed` (`1` or `0`) and restored the next time the ribbon mounts.
 
-The Home header and the editor title bar, immediately left of Print, share a language control. The button shows `EN` or `UA` for the language in use. Its tooltip names the other language. One click switches every Folio-owned label immediately. Document, cell, and slide text stays as written. The last choice is stored as `folio_ui_lang` and wins over detection on the next launch. With no saved choice, the desktop build reads the Windows country and starts in Ukrainian when that country is `UA`. Any other country follows the Windows display language. The browser build uses `navigator.language`.
+The title row combines the Folio mark, Quick Access (Save, Undo, Redo, Print), the file name, command search, and the language control. Save As, Print setup, and the other file operations stay in File. The language button shows `EN` or `UA` for the language in use. Its tooltip names the other language. One click switches every Folio-owned label immediately. Document, cell, and slide text stays as written. The last choice is stored as `folio_ui_lang` and wins over detection on the next launch. With no saved choice, the desktop build reads the Windows country and starts in Ukrainian when that country is `UA`. Any other country follows the Windows display language. The browser build uses `navigator.language`.
 
 The ribbon does not include dictation, designer assistance, add-ins, sharing, ink drawing, transitions, animations, a presenter view, mailings, or comments.
 
@@ -68,7 +66,7 @@ People expect writing tools in one place, grouped the way the rest of an office 
 ## 4. Settings and About
 
 ### The Rule
-Settings is a dialog rendered with the warm paper theme and a single section list:
+Settings is a dialog rendered with the interface theme and a single section list:
 1. **About**: Displays identity lines as selectable plain text:
    - App title (`Folio`) and app version constant (`1.0.0`).
    - One line summary: `Local-first office suite for documents, spreadsheets, and presentations`.
@@ -76,7 +74,7 @@ Settings is a dialog rendered with the warm paper theme and a single section lis
    - Author email: `1versuses1@gmail.com` (presented as plain text and a `mailto:` link, without network requests).
    - Author phone: `063 556 70 90` (plain text).
    - Author place: `Ukraine, Chornomorsk` in English, `Україна, Чорноморськ` in Ukrainian.
-2. **General**: Repeats the existing language switch (`EN` / `UA`). The choice updates UI strings immediately and is stored in `folio_ui_lang`. The title-bar and start-screen language buttons stay.
+2. **General**: Repeats the existing language switch (`EN` / `UA`) and the appearance switch (`System` / `Light` / `Dark`). Language updates UI strings immediately and is stored in `folio_ui_lang`. Appearance is stored in `folio_theme`. The title-bar and start-screen language buttons stay.
 
 Settings is reachable from:
 - The start screen header, beside the language button.
@@ -96,7 +94,7 @@ Settings and About information must be accessible both before opening any docume
 ## 5. Shared Command List
 
 ### The Rule
-Ribbon buttons, context menus, quick access, and command search call a single typed command list in `src/shell/commands.ts`. Each command provides a unique id, an i18n label key, compatible document kinds (`document`, `spreadsheet`, `presentation`, `pdf`, or `any`), and a `run` callback.
+Ribbon buttons, context menus, quick access, and command search call a single typed command list in `src/shell/commands.ts`. Each command provides a unique id, an i18n label key, compatible document kinds (`document`, `spreadsheet`, `presentation`, `pdf`, or `any`), and a `run` callback. Optional `enabled` and `checked` callbacks drive disabled and pressed states. Save accepts `save` or `onSave`. Print accepts `print` or `onPrint`.
 
 ### The Reason
 Centralizing command definitions ensures consistent labels, keyboard shortcuts, contextual availability, and key tips across all app surfaces without duplicating action logic.
@@ -139,10 +137,10 @@ Users expect familiar right-click access to editing and structural commands dire
 ## 8. Quick Access Toolbar
 
 ### The Rule
-A Quick Access row (`src/shell/QuickAccess.tsx`) is rendered above the ribbon across all open document kinds (Document, Spreadsheet, Presentation, PDF):
+Quick Access (`src/shell/QuickAccess.tsx`) sits in the title row across all open document kinds (Document, Spreadsheet, Presentation, PDF):
 - **Save**: Saves the active file (opens Save As if untitled or macro path).
 - **Undo**: Undoes the previous action (in Document editor, Spreadsheet workbook, or Slide presentation).
-- **Redo**: Redoes the undone action (in Document editor or Spreadsheet workbook).
+- **Redo**: Redoes the undone action in a Document or Spreadsheet. The control stays disabled for a Presentation.
 - **Print**: Opens print workflow matching the ribbon print handler.
 
 The row is hidden on Home with the ribbon and remains omitted from printed output.
@@ -204,10 +202,11 @@ Users need visual spelling feedback, quick one-click corrections, and customizab
 ## 12. Spreadsheet Data and Number Groups
 
 ### The Rule
-The Spreadsheet Home ribbon includes:
-- **Number group**: General (`General`), Number (`0.00`), Thousands (`#,##0`), Currency (`#,##0.00`), Percent (`0%`), Date (`yyyy-MM-dd`), and Time (`hh:mm`). Formats set cell `ct: { fa, t }`.
-- **Data group**: Fill (`fillSheetSelection` with series or copy modes), Sort Ascending, Sort Descending, Filter toggle, AutoSum (`=SUM(...)`). Fill in series mode increments numbers or `yyyy-MM-dd` dates by the step between the first two cells (or by 1 when only one seed cell is present). In copy mode, it repeats the seed cell throughout the selected rectangle.
-- **View group**: Freeze row, Freeze column, Freeze at selection (freezing rows above and columns to the left of the focused cell), and Unfreeze.
+The Spreadsheet Home ribbon includes a **Number group**: General (`General`), Number (`0.00`), Thousands (`#,##0`), Currency (`#,##0.00`), Percent (`0%`), Date (`yyyy-MM-dd`), and Time (`hh:mm`). Formats set cell `ct: { fa, t }`.
+
+The Data tab includes Fill (`fillSheetSelection` with series or copy modes), Sort Ascending, Sort Descending, Filter toggle, and AutoSum (`=SUM(...)`). Fill in series mode increments numbers or `yyyy-MM-dd` dates by the step between the first two cells (or by 1 when only one seed cell is present). In copy mode, it repeats the seed cell throughout the selected rectangle.
+
+The View tab includes Freeze row, Freeze column, Freeze at selection (freezing rows above and columns to the left of the focused cell), and Unfreeze.
 
 ### The Reason
 Office users require direct ribbon access to standard accounting and chronological number formats (including thousands comma separators and currency), predictable linear/date sequence autofill, and selection-based viewport split freezing.
@@ -356,7 +355,7 @@ Presenters structure different slides around distinct communicative goals (intro
 ### The Rule
 - Presentations support two view modes: **Normal View** (left slide thumbnail strip, central canvas, notes pane) and **Slide Sorter** (`[data-testid="folio-slide-sorter"]`), accessible from the View tab on the Presentation ribbon.
 - In Slide Sorter mode, slides are displayed in a responsive grid of slide cards showing preview element placement. Clicking any card selects that slide, exits Sorter mode, and focuses the slide in Normal view.
-- The View tab includes a **Palettes** group offering three built-in offline color palettes (`applyPalette` in `src/slides/palettes.ts`):
+- The Design tab includes a **Palettes** group offering three built-in offline color palettes (`applyPalette` in `src/slides/palettes.ts`):
   - **Paper**: Warm cream background (`#faf8f5`), slate text (`#2d3748`), warm accent (`#d97706`).
   - **Ink**: Dark slate background (`#1e2022`), crisp light text (`#f8fafc`), ice blue accent (`#38bdf8`).
   - **Teal**: Pale mint background (`#f0fdfa`), dark green-slate text (`#134e4a`), teal accent (`#0d9488`).
@@ -367,7 +366,7 @@ Slide decks benefit from high-level thumbnail overview when restructuring or rev
 
 ### The Check
 - `tests/slide_palettes.test.ts` asserts color and background transformations across all three palettes.
-- `e2e/slide-tools.spec.ts` toggles Slide Sorter view, selects a slide to return to normal view, and verifies Teal and Ink palette color applications.
+- `e2e/slide-tools.spec.ts` toggles Slide Sorter view, selects a slide to return to normal view, and verifies Teal and Ink palette color applications from Design.
 
 ---
 

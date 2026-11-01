@@ -10,6 +10,7 @@ import {
   isRightHalfClick,
 } from './slideshowNavigation';
 import { X, ChevronLeft, ChevronRight, Target } from 'lucide-react';
+import { cssFamily } from '../fonts/names';
 
 interface SlideshowProps {
   slides: Slide[];
@@ -283,7 +284,7 @@ function SlideshowElement({ element: elem }: { element: SlideElement }) {
             justifyContent:
               elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
             textAlign: elem.align || 'left',
-            fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+            fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
             fontSize: `${elem.fontSize || 18}px`,
             fontWeight: elem.bold ? 700 : 400,
             fontStyle: elem.italic ? 'italic' : 'normal',
@@ -378,7 +379,7 @@ function SlideshowElement({ element: elem }: { element: SlideElement }) {
                 justifyContent:
                   elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
                 textAlign: elem.align || 'center',
-                fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                 fontSize: `${elem.fontSize || 18}px`,
                 fontWeight: elem.bold ? 700 : 400,
                 fontStyle: elem.italic ? 'italic' : 'normal',
@@ -417,7 +418,7 @@ function SlideshowElement({ element: elem }: { element: SlideElement }) {
                       padding: '4px',
                       fontSize: '13px',
                       color: elem.color || '#1e2022',
-                      fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                      fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                       verticalAlign: 'top',
                     }}
                   >

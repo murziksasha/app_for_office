@@ -631,7 +631,7 @@ export async function exportXlsx(sheets: FortuneSheetData[]): Promise<Blob> {
             italic: !!cell.it,
             underline: cell.un ? true : undefined,
             size: cell.fs || 11,
-            name: cell.ff || 'Calibri',
+            name: cell.ff || 'Noto Sans',
             color: cell.fc ? { argb: hexToArgb(cell.fc) } : undefined,
           };
         }
