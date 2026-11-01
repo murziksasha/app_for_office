@@ -116,7 +116,7 @@ export function wrapInHtmlDocument(bodyHtml: string, title = 'Document'): string
   <title>${title}</title>
   <style>
     body {
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-family: "Noto Serif", "Noto Sans", serif;
       line-height: 1.6;
       color: #1f2328;
       max-width: 800px;

@@ -2,11 +2,13 @@ import React from 'react';
 
 interface RibbonGroupProps {
   label: string;
+  /** Gallery keeps a single horizontal row, used by the styles strip. */
+  layout?: 'stack' | 'gallery';
   children: React.ReactNode;
 }
 
 /** A labeled instrument cluster: tools on top, caption underneath. */
-export const RibbonGroup: React.FC<RibbonGroupProps> = ({ label, children }) => {
+export const RibbonGroup: React.FC<RibbonGroupProps> = ({ label, layout = 'stack', children }) => {
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', flexShrink: 0 }}>
       <div
@@ -14,22 +16,11 @@ export const RibbonGroup: React.FC<RibbonGroupProps> = ({ label, children }) => 
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          padding: '4px 10px 2px',
-          minHeight: 96,
+          padding: '2px 8px 2px',
+          minHeight: 92,
         }}
       >
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            alignContent: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            flexWrap: 'wrap',
-            maxWidth: 460,
-          }}
-        >
+        <div className={layout === 'gallery' ? 'folio-ribbon-tools is-gallery' : 'folio-ribbon-tools'}>
           {children}
         </div>
         <div

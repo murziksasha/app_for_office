@@ -81,3 +81,7 @@ export function userRegion(): Promise<string | null> {
   return getPlatformAdapter().userRegion();
 }
 
+export function pickFontFiles(): Promise<PlatformFileResult[]> {
+  return getPlatformAdapter().pickFontFiles();
+}
+

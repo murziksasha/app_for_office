@@ -571,6 +571,15 @@ export async function exportDocx(
   }
 
   const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: 'Noto Serif',
+          },
+        },
+      },
+    },
     footnotes: Object.keys(footnotesMap).length > 0 ? footnotesMap : undefined,
     sections: [
       {

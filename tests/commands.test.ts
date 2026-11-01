@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { commands, getCommandsForKind } from '../src/shell/commands';
+import { describe, expect, it, vi } from 'vitest';
+import { commandIsEnabled, commands, getCommandById, getCommandsForKind } from '../src/shell/commands';
 import en from '../src/i18n/locales/en.json';
 import uk from '../src/i18n/locales/uk.json';
 
@@ -37,6 +37,27 @@ describe('Shared command list', () => {
     const sheetCommands = getCommandsForKind('spreadsheet');
     const existsInSheet = sheetCommands.some((c) => c.id === docOnlyCmd!.id);
     expect(existsInSheet).toBe(false);
+  });
+
+  it('runs Save and Print from either callback name', () => {
+    const save = getCommandById('save');
+    const print = getCommandById('print');
+    const onSave = vi.fn();
+    const onPrint = vi.fn();
+    save?.run({ onSave });
+    print?.run({ onPrint });
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onPrint).toHaveBeenCalledOnce();
+  });
+
+  it('disables presentation redo', () => {
+    const redo = getCommandById('redo');
+    expect(redo).toBeDefined();
+    expect(getCommandsForKind('presentation').some((cmd) => cmd.id === 'redo')).toBe(false);
+    expect(commandIsEnabled(redo!, { kind: 'presentation' })).toBe(false);
+    const run = vi.fn();
+    redo?.run({ kind: 'presentation', redo: run });
+    expect(run).not.toHaveBeenCalled();
   });
 });
 

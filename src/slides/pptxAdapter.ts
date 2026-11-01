@@ -325,6 +325,7 @@ export async function importPptx(
       let underline = false;
       let color = '#1e2022';
       let align: 'left' | 'center' | 'right' = 'left';
+      let fontFamily: string | undefined;
 
       if (txBody) {
         const paragraphs = txBody.p ? (Array.isArray(txBody.p) ? txBody.p : [txBody.p]) : [];
@@ -353,6 +354,8 @@ export async function importPptx(
               if (r.rPr.solidFill?.srgbClr?.['@_val']) {
                 color = `#${r.rPr.solidFill.srgbClr['@_val']}`;
               }
+              const typeface = r.rPr.latin?.['@_typeface'];
+              if (typeof typeface === 'string' && typeface.trim()) fontFamily = typeface.trim();
             }
           });
         });
@@ -369,7 +372,7 @@ export async function importPptx(
           fill,
           borderColor,
           borderWidth,
-          ...(hasText ? { text: fullText, fontSize, bold, italic, underline, color, align } : {}),
+          ...(hasText ? { text: fullText, fontSize, fontFamily, bold, italic, underline, color, align } : {}),
         });
       } else if (hasText && !fill && !borderColor) {
         elements.push({
@@ -378,6 +381,7 @@ export async function importPptx(
           ...bounds,
           text: fullText,
           fontSize,
+          fontFamily,
           bold,
           italic,
           underline,
@@ -394,7 +398,7 @@ export async function importPptx(
           fill: fill || (hasText ? undefined : '#e2ded6'),
           borderColor,
           borderWidth,
-          ...(hasText ? { text: fullText, fontSize, bold, italic, underline, color, align } : {}),
+          ...(hasText ? { text: fullText, fontSize, fontFamily, bold, italic, underline, color, align } : {}),
         });
       }
     }
@@ -693,6 +697,10 @@ export function createSlideLayout(type: SlideLayoutType, slideNumber = 1): Slide
       break;
   }
 
+  for (const element of elements) {
+    if (!element.fontFamily) element.fontFamily = 'Noto Sans';
+  }
+
   return {
     id,
     title,
@@ -718,6 +726,7 @@ export function createEmptySlide(slideNumber = 1): Slide {
         width: 80,
         height: 18,
         text: slideNumber === 1 ? 'Title of Presentation' : 'Slide Title',
+        fontFamily: 'Noto Sans',
         fontSize: slideNumber === 1 ? 32 : 26,
         bold: true,
         align: slideNumber === 1 ? 'center' : 'left',
@@ -734,6 +743,7 @@ export function createEmptySlide(slideNumber = 1): Slide {
           slideNumber === 1
             ? 'Subtitle or presenter name'
             : '• First key idea\n• Second key takeaway\n• Third supporting detail',
+        fontFamily: 'Noto Sans',
         fontSize: 18,
         color: '#5c6370',
         align: slideNumber === 1 ? 'center' : 'left',
@@ -781,6 +791,7 @@ export async function exportPptx(presentation: PresentationModel): Promise<Blob>
           w: wInch,
           h: hInch,
           fontSize: elem.fontSize || 18,
+          fontFace: elem.fontFamily || 'Noto Sans',
           color: (elem.color || '#1e2022').replace('#', ''),
           bold: !!elem.bold,
           italic: !!elem.italic,
@@ -848,7 +859,9 @@ export async function exportPptx(presentation: PresentationModel): Promise<Blob>
           });
         }
       } else if (elem.type === 'table' && elem.rows && elem.rows.length > 0) {
-        const tableRows = elem.rows.map((row) => row.map((cell) => ({ text: cell })));
+        const tableRows = elem.rows.map((row) =>
+          row.map((cell) => ({ text: cell, options: { fontFace: elem.fontFamily || 'Noto Sans' } }))
+        );
         s.addTable(tableRows, {
           x: xInch,
           y: yInch,

@@ -19,6 +19,6 @@ This directory contains the normative specifications for the **Folio** applicati
 - [`shell.md`](./shell.md) — Start screen, ribbon tabs, status bar, drafts, keyboard shortcuts, and close guard.
 - [`security.md`](./security.md) — DOMPurify sanitization, VBA macro neutralization, legacy binary refusal, path allow-list, and offline guarantee.
 - [`desktop-windows.md`](./desktop-windows.md) — Tauri 2 desktop shell, native dialogs, file associations, single-instance forwarding, and NSIS installer.
-- [`ui.md`](./ui.md) — Visual styling (warm paper, ink typography, teal accents), iconography, and brand independence.
+- [`ui.md`](./ui.md) — Visual styling (neutral chrome, light and dark themes, editor accents), iconography, and brand independence.
 - [`testing.md`](./testing.md) — Test pyramid, unit tests per adapter, Playwright smoke suite, and desktop build validation.
 

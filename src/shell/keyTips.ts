@@ -10,7 +10,13 @@ export const TAB_KEY_TIPS: Record<string, string> = {
   home: 'H',
   insert: 'I',
   layout: 'L',
+  references: 'R',
+  data: 'D',
+  design: 'G',
+  slideshow: 'S',
   view: 'V',
+  table: 'T',
+  picture: 'P',
 };
 
 export const QUICK_ACCESS_KEY_TIPS: Record<string, string> = {

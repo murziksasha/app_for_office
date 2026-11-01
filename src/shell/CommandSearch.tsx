@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { t } from '../i18n/instance';
-import { searchCommands, type CommandContext, type FolioCommand } from './commands';
+import { commandIsChecked, commandIsEnabled, searchCommands, type CommandContext, type FolioCommand } from './commands';
 import type { DocumentKind } from '../types';
 
 export interface CommandSearchProps {
@@ -43,6 +43,7 @@ export const CommandSearch: React.FC<CommandSearchProps> = ({ kind, context, onC
   }, []);
 
   const handleRunCommand = (cmd: FolioCommand) => {
+    if (!commandIsEnabled(cmd, context)) return;
     cmd.run(context);
     onCommandRun?.(cmd);
     setOpen(false);
@@ -142,7 +143,7 @@ export const CommandSearch: React.FC<CommandSearchProps> = ({ kind, context, onC
             left: 0,
             right: 0,
             zIndex: 1100,
-            backgroundColor: '#ffffff',
+            backgroundColor: 'var(--folio-panel)',
             border: '1px solid var(--folio-border)',
             borderRadius: 6,
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
@@ -165,6 +166,8 @@ export const CommandSearch: React.FC<CommandSearchProps> = ({ kind, context, onC
           ) : (
             results.map((cmd, idx) => {
               const isSelected = idx === selectedIndex;
+              const enabled = commandIsEnabled(cmd, context);
+              const checked = commandIsChecked(cmd, context);
               let label = '';
               try {
                 label = t(cmd.labelKey);
@@ -174,6 +177,9 @@ export const CommandSearch: React.FC<CommandSearchProps> = ({ kind, context, onC
               return (
                 <div
                   key={cmd.id}
+                  role="option"
+                  aria-disabled={!enabled}
+                  aria-checked={checked || undefined}
                   data-testid={`command-search-item-${cmd.id}`}
                   onClick={() => handleRunCommand(cmd)}
                   onMouseEnter={() => setSelectedIndex(idx)}
@@ -183,12 +189,13 @@ export const CommandSearch: React.FC<CommandSearchProps> = ({ kind, context, onC
                     justifyContent: 'space-between',
                     padding: '8px 12px',
                     fontSize: 13,
-                    cursor: 'pointer',
-                    backgroundColor: isSelected ? 'var(--folio-border)' : 'transparent',
+                    cursor: enabled ? 'pointer' : 'default',
+                    opacity: enabled ? 1 : 0.45,
+                    backgroundColor: isSelected ? 'var(--folio-accent-light)' : 'transparent',
                     color: 'var(--folio-ink)',
                   }}
                 >
-                  <span style={{ fontWeight: isSelected ? 600 : 400 }}>{label}</span>
+                  <span style={{ fontWeight: isSelected || checked ? 600 : 400 }}>{checked ? '✓ ' : ''}{label}</span>
                   {cmd.shortcut && (
                     <span
                       style={{

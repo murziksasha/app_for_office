@@ -49,5 +49,10 @@ export interface PlatformAdapter {
   setupFileDropHandler(onFiles: (files: PlatformFileResult[]) => void): () => void;
   setupOpenRequestHandler(onOpen: (paths: string[]) => void): () => void;
   userRegion(): Promise<string | null>;
+  pickFontFiles(): Promise<PlatformFileResult[]>;
+  fontList(): Promise<string>;
+  fontPut(indexJson: string, files: Array<{ fileName: string; bytes: Uint8Array }>): Promise<void>;
+  fontRead(fileName: string): Promise<Uint8Array>;
+  fontRemove(family: string): Promise<void>;
 }
 

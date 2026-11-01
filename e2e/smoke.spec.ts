@@ -104,9 +104,11 @@ test.describe('Folio Smoke Test Suite', () => {
     await expect(page.locator('.fortune-toolbar')).toHaveCount(0);
 
     const ribbon = page.locator('.folio-ribbon');
-    for (const caption of ['Font', 'Number', 'View', 'Data']) {
+    for (const caption of ['Font', 'Number']) {
       await expect(ribbon.locator('.folio-ribbon-caption', { hasText: caption })).toBeVisible();
     }
+    await ribbon.getByRole('button', { name: 'Data', exact: true }).click();
+    await expect(ribbon.locator('.folio-ribbon-caption', { hasText: 'Data' })).toBeVisible();
 
     const cells = page.locator('.fortune-cell-area');
     await expect(cells).toBeVisible();
@@ -138,9 +140,11 @@ test.describe('Folio Smoke Test Suite', () => {
     await page.mouse.down();
     await page.mouse.move(b1.x, b1.y);
     await page.mouse.up();
+    await ribbon.getByRole('button', { name: 'Home', exact: true }).click();
     await ribbon.getByRole('button', { name: 'Merge', exact: true }).click();
     await expect(page.locator('.fortune-fx-input')).toContainText('10');
 
+    await ribbon.getByRole('button', { name: 'View', exact: true }).click();
     await ribbon.getByRole('button', { name: 'Freeze row' }).click();
     await expect.poll(async () => {
       const top = await page.locator('.fortune-rows-freeze-handle').evaluate((el) => Number.parseFloat(getComputedStyle(el).top));

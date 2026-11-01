@@ -15,6 +15,7 @@ export interface SheetFormatPayload {
   ht?: number;
   tb?: string | number;
   numberFormat?: { fa: string; t: string };
+  ff?: string;
 }
 
 export interface FormatPainterState {
@@ -128,7 +129,11 @@ export function applyDocumentFormat(editor: any, payload: DocumentFormatPayload)
     else if (mark.type === 'italic') chain.setItalic();
     else if (mark.type === 'underline') chain.setUnderline();
     else if (mark.type === 'strike') chain.setStrike();
-    else if (mark.type === 'textStyle' && mark.attrs?.color) chain.setColor(mark.attrs.color);
+    else if (mark.type === 'textStyle') {
+      if (mark.attrs?.color) chain.setColor(mark.attrs.color);
+      if (mark.attrs?.fontFamily) chain.setFontFamily(mark.attrs.fontFamily);
+      if (mark.attrs?.fontSize && typeof chain.setFontSize === 'function') chain.setFontSize(mark.attrs.fontSize);
+    }
     else if (mark.type === 'highlight' && mark.attrs?.color) chain.setHighlight({ color: mark.attrs.color });
     else if (mark.attrs) chain.setMark(mark.type, mark.attrs);
     else chain.setMark(mark.type);
@@ -171,6 +176,7 @@ export function captureSheetFormat(api: any): SheetFormatPayload | null {
   if (cell.ct?.fa) {
     payload.numberFormat = { fa: cell.ct.fa, t: cell.ct.t || 'n' };
   }
+  if (typeof cell.ff === 'string') payload.ff = cell.ff;
   return payload;
 }
 
@@ -190,6 +196,7 @@ export function applySheetFormat(api: any, payload: SheetFormatPayload): void {
   if (payload.numberFormat) {
     api.setCellFormatByRange?.('ct', payload.numberFormat, range);
   }
+  if (payload.ff) api.setCellFormatByRange?.('ff', payload.ff, range);
 }
 
 export function useFormatPainter(): FormatPainterState {

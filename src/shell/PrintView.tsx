@@ -5,6 +5,9 @@ import { FortuneSheetData } from '../spreadsheet/adapters';
 import { defaultPrintSetup } from '../spreadsheet/sheetPrint';
 import { mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from '../document/pageSetup';
 import { documentToHtml } from '../document/model';
+import { cssFamily } from '../fonts/names';
+import { ensureFamilies } from '../fonts/load';
+import { familiesInState, defaultFontFor } from '../fonts/collect';
 import {
   chromeFromDoc,
   formatFieldRun,
@@ -202,7 +205,7 @@ function SlidePage({ slide, slideSize }: { slide: Slide; slideSize?: '16:9' | '1
                     alignItems: 'center',
                     justifyContent: elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
                     textAlign: elem.align || 'center',
-                    fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                    fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                     fontSize: `${elem.fontSize || 18}px`,
                     fontWeight: elem.bold ? 700 : 400,
                     fontStyle: elem.italic ? 'italic' : 'normal',
@@ -232,7 +235,7 @@ function SlidePage({ slide, slideSize }: { slide: Slide; slideSize?: '16:9' | '1
               top: `${elem.y}%`,
               width: `${elem.width}%`,
               minHeight: `${elem.height}%`,
-              fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+              fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
               fontSize: `${elem.fontSize || 18}px`,
               fontWeight: elem.bold ? 700 : 400,
               fontStyle: elem.italic ? 'italic' : 'normal',
@@ -443,7 +446,12 @@ export const PrintView: React.FC<PrintViewProps> = ({ tab, scope, slideIndex, pd
   useEffect(() => {
     let cancelled = false;
     const urls: string[] = [];
-    const finish = () => {
+    const finish = async () => {
+      if (cancelled) return;
+      await ensureFamilies([defaultFontFor(tab.kind), ...familiesInState(tab)]);
+      if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready;
+      }
       if (cancelled) return;
       document.body.dataset.folioPrint = 'extra';
       window.print();

@@ -84,7 +84,7 @@ export const ribbonFieldStyle: React.CSSProperties = {
   padding: '2px 6px',
   borderRadius: 4,
   border: '1px solid var(--folio-border)',
-  background: '#fff',
+  background: 'var(--folio-panel)',
   color: 'var(--folio-ink)',
   fontSize: 12,
   outline: 'none',

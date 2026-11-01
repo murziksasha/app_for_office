@@ -18,7 +18,7 @@ test.describe('Presentation Tools E2E', () => {
     await expect(newSlideBtn).toBeVisible();
     await newSlideBtn.click();
 
-    // Verify "From Beginning" button exists in ribbon
+    await page.locator('.folio-ribbon').getByRole('button', { name: 'Slide Show', exact: true }).click();
     const fromBeginningBtn = page.locator('.folio-ribbon').getByRole('button', { name: 'From Beginning' });
     await expect(fromBeginningBtn).toBeVisible();
 
@@ -162,8 +162,7 @@ test.describe('Presentation Tools E2E', () => {
     await slide1Card.click();
     await expect(sorter).not.toBeVisible();
 
-    // Sorter button now shows "Slide Sorter" again
-    // In View tab, click Teal palette
+    await page.locator('.folio-ribbon').getByRole('button', { name: 'Design', exact: true }).click();
     const tealBtn = page.locator('.folio-ribbon').getByRole('button', { name: 'Teal' });
     await expect(tealBtn).toBeVisible();
     await tealBtn.click();

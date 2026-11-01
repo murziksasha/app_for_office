@@ -73,7 +73,7 @@ test.describe('Document Tools E2E', () => {
     await editor.locator('p').first().click();
 
     // Click Format Painter in ribbon
-    const painterBtn = page.locator('button[title*="Format Painter"]');
+    const painterBtn = page.locator('.folio-ribbon button[title*="Format Painter"]');
     await expect(painterBtn).toBeVisible();
     await painterBtn.click();
 
@@ -277,8 +277,8 @@ test.describe('Document Tools E2E', () => {
     await page.keyboard.type('Paragraph text.');
     await page.keyboard.press('Enter');
 
-    // Switch to Insert tab and click Table of Contents
-    await page.locator('.folio-ribbon').getByRole('button', { name: 'Insert', exact: true }).click();
+    // Switch to References and click Table of Contents
+    await page.locator('.folio-ribbon').getByRole('button', { name: 'References', exact: true }).click();
     const tocBtn = page.getByRole('button', { name: 'Table of Contents' });
     await expect(tocBtn).toBeVisible();
     await tocBtn.click();
@@ -299,8 +299,8 @@ test.describe('Document Tools E2E', () => {
     await editor.click();
     await page.keyboard.type('Claims requiring a citation');
 
-    // Switch to Insert tab and click Footnote
-    await page.locator('.folio-ribbon').getByRole('button', { name: 'Insert', exact: true }).click();
+    // Switch to References and click Footnote
+    await page.locator('.folio-ribbon').getByRole('button', { name: 'References', exact: true }).click();
     const fnBtn = page.getByRole('button', { name: 'Footnote' });
     await expect(fnBtn).toBeVisible();
     await fnBtn.click();
