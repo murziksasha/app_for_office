@@ -62,6 +62,8 @@ export function tabFromDraft(draft: DraftItem): EditorState {
     isDirty: true,
     cleanHash: draft.cleanHash || '',
     diskStamp: draft.diskStamp,
+    importReport: draft.importReport,
+    requiresSaveCopy: draft.requiresSaveCopy,
     documentContent: draft.kind === 'document' ? draft.content : undefined,
     spreadsheetData: draft.kind === 'spreadsheet' ? draft.content : undefined,
     presentationData: draft.kind === 'presentation' ? draft.content : undefined,

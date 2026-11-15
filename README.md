@@ -1,8 +1,8 @@
 # Folio — Local-First Office App
 
-**Folio** is a local-first office application running completely in the browser. It opens, edits, and saves everyday documents, spreadsheets, and slides directly on your computer with no account, no tracking, and no cloud uploads.
+**Folio** is a local-first office application for Windows desktop and the browser. It opens, edits, and saves everyday documents, spreadsheets, and presentations directly on your computer with no account, tracking, or cloud uploads. The Windows app uses Tauri 2; the browser build uses the File System Access API where available.
 
-In Chromium-based browsers (Chrome, Edge), Folio utilizes the **File System Access API** to save changes back to the original file in-place. In other browsers, it smoothly falls back to download-on-save.
+In Chromium-based browsers (Chrome, Edge), Folio uses the **File System Access API** to save changes back to the original file in place. Other browsers download a copy. If import notices identify features that cannot survive a save, Folio requires Save a Copy so the original stays intact.
 
 ---
 
@@ -122,6 +122,8 @@ In Chromium-based browsers (Chrome, Edge), Folio utilizes the **File System Acce
    ```bash
    npm run test:e2e
    ```
+
+   To check private real-world files locally, place at least one `.docx`, `.xlsx`, and `.pptx` in a folder outside the repository, set `FOLIO_COMPAT_DIR` to that folder, and run `npx vitest run tests/compatibility_corpus.test.ts`. The test reads the files in memory and does not upload or rewrite them.
 
 5. **Build for production**:
    ```bash

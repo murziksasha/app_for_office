@@ -1,5 +1,3574 @@
 {
   "revision": "6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec",
   "source": "https://github.com/google/fonts",
-  "families": []
+  "families": [
+    {
+      "family": "Noto Sans",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "82cc6912b231abe287c83fa6b25e238789b54fb14cd7256e7d8741a290ac8a2e",
+          "file": "noto-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5a53c180bd9b44f9e1087b7b2a3176f462767722815d0caf5ee56203495e710d",
+          "file": "noto-sans-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "b3977b5880a60dec9670504af4167e6bcbd5b95fe582dd827bd94d84821977eb",
+          "file": "noto-sans-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "59df33731c0016c54e7c2430662eced241226b6fae9d2abc2f6af0a71a87bcb0",
+          "file": "noto-sans-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Noto Serif",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-serif.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "47f6a199748019d27abac09d576d78cd4e8c865ad62594f47c9fa26a0d2b696a",
+          "file": "noto-serif-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "202339ff64105d305ff0e5beca5b0c2b99350f8a07c2a57c1f1f8d6f717d1d78",
+          "file": "noto-serif-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "46ad2cfa6443b33908d1b49cf3e00f3c14acdf80af344fb84129926f7a14d52d",
+          "file": "noto-serif-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "64fae8f5329fd9e59713e5b7c6752152cab2a1c9fe8c0cdabf0dc905af848a87",
+          "file": "noto-serif-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Noto Sans Mono",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-sans-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "44e2448f7fb83b4134c26e0263b2cc008fa6164c736f18f4644e34d0870b2a1e",
+          "file": "noto-sans-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "fcb30e5e8ae5aaf09595a69d631c77e0681c55ae29b53445d0667c6a61e6f093",
+          "file": "noto-sans-mono-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Inter",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "inter.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "56fffc42aab4ed2714eb292f22327c6b9b7865f6a220c2b5a50955c721ec8cf8",
+          "file": "inter-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ba71d008716e0992a2d0599faa8f1d442c541cf35e80643c36e16efd5752d316",
+          "file": "inter-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "c9d9da2f7e3c0e93fa71452c8e53ee28d11854d18d5e3f32232b9b939eb4c997",
+          "file": "inter-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "a2bfb91d4b98218610875801b4421547b24d4b2a6badcd6bc3dba23987b8e1c3",
+          "file": "inter-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Roboto",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "roboto.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c1f9ef483d9e05e801e54f996ed615516478ff423fcefe35e4f055cdae8f285e",
+          "file": "roboto-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ebd14ebe43c18de573620e6f2c0423d0593ce0268f6cf517eecc957ef2ea19f6",
+          "file": "roboto-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "ccabe214e1f595ea8ed5cd7485b38605a78fdd92c0c2e64dbc8467a84fe8961a",
+          "file": "roboto-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "10ba067cb0e599dc59ddb83b531ad32b4cdd0862fae474117903137db63d006d",
+          "file": "roboto-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Open Sans",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "open-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ef6c4b600b4c3b5ac45c4456823383b9d76c7796aa4c32fecc475161de9ca640",
+          "file": "open-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "9a42f10b0888fbfc14cca664b8b004987e2b768e90060e941623ed89b85dd608",
+          "file": "open-sans-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "d4fee8330fbd3133fd73b8a2554ba3f6b47757907bfbf76000a72d90edc9a57b",
+          "file": "open-sans-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "06b9776107aeb3def9c137eaf070525ee44f005e23edaf2d6a32eff37fecc089",
+          "file": "open-sans-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Montserrat",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "montserrat.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ba3be945f41b47cb66285b2d381bb9005455010d748540d87330e0e9383d48e9",
+          "file": "montserrat-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3d8ded296487b7de6bd98485afa43a37bf91e4189e0f87a257da6626c66c019e",
+          "file": "montserrat-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "30ec72b22e89aad421a77d14288acc6b12f32fa0a05cc95caf6c1ae979428549",
+          "file": "montserrat-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "044b008900ab5553085b91052de1309f3396ed76d735f8cf803d3a3cd2eb6f41",
+          "file": "montserrat-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Manrope",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "manrope.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "29c029673ff935984bc103ee9c20a4f1a7dec9e542c6d9c22217e481a5126fcd",
+          "file": "manrope-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "540ca2adb0351f87971ccc92a64bc2e5395dfe801470097d50ac3bca37194b2d",
+          "file": "manrope-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Fira Code",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "fira-code.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "1951704855ced41e0604f73cab65710f1fdee0811a79b94c8dd4b6232342f128",
+          "file": "fira-code-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "b1ddaebc050531c5cb506a1c48b7de833fb28f5aa0f660c58e345f5589c65b2f",
+          "file": "fira-code-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Source Serif 4",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "source-serif-4.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "64d8a68d31cba8f90bb6a5fd7cc98af3cbebc58eea261b22106f4e6280021ca1",
+          "file": "source-serif-4-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "18c6762f1e4655e1084947449887807e0987a84cc14f7f4b8b6e7f77fe18131b",
+          "file": "source-serif-4-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "4cc333de17d1ba53d77f1ceae25f054fa532cf9451d91cf0db82ecc29d94c128",
+          "file": "source-serif-4-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "237f6bd3ae19fe81e48250daa6a6e6448b000ade1e8c2b2a33e731a710bc426a",
+          "file": "source-serif-4-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Alegreya",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "alegreya.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "1fbf66c9424c31fb76e6002b02cbcf7a26218003b1e61cdf75cbd2830d00e983",
+          "file": "alegreya-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "f3117b76e871a5f339989daa5e9144647bc07e6c1e426c76f58de26a25cbffc7",
+          "file": "alegreya-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "bac5a88a2d295a3fcbba95c03e6f3ac396474f0c86bc9215962142c305be7f61",
+          "file": "alegreya-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "6f8909c49f8e727490db10b6d250cc7e64128270b70c606a7d3c0b155245bb64",
+          "file": "alegreya-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Advent Pro",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "advent-pro.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "f48b9e84ffd3214447b7fd37e1964bd39c57ec23d923f042045e68e2bfc025a1",
+          "file": "advent-pro-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ffd73fd5f7c849f916fb8054e6260275c0ac3188ac2df37ef3576634a094b3ca",
+          "file": "advent-pro-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "c890ad4632d33e9c7cedf1cc8eaea9d59471dcc35762daddf44bd4e81d480cb8",
+          "file": "advent-pro-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "18154314717c38b5aff130531d3956e545cf4dbc3ce13244143d317a470a9313",
+          "file": "advent-pro-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Anonymous Pro",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "anonymous-pro.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5364a7c01e8bfeb36def91a629888bd6cb0add05717ef4d45e177ba28bb3589c",
+          "file": "anonymous-pro-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5c90fe82c3df2aa79bbdaff28f17886ffcc7379280322309a95015b640a73d46",
+          "file": "anonymous-pro-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "7d422c6f29061b1d45bc21942bae52435164752c6c2893ddb4d168c1d4a0761b",
+          "file": "anonymous-pro-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "85990e08d529ffd8a014258bb6df41234368bce15dc294e5e9aae2badd25d5ab",
+          "file": "anonymous-pro-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Amatic SC",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "amatic-sc.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ec7b845b63955e6f0ebce6e78c9572817e3db564d4388aa292a831639b250ffd",
+          "file": "amatic-sc-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d19a622f1161082e8c2a880ee08281e204a036968c8f992e739ac145ed7c5c3f",
+          "file": "amatic-sc-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Alegreya SC",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "alegreya-sc.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "6fd4134639e50152ed6ff5adff170e66251369345285224bb5988dc2f5ceaaea",
+          "file": "alegreya-sc-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "318d4cbd4be423a7fc02952516d34db8b7809805040c36ebe283004fc3153095",
+          "file": "alegreya-sc-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "d58e988369701d0eb3cb782a2f9f3abd9e4b77510fdcc9c17b1ae07522379d8f",
+          "file": "alegreya-sc-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "fd89175406d3adc25e9c4d4e0662fca747fd1eadc27e31b0530d30484cc5b850",
+          "file": "alegreya-sc-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Akt",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "akt.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "29aa9480d3b49e697311e56dde35f968044f1a21a199aa0a6bf8ce19d0841b8d",
+          "file": "akt-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5853b160db2f49f328701cafa5e14a5ec56b77e1045955757bfd2f2bcdc9de33",
+          "file": "akt-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cousine",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "cousine.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "2ba909abe0660bbe2cfbdce901dcf13d2aa6e9189a1e259d47b9d34f70ef6304",
+          "file": "cousine-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "04859b59108d247b96f3952cad6078f9f1db7c69c3babb35c30878b35e397925",
+          "file": "cousine-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "c8bf3dce784632756015120d02aa4ec812e74180c52401657f89910966d30b18",
+          "file": "cousine-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "1ff457a76e336321daf83c9cb58614f62eb0f0dd0e5d575735bf7d0f54a2866d",
+          "file": "cousine-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Bad Script",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "bad-script.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "206c61a75ef847243e7036afa2bb8476bcc6009da66facc9549e3391b400d964",
+          "file": "bad-script-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Alice",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "alice.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8f669d0999416d27d28d391f9a4eb7d24d7a41cf9333086766c1a67593bf07f4",
+          "file": "alice-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Alegreya Sans",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "alegreya-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c24f96fdffaf99dd1bdd064b707dc2212d648a1008dc247754bf1c2455e16743",
+          "file": "alegreya-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "99b415d6c1acbdfe899ee7c4f40cb965bc781d26dedc487b3c2a95436c126979",
+          "file": "alegreya-sans-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "5653b66757165d6fbe978e46ab6b30b795bced3850549971b61a4b8574a3b279",
+          "file": "alegreya-sans-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "88542f6d0f5820ecba710405092eb92d79c9a3f9fe66ecc08e7b621258fef844",
+          "file": "alegreya-sans-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Fira Mono",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "fira-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "118aca5713d88386dceb47bccb2daa7eb51fc7315b37c0f4f7f40f16c57dbdc8",
+          "file": "fira-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "4a1783cd66310d814f774becc0525b821287e16f149c7b47e1e336587dbccee4",
+          "file": "fira-mono-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Caveat",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "caveat.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "bb4cab31944fde800d2116441e62e3a49efb86cf89b0c8c014605220ab850f6e",
+          "file": "caveat-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5d30fd029fe392a845a2dfcab3534da4c260d2ce6f90f972d959e5ece619f564",
+          "file": "caveat-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Alegreya Sans SC",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "alegreya-sans-sc.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a506f12cc0ba54710dbbb15ac131b44acd79184b032964746deebd87db709052",
+          "file": "alegreya-sans-sc-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3f39185c33848e6671544a7de4d2a6395bdfae944e88f9582e09ef1f37b22456",
+          "file": "alegreya-sans-sc-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "00c5bbf1dd8cbe701db4cd7288fe2d8d021454f6807b1ec7be2ab8e36f1a40c5",
+          "file": "alegreya-sans-sc-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "87235b5bd6cfaf46be8b08de3f75e9f6282ae04489e6aadf2ec1b16fa83eacfc",
+          "file": "alegreya-sans-sc-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Geist Mono",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "geist-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "928b55c823ac695e153e52f697a99ba931d0b6b62973d5d9821280dae4b0ae86",
+          "file": "geist-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "e06a64ad10fded8d7ebff544440f729de01a681414ab2d48f09e300c2d0a43e7",
+          "file": "geist-mono-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "92a5389d499c21c727078d357d8b2079ce54c84a8c8882f118f07af022c2b5d7",
+          "file": "geist-mono-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "a362ab6a8321aae689b0ee90003876e262eb92bc918138d830c3a3a07a347a5f",
+          "file": "geist-mono-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Balsamiq Sans",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "balsamiq-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "f8f9e489326316ebeb50412153b25a0e03b48569805c8dab2ca8fada8d2bfc03",
+          "file": "balsamiq-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5be85f6b6692bc0669bd9d6b6fde432019b739038249ffed7b10a70271a0fd8a",
+          "file": "balsamiq-sans-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "f2a1900473e4a905b9419ea95018eab5b112c7fd8a760e46b7364ca992dd3197",
+          "file": "balsamiq-sans-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "38286505b7e6d484171691126c0013dc5d49c246cbfa4c4416de00136361bfb0",
+          "file": "balsamiq-sans-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Comforter",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "comforter.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a37a848b69e2209ef62439a81beac5e46c45efd038c3ff396a9a5bfde3f506d1",
+          "file": "comforter-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "IBM Plex Mono",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "ibm-plex-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "330b9988430e5bbf4a0e41d8f8cb3967342afa3a9f900bfc7e7461ca81aaa93f",
+          "file": "ibm-plex-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "1a6b9cef2ed56b9ca1977c0cef4c58a05ebe510fa6753fff1d60323c89838a13",
+          "file": "ibm-plex-mono-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "6f0f4fb0902a77c65683d822fea27125901a2b1f7546dfebd495314bb75c2243",
+          "file": "ibm-plex-mono-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "667c1ef25ef4636a2d5c6944032725465a4f71d3accb0e2a637655d2636e0135",
+          "file": "ibm-plex-mono-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Comforter Brush",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "comforter-brush.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "b8fbf9e83a6d3c66d91a892babdb91c90aea807d75c768ac3400fae1224ba2bc",
+          "file": "comforter-brush-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Bitter",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "bitter.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "01ebd1fa77813c237111ae6c1467d88a41ed7ad895bc05ed518b2805090185d1",
+          "file": "bitter-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "48745763094537eb915b7aada6a444033a567a55bc6f9514a8559aca61dabb48",
+          "file": "bitter-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "ef658fab4df3457c8ccbe92b9856038983314366207ee650c93b83b67c353391",
+          "file": "bitter-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "64ad8a043cb7951dac4182a0ba9ee36b0fa4a3733493a7f0d008f29c4f267730",
+          "file": "bitter-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Great Vibes",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "great-vibes.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c29d4f0af5cc8ec3a5685756cd7f5e07243b0511f44f01c0ffd90430ffdecbbd",
+          "file": "great-vibes-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Andika",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "andika.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "650dc7e26cac341d0802b062de0133d9caa62eec938d1bffa52460d10b9c4225",
+          "file": "andika-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "59a7a8b3c1afdfd58796b96118c097b6d5fa841c4742724b8146e14a3e34daa5",
+          "file": "andika-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "22998a716477769a6c7e5e6d4fd5a0aa79a553324b44cfbcc434726faa8a2c1b",
+          "file": "andika-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "4598b2d3866d8301bf64557baf1d7bcbc01b0717abc75bcda8db90544e34000f",
+          "file": "andika-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Climate Crisis",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "climate-crisis.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "89412fe7acb92290aef5bdc5b85f22144cf47b4b377c3a5e294f4010ee27187e",
+          "file": "climate-crisis-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "73bcfe633b5131258669bd00c08a15dbf4d229e2c0988a06f5f3b591d0ec87e3",
+          "file": "climate-crisis-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Arimo",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "arimo.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a3e84a1172a3209b75d1644b6581c264543135acb2c6e2af15e6360c5418ecee",
+          "file": "arimo-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "7a82a833290dc0522a599c20928605104bceb0886d6f8a6b8f3db029c87e05d4",
+          "file": "arimo-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "935d27c6deaf1bca1bfa4e0e30e97215c9d22fcad313b66180f3c2200a310fce",
+          "file": "arimo-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "3d7d5503634beb2c87eaa91c6ddefca6581769b1fde21cb97c038576f5f87609",
+          "file": "arimo-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "JetBrains Mono",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "jetbrains-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "e06fd221ee1eab8d9b08043a704a6f06897460d3d09f8d9419b90d931ee602bd",
+          "file": "jetbrains-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "b4eef28d6f8ece87447d4d44a056c1aa71e46348dd9c1298c9beea925daef543",
+          "file": "jetbrains-mono-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "10ae486be091ac6abb125114b047db789847df3db9c48ceffafabe970aa7e37e",
+          "file": "jetbrains-mono-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "c33d042156c02385e59b6e260a46d141095352a4659afb0cc9cb03605e0601b1",
+          "file": "jetbrains-mono-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Comfortaa",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "comfortaa.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "6fb7be2499c3b77f180363515dc726755c8d1cab6fa0fd53d3aec3c77b1d95dc",
+          "file": "comfortaa-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "df44a9abe5c1b80b89afdc118c92e63b49f45c90fad2d0c02a4af99286f8fd00",
+          "file": "comfortaa-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Bona Nova",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "bona-nova.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "7987fbfd3c7bddd1b07adc3cc1e660323f51923c7606ebe8f70819ca324ae9aa",
+          "file": "bona-nova-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3ce3416739257a3ce855d4e35c87b6664b4cb362a798536c181640a16bd83b60",
+          "file": "bona-nova-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "7db7a4e2aeb96cb9b30d7af49db856d5469db4a144dcedee573a3d1e1cc84290",
+          "file": "bona-nova-italic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Arsenal",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "arsenal.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "837188c5850c17d933b95f4a4c965c61017701f795ad37ae95e13c0edfe5766c",
+          "file": "arsenal-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "78d3f58659bc3961c8f1df19c9a31df24eb56225ea1fd48512ae7309edda72e2",
+          "file": "arsenal-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "5e4ea6b9bd642908490c6133c2e3abfe093c9abcd1f71afadc743ad31a12399a",
+          "file": "arsenal-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "1f54959d7b4a394d64d109f3fdd227e94eb6dbf070124b02d57949cef2263555",
+          "file": "arsenal-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Lilex",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "lilex.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "958dd0ab3949071e5a39046a63397969cb4d0ac4b53e2d09713c31f3a2282332",
+          "file": "lilex-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "4fe63c32195026d3da4a5b83e86ce07423198547e338cae60bd8417a9040d98c",
+          "file": "lilex-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "b9031da783257fcaaa80a457cd33e21e6ec180701c6dd048e07c54db064023ac",
+          "file": "lilex-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "41df9028e4ffac3a9b9f0fe3904ba88950b476ae322a38844f41bb6405144e55",
+          "file": "lilex-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Comic Relief",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "comic-relief.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5243fe7725779e3c7b4ff27de081e3536e60734fc1ec488dc33e41e1a8232e02",
+          "file": "comic-relief-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "9a35a23cc0fd5fdb42dc8910047c0222b32f7225b5c5fb3e7a4ef3707430838f",
+          "file": "comic-relief-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Bona Nova SC",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "bona-nova-sc.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "0f4d56fe3d88c27b38e7c5be96ef79dc4e1996681ef6bd69df5b9b6895c0b759",
+          "file": "bona-nova-sc-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "510e7c9ea0c6f609197838a042815a7d7cfba343c8004d3db9049aef19f15cab",
+          "file": "bona-nova-sc-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "a7aa5a8fd3a3bb704e92a01f6cd813b825818b58d21ecf8a239af08a21ab42a5",
+          "file": "bona-nova-sc-italic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Arsenal SC",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "arsenal-sc.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "24b99b58ca80bc09a15df44ba2440375be5767d41aacf08f77820800040c8d64",
+          "file": "arsenal-sc-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a31bac35e7cc8c29a1ed1073e1f066a115420dc8daed0858ec7ff33b005d99c3",
+          "file": "arsenal-sc-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "7c361faa3aedd915cdae797a1bb72f07957562ce4e229b57fc3bfa35675ae135",
+          "file": "arsenal-sc-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "9f3442fa75b42a7565411dfad3d63a5923c1dc480e11232e818eca42d7bd0f27",
+          "file": "arsenal-sc-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Marck Script",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "marck-script.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "0718f91802b814d68ec78866add46dd089ced27a9b531917775b21a8449f6e15",
+          "file": "marck-script-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Brygada 1918",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "brygada-1918.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8cecfa132cc5d8df2c6ccbe0660eca6545fad8d29c68edcf62fceccb6efcb69c",
+          "file": "brygada-1918-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "59f80188f3e14fd0908e3a95fcf034ab4d45ae9f94cf52d1f18a1ac13a9038a9",
+          "file": "brygada-1918-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "9de64013705ba90c170c4221580a3d5580a4e9aaf87ebf4da862b23a446acb69",
+          "file": "brygada-1918-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "08f0f0a69383c873fd1ec5cdab64519d8bb0995998a212e0c99911e55fabdfce",
+          "file": "brygada-1918-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Overpass Mono",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "overpass-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "63a05fbe24559c19c0cadf137ec4062a7f764ea5ae5018de6993ce774037e2f3",
+          "file": "overpass-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a09b05aa632b561e19da881c91046059cec58b641b53454bb7b415dac03613fd",
+          "file": "overpass-mono-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Flow Block",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "flow-block.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "391f7d3b742df36f6a14030e9db0065c2d44b9f6af289722e12c98495af09a6e",
+          "file": "flow-block-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Flow Circular",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "flow-circular.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8c2f56e1f30ef6cf3d77eea20fc3baae1ac614a47d07f9e765f17010e95bc602",
+          "file": "flow-circular-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Pacifico",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "pacifico.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "6928d623ce7c2aec540aaf6454bf2a8f96ecbc8427c42e2a48716f25d29ba9c9",
+          "file": "pacifico-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Charis SIL",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "charis-sil.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "0c00e976bd5c5444ab022f80e0fab26d3b88abce11fde8cea46d9853c7af7494",
+          "file": "charis-sil-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "219cfcd7239e928c91ea8283d46ab7ca1a64087d04d00995b386d5f3b83854c8",
+          "file": "charis-sil-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "04ec89a3215fc9dd35514997c7156b86c75cff9f017364d6bc4882e665ae801b",
+          "file": "charis-sil-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "cb4cf36f735363a9ec58a4ec836e9cfb6628481a39f06ab8aa696605be5c2bf4",
+          "file": "charis-sil-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Carlito",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "carlito.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "4926e271561550b2c06e52d1135e3aea371f313e4832fa4dd42c74da682b77a1",
+          "file": "carlito-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "edcc98cd701cc75a076011a55a493da299244e51749188e680036aee61ffe76a",
+          "file": "carlito-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "3740414e24e84935c37df04ce304b12d7b0e9fc68abd5123ed41fc6c56317fa9",
+          "file": "carlito-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "1c96a57e0616dbf8f62110e996c900eb3d0b95614554e0df2cc6f59d1ffe90a5",
+          "file": "carlito-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Roboto Mono",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "roboto-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3f3c18e7416f9b5eb4737cea4d6052ffc2259d0c1f5f4ca83bc124f3e6710246",
+          "file": "roboto-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5edcb01179145e054360515dff43f08602925115f4319920f2285f8666b6775b",
+          "file": "roboto-mono-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "9aaec4f79fbef7eddb875ebb8e218deaf669837c1fa9eed126fdc87365d9639e",
+          "file": "roboto-mono-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "56b0cd68a93cff9a627ca12f8642a93437460521bc3472947907aa20e9797db1",
+          "file": "roboto-mono-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Flow Rounded",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "flow-rounded.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "aef5f966d0b3d4239f352d1acc539e5881ba30885845a14e08b3fbd586bfc567",
+          "file": "flow-rounded-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Pangolin",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "pangolin.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "9127f58542484c923dd8d7429f6a8bad7c83c78dc09321da673564a5f80cc91f",
+          "file": "pangolin-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cascadia Code",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cascadia-code.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "314a986cc63f70260589d140dfe49cfb22d35219fc5567fe310930246e90508e",
+          "file": "cascadia-code-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8227145cab845b231287112cd384b0b6791d47c8d4f821c028ef89e0fe51d74a",
+          "file": "cascadia-code-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "347046d4f4fc2d5360b47f87c2c7128907f05a7090ddb03c308e2ee597cef8ad",
+          "file": "cascadia-code-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "abc0406fa1c65ec911361ce6a53b07ce930f79cb97d2260c3e712934e0b70cb7",
+          "file": "cascadia-code-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Source Code Pro",
+      "category": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "source-code-pro.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3db92354c8ffcb52fde4d45edf2ba20f46991ce6976d4662a43d0070137ffc4c",
+          "file": "source-code-pro-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3f6b9c3c878b28b0f14ce74ca04a5154a46d95ae16a63bc96f97a02fa4888dc0",
+          "file": "source-code-pro-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Forum",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "forum.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "9d3e3d7dc3dfbe363cacdae83e8c95f07ff4389cb8be62be80b38bd67290b595",
+          "file": "forum-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Playpen Sans",
+      "category": "handwriting",
+      "license": "OFL-1.1",
+      "licenseFile": "playpen-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8ed1f28a90ae100d92881b2525650b63721f3579b16c38317a3bf087deddf1aa",
+          "file": "playpen-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8cf68788e52cbd1f7efccb6b32bbd1def09b28e70bae75e7ad78b4047dc5c4fa",
+          "file": "playpen-sans-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cormorant",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cormorant.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "25c17112b4024d8813cf0e382864f9ae2d5100d96c06296b239760260fd378e6",
+          "file": "cormorant-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ef3ba69a41ac8ee8cecc4bca0191daa379e0c430f216810078a4ca7494c96fb1",
+          "file": "cormorant-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "3bdadb4ae11c41fe79e0658343dc9e43c794803de1292afbd3c9d20d5971bd09",
+          "file": "cormorant-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "0f77bcb685684dc30ee473f51f11306e2b0db796a246a23383f9f1b3cc6b3548",
+          "file": "cormorant-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cascadia Mono",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cascadia-mono.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "08e3dba356e30a7d1bc872c4aa7b2302cbab89d3b41bcea6687a38c26a048449",
+          "file": "cascadia-mono-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ff28117f357d37dba82289a57fcdc5fe55dec46ab7886dd8b1ae286a8ac4ec4d",
+          "file": "cascadia-mono-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "51e6fbd4b4c7c6d6f5f1b266799dd0c6aa38665e13b41f8e4454c44e23daca7d",
+          "file": "cascadia-mono-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "bc2609b949abb5ba3253a893a9a65b3827a9478cc55a67b1f5f4c38ccfd0461c",
+          "file": "cascadia-mono-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Handjet",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "handjet.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "4b3d95205ca1cd18f6df83d44caab6b44fa32469744e568eab3577c612868d51",
+          "file": "handjet-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "9157aa8b5ad9307571daecc6e9dcc53b23d1d39a94e64e197a65267ec63e78e9",
+          "file": "handjet-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cormorant Garamond",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cormorant-garamond.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "f727e8e268cde196e929136766aaa513e2df7b8d3db4fe92f2dcf2c87fe2a261",
+          "file": "cormorant-garamond-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "565bd07c169c6d381f076408121c412ea9996f3ebe6474d9774ffc33104a3ff3",
+          "file": "cormorant-garamond-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "8457e4e64ff14c79dd24b5d7369a191e7b2ed3a0d2eed984f77cb4c764a7cb2b",
+          "file": "cormorant-garamond-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "fd868363da1fc75fe5d78e1caaa75d83c7e84b802d2d135b4514c3a6a12382b6",
+          "file": "cormorant-garamond-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Kablammo",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "kablammo.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "768a62ef29bfb154a8ef9d3e7050a9f9ce9af209c50b892aae56c392715bf08e",
+          "file": "kablammo-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d90a76b2d59634adad6110e0f9f5596474907c7f505f1056178bfb3827a4b29a",
+          "file": "kablammo-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cormorant Infant",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cormorant-infant.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "927a534f73416aa89eb2fb6398f990221b861a633fe861c084763886b4e55725",
+          "file": "cormorant-infant-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "fd8e1995ee857799665f73092d0659cf22088696c8367882ea38aa392219e884",
+          "file": "cormorant-infant-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "05128f561f128d97c082a766593f3470ef63702f2f77cf224e46601d0cc2bacd",
+          "file": "cormorant-infant-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "952490a72045dc6f770c0b3f24744df837d5d79413379cf8842ebd4f3f18fc50",
+          "file": "cormorant-infant-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Kelly Slab",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "kelly-slab.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3db8cd52ccc1ec7d124667a71e9cbe1e918d7be8316cfa34443b6c2c86bebbf3",
+          "file": "kelly-slab-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cormorant SC",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cormorant-sc.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "485f0a652f84c5a8d934cc2d75210dc2a3920ca1ec98a2c2d8e4b8f12e9d7a21",
+          "file": "cormorant-sc-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "578ec97f3d44023cf7e55da2eff1568d9eb92f77d66834b9cf6ddd62af6c8f71",
+          "file": "cormorant-sc-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Libertinus Serif Display",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "libertinus-serif-display.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d8d1039dcb7f588102bc0a7c7dbdacccd5f966be143cb361b39d2b6f3d52de6f",
+          "file": "libertinus-serif-display-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cormorant Unicase",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cormorant-unicase.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "789433f29ac66fdb69fd2e1de30633ae379c05ff8371a587effcf3873bff09be",
+          "file": "cormorant-unicase-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d7e78511abb9c07f9f1f448db76e722873c68c0a13b83ab1393e3c15fcd38a4d",
+          "file": "cormorant-unicase-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Commissioner",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "commissioner.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "6792ef794dabc7c7c0377248ed818367178ce05d77fc72ef0c4f0ff98c2b9e00",
+          "file": "commissioner-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "b017b37151b74ed798689237c59f54b699fe1676324475c2d3872ffcebffe453",
+          "file": "commissioner-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Lobster",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "lobster.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "2a511d199d0f97766719f1a1099854bcdcd0128ecdfe205ad5afc6ff4845e82e",
+          "file": "lobster-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "EB Garamond",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "eb-garamond.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a4e9bc0c536cdd7a7e7d54d3651a61c1715e964cb9204c1a47e6ed90730ae691",
+          "file": "eb-garamond-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8358bf74025973ef93e0bcd41ce637b0ea2b0a931fc872ac6bfd4f9fc6b60c32",
+          "file": "eb-garamond-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "40d58f5386880a4fe5d4af96526896e3a0b0c46cd66d76a44eeba088749f738c",
+          "file": "eb-garamond-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "95b82615725e918db95fd2abeb8099f528715cedb77f17fd436aa6538a9b0117",
+          "file": "eb-garamond-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Cuprum",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "cuprum.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "096fdc70bf88b3499beefbe46be43abcb588d9e228c18f75a1cd86d1f0cc7c9a",
+          "file": "cuprum-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "34e705cdc298bd8b4cad05a70f9ccc5e74d5afa37e0a2bba93714242cb178bdd",
+          "file": "cuprum-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "b8f7f21bd1f1273b397776e377fc72651a11c023027ceeb91a3947c11929bf62",
+          "file": "cuprum-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "beb61c2f7fa5ffa2330983570b2887af42197df8524f524aa4ccd0350068761b",
+          "file": "cuprum-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Monomakh",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "monomakh.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8d83133b8a5223a1560c481b96b000be3059e6d3bbd41ef6add0a20e7ec5c726",
+          "file": "monomakh-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Gabriela",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "gabriela.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "f77310d8bdd05136566d7a37e0a2e8133cfc61491fc913aa7f23264ed8990920",
+          "file": "gabriela-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Days One",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "days-one.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "1a6d583aba31b9c528993e456d32fe1e8acd3760c617affe958c911fdf377938",
+          "file": "days-one-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Noto Sans Display",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-sans-display.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "f34c2b846e3a456abf7f3cee0b7936322234e4884c81994a44999acd48e81121",
+          "file": "noto-sans-display-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "178ff03bbbe0cf6637f862ca5f4b09eacf033c4e7fe93f9eed7881fb77929ac5",
+          "file": "noto-sans-display-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "e60462446bd987bc593c1a7048b31358fa91fea17ec97fb01a86dcf5c654a139",
+          "file": "noto-sans-display-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "4d1871db2158f599a8b8d77a0210fbf74cade9aec79564d5ea378cfa195d4465",
+          "file": "noto-sans-display-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Gentium Book Plus",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "gentium-book-plus.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c1423b582ae8ede04a71f2cba8172347ae85194a86076e21bdae5c292e559e0d",
+          "file": "gentium-book-plus-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8958376a69ce5bc7b2bbb1eef2504e1a0d8f1b0b5c5298a4d45848bc963821b5",
+          "file": "gentium-book-plus-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "efdccbd26d5a9e36e1c98ed90f71005e211c5aaf65412f5caf625cdab1654914",
+          "file": "gentium-book-plus-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "0af0903712bcfb6219b7542dcdc74904327b82f78c524bea503b0c66a6d245f3",
+          "file": "gentium-book-plus-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Didact Gothic",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "didact-gothic.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ae45a7d35140e46578e74ace2fec2c85050863c8b53107116608731f8a62385e",
+          "file": "didact-gothic-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Noto Serif Display",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-serif-display.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "2c7039511d379c25c4652a0f140825a0b59325d05cc4882117829da15f9f5393",
+          "file": "noto-serif-display-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "6d11eb68285b6dd5b0e60dd5dfb53d175f64e1f2b879824bceea189579d17b94",
+          "file": "noto-serif-display-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "18938ba6ff3b9b83fc7a72a1c12dd873819a36739468e6f71db6546b13126e72",
+          "file": "noto-serif-display-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "9b23ca4fd532cef557b1d5935fbc04cd162a2fe11384593ecf3fd17ea57cc519",
+          "file": "noto-serif-display-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Gentium Plus",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "gentium-plus.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "756056e7c5db087d3f750d8170f7e66ab36cdd47d82a00c09a9c508c33f884d6",
+          "file": "gentium-plus-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8a782dc9c6a498a84133c8ff2aee5ec4f45b369525b1de368d3f12b48ce6b9c6",
+          "file": "gentium-plus-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "3ded890f8c12425eacb59280f42559275502c0259e5063e06d9ec9deb76364ce",
+          "file": "gentium-plus-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "a687b0f3bda8796c2c8cdefaa3fd997eebb9606198e095d0911b2b9afbd36a7b",
+          "file": "gentium-plus-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Oi",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "oi.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a22ec7eb35253e61cd5b674d42dda959f7b9d75aacca657e57714051a4c554ad",
+          "file": "oi-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Orelega One",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "orelega-one.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d03c03b79f6748c1363613bf7e63063215782da0d8b26a4be6d70563261b26c3",
+          "file": "orelega-one-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "El Messiri",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "el-messiri.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5585dfc817caa55174fc5a9536141c148ce60effed5146d1a30e8161ba0c3e98",
+          "file": "el-messiri-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3ed701c788cd26a24097b9532bf779ba007d1e1af08309506cd1ced32bffee18",
+          "file": "el-messiri-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Playfair",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "playfair.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "191601c5a0a095a5ea5a844bcfbfd35d3a979c02ed29a3e3f434c46ba50cf4a9",
+          "file": "playfair-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "e45013102bde53e01ae9b235a0fa0bd55ece543027bcd341bcc05106ca9f0765",
+          "file": "playfair-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "147a7eaa1ebcf025810dc671dad40dbc08b20c823ca8fc84f9d9d5284d1c8d7b",
+          "file": "playfair-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "971509cc62043e94022eb33fce081467e53b0afe9717715457ddc9470355c2f0",
+          "file": "playfair-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "IBM Plex Serif",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "ibm-plex-serif.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ad564bb2e46a69c6a6d304cf0fee37d0d15d04b30fbae9b3c1b68d40e6408512",
+          "file": "ibm-plex-serif-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "151c805a322e816df7adef6da77d524e9f14f2e2e5300fb8f4cddd25e6a690d6",
+          "file": "ibm-plex-serif-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "48db5ae87c95257e1cfcc342b45a68195a98d7869442ad674df57a3deefe3faa",
+          "file": "ibm-plex-serif-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "69d334892b259b6e22a74fd07e1ef6d8b48bf838e182a23635c9188ac74725f7",
+          "file": "ibm-plex-serif-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Exo 2",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "exo-2.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d0521367802ce3cc29594ceda169dcd9b4d52b28a8fbf4aa7f5cff96c728a5bf",
+          "file": "exo-2-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a1eefc9f18d00e6c5f7a750f6980d8383bdf779c1ead8cd5fd0a23047292b7e7",
+          "file": "exo-2-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "9e3ad1218d176c3d0276e32112eaa6f77ce00f35639195f4b89b47e7fec65bc5",
+          "file": "exo-2-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "b477bf2d6de481fb62560656a2f620aeb48718e6b1b7c3c1250005acf2d0012d",
+          "file": "exo-2-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Finlandica",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "finlandica.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "91ca5c71e61f345266d29cccec3faa5f17f19dcdd92bce4acb697250b94f654b",
+          "file": "finlandica-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "0d40ff3f4042e5cfa586b45681be862758190b11065376805561f3e053b47255",
+          "file": "finlandica-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "d500518825fda9d88104dfc7005e4e75c1fab387c86686a4ef91f35c86adc181",
+          "file": "finlandica-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "5eeb01cc43fabb3cbd5aca880229fb4934530c90843492a7fbf2919d0d00e939",
+          "file": "finlandica-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Poiret One",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "poiret-one.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ecc3395a1df908a5e4484479fde399a54dbb0ab01f3ff88e309b19643237361b",
+          "file": "poiret-one-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Finlandica Headline",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "finlandica-headline.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "557cadd01c5be5252611baa42a6c1e5d3c230261fc46b08d83f4aca5fa750e58",
+          "file": "finlandica-headline-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "82703803e54552118dbff04fc1061cb1b0982b3131c2cb009ad4d0f817a23d97",
+          "file": "finlandica-headline-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "1907a1afc46019ec5e2b724267a9e11cbb4b128cd2f1e98063fdda27b3635beb",
+          "file": "finlandica-headline-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "26690616de804b4b3f2b49742d30fb07fb4d59b20e9b0a08098dd9fed93a7565",
+          "file": "finlandica-headline-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Ponomar",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "ponomar.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "18af98fe781339c0451d619d041a17716e60851570ab1584caa6e86dcde0a423",
+          "file": "ponomar-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Finlandica Text",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "finlandica-text.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "18f84ca1feecd4ca366369c8055f1dbbd1fc3283e519dd5ce67010cc75e8bffe",
+          "file": "finlandica-text-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "043eec76a0f88db12b9e158f0371a3db6f0cab493dca933d2289e2e63550377d",
+          "file": "finlandica-text-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "853df4577ef0bd254c7fd098525343520696adf4ab0fc2a2cfe602e935d299f7",
+          "file": "finlandica-text-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "a48b4ee059e33bb3841025c19f2c78ac4ce3f2e3bf0c6049eda027c2a3148bb7",
+          "file": "finlandica-text-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Press Start 2P",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "press-start-2p.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "9ca8ccb2796f10e636129e7451f55e143588fed5b0846457cfb144b1393083aa",
+          "file": "press-start-2p-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Fira Sans",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "fira-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "311fd23871e8a383e8f10943961abc331601086a68a604ff2b0e8135c4623e55",
+          "file": "fira-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "092e58c30ea91a73096b1748bff263c98ec21f27b23c7ef993cf7dd96b1609dd",
+          "file": "fira-sans-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "826087bf6e3cccec67bcdc5f6c8cf9df49319f2150cddc4e4ecac3715a561ed7",
+          "file": "fira-sans-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "dd57b399b20a0221d5a52ab7e0a73ecb168e18852723a9025eb389b8de6d3478",
+          "file": "fira-sans-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Prosto One",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "prosto-one.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "56712669c54293061cf5a4cf3fc1be7a0ce43c1e6c66ea0368298101dbbaf873",
+          "file": "prosto-one-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Kurale",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "kurale.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "b463b5970a01e709ef46568c55602e5981fff2217be6ba5a3f952f0571df6c5e",
+          "file": "kurale-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Ledger",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "ledger.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c30832321a4764c7d4ff19d6798576cf9de1643582be17666c92d966fd14224a",
+          "file": "ledger-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Geist",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "geist.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ac394ce1aa001b7faeb585f9a4eb9fbdd271ec6a678505b624225f37c99f6a0d",
+          "file": "geist-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c0de35839cce641c316ea89f50b3f42470f0e7f3819e847795853ab7d98a33a1",
+          "file": "geist-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "579be79b819cf9ddb74a9244abe5c9a9eeafbda869adaafe409b78ac9fca2676",
+          "file": "geist-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "8b9d56f044e0e34629df9b5f8fc2e97ef4d7aff33d4e8c99b235009ee5a92f23",
+          "file": "geist-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik 80s Fade",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-80s-fade.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5f870f79c813bea06cf0a5cd0f27bbc9056f5a2403933c8c5f0ac4cb998158e8",
+          "file": "rubik-80s-fade-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Libertinus Serif",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "libertinus-serif.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "b06e7ad27bb4fdcaa1b88c28c19db1a0b31e81511f6e0a6a95de414f86ded29c",
+          "file": "libertinus-serif-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "e18281fb8f160fea0594159319552d0e860f9d940bcadecdc93ab67e0c0d5211",
+          "file": "libertinus-serif-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "1ab3e0c559127228a7e485bb18db652504a0009f9ff5350e1f3a2c847870e02a",
+          "file": "libertinus-serif-italic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Geologica",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "geologica.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "da8bf84bf080e6d5d6b08ca4952ef2aeec426b293618f2f1e1d23073e6a76393",
+          "file": "geologica-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "7cdfc5d537ffaa1583e7cb9ca8458e2b2cc811be6fbbb442c904ca0973166c79",
+          "file": "geologica-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Beastly",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-beastly.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "95b616b3b6ba82207e627269687600678f7ae533503d4bd4fbc324a8c261cc4d",
+          "file": "rubik-beastly-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Literata",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "literata.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ad1158256e8fc5764abe5d1b0d0515fbed7d6cd286f4214d5a7759e745048d08",
+          "file": "literata-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "3f3c49267bba60c4d74b7cdf5c2607e9e694fc290992ac95160524531f3db746",
+          "file": "literata-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "7042f3acbfd27fadb59d586ea073ff8167deadead1420dd7c894fe088cefff94",
+          "file": "literata-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "10c27ba367f701fb98818e441cd1bb826c83d42eabbbbfb3b5a78a1d9f5122e4",
+          "file": "literata-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Broken Fax",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-broken-fax.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "308f277ab3278b69b6fd99ea27f6b57f31b5344b0d56967fd647d6c3ac1d9336",
+          "file": "rubik-broken-fax-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Lora",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "lora.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "196e5db0569670d7fdb7b3c76207dbff1c31013deac84ae36e1b3e9496b6cc27",
+          "file": "lora-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d964433ac71ec25ee743b53f879116753854865fe1a97df69c3771d8413ae83f",
+          "file": "lora-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "f70a557d4fd63ae637b18ac8e5c18682480bbeb338c1ef25913887076176612d",
+          "file": "lora-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "fb4375ebe420d010bcb5363c080d507febc76548e9feecdd8acc0388d01f44e1",
+          "file": "lora-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Golos Text",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "golos-text.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "2a43ed35cb0b7cfe608dd2a843828b4c9a4caaf1d55450c87a1f26fec1a178f6",
+          "file": "golos-text-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d8914cc833b0b1f681ea69e8d5d75f58a54174e8ffb1b34ede0bdf2ce8ab9da9",
+          "file": "golos-text-bold.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Bubbles",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-bubbles.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5261a91db6d2a705d19d97315ead25ed97f49b3a3f4bdb9c0fd27726693e3ebd",
+          "file": "rubik-bubbles-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Burned",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-burned.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "96b12f24eb71b46e0feb948a6cba91ff632fa59239ce30e19d722eb1f50ef911",
+          "file": "rubik-burned-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Dirt",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-dirt.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "000164601112d48402e8c7ebda8dd88b1cd06d308ec13c77bb2932d08008a72c",
+          "file": "rubik-dirt-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Distressed",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-distressed.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "809377ea31439f7b05d6b3e7b0fc1f55cd53ebb9ce222700e4fc1d64ae834d40",
+          "file": "rubik-distressed-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Doodle Shadow",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-doodle-shadow.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "e2d4326815f737831d2a9bbb50990fb8da34be63de6de52bd5c257b2f167893a",
+          "file": "rubik-doodle-shadow-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Doodle Triangles",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-doodle-triangles.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "d1c8c8ac806c810541cebf1955e90e08ca4b8b71f8b8aec8258201196fb18aa6",
+          "file": "rubik-doodle-triangles-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "IBM Plex Sans",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "ibm-plex-sans.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "77f0b0dcb274ecca33f32c1f60c82fb30857fd1a498a574fd7fe597c47283335",
+          "file": "ibm-plex-sans-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "a55309df356885b359d0aa217170d56c9bba951e367cb3a96e5ed0cc754ac52f",
+          "file": "ibm-plex-sans-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "9480ebdd0402e8d7a966f07501edf4fffc1e4d74567f86ecfba27b33dfa6e1fb",
+          "file": "ibm-plex-sans-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "ac36192a59899e866f0125211228115b7440b18256ec896c469873c423ad40fd",
+          "file": "ibm-plex-sans-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Gemstones",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-gemstones.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "c5fd44b9f19d6224793a96d4d841198dfdc14218ceb644bc097d386d43f4b514",
+          "file": "rubik-gemstones-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Old Standard TT",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "old-standard-tt.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "21a32c451bb21e30093626cbddec5c9708821ad136a2724985327bbc701caaf2",
+          "file": "old-standard-tt-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "05305f035ea2bfc115f993cdb145a3919ae8055fff9f77514973d23f1b73151b",
+          "file": "old-standard-tt-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "96ff8849d1d358b0b1584efe19dd3bc50d10fb60af3f3e7730c029b72de0340a",
+          "file": "old-standard-tt-italic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Glitch",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-glitch.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "26bba76b2ff6b3b3cb4d054b744d5af9315a30ccf7f5343eb3ea486a501e91fc",
+          "file": "rubik-glitch-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Oranienbaum",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "oranienbaum.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "32ef97744395d933eab99b65e4a9e807ae33179848ef637cd7f594d8320de6a2",
+          "file": "oranienbaum-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Inter Tight",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "inter-tight.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "ad11faea21ba5f0ca932ce4328de2ffe38540eb277e93c151c71bc10429a3705",
+          "file": "inter-tight-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "e9fe56c5c63477655bc1598f55351c27eca1bce3eb3d5ee38e44ac4972c2822a",
+          "file": "inter-tight-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "8d6cd935c3fc1630cb5753ef7e4c90ae1cca4d7a8d0577b1add2b27437ea0220",
+          "file": "inter-tight-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "a5c54d23fc5bb794d7140f8d3a7de869768a1f5b7806ff3000e4258fba8fdbd3",
+          "file": "inter-tight-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Glitch Pop",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-glitch-pop.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "2fa882cbc1175a91186e9214bad596323d5cf797556bb701bc66884a840bca10",
+          "file": "rubik-glitch-pop-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Piazzolla",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "piazzolla.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "8d1621cf19b6cd32c68c8604ab9e2cb3b8d680e042663277bb288e924a01f864",
+          "file": "piazzolla-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "be32f5222ee814bffd8932488823d256c958c62ccff07190bda4c1937ca7cdd7",
+          "file": "piazzolla-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "109a3f689112c0acff0bb011016b1e37cfcfa49e310f784f94e92a5f4b005285",
+          "file": "piazzolla-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "de217ce199b14014d8a816d463d06964e0d685b414c810e0f48895ee4de46b16",
+          "file": "piazzolla-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Istok Web",
+      "category": "sans-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "istok-web.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "779085c65bec8cba56cac98890a9ded30e03e93a0c7341cf3479e7d7297cd42b",
+          "file": "istok-web-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "5641f6f3965b261d085bac7055de428ce1081f0ab03b1386ef1b3be638fe4bcf",
+          "file": "istok-web-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "8fbb4a677cb8fa853d33bce007cdc3a619502ba9b477eb3a86342273428c122c",
+          "file": "istok-web-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "ab5ef7e5fcb8cd415af84248bd502dce997ab791f3bfce841069f3ea6e274729",
+          "file": "istok-web-boldItalic.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Rubik Iso",
+      "category": "display",
+      "license": "OFL-1.1",
+      "licenseFile": "rubik-iso.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "85b5fd753e3fc725482b87950efff0be88a01261eb406260584bba52dfe85093",
+          "file": "rubik-iso-regular.ttf"
+        }
+      ]
+    },
+    {
+      "family": "Playfair Display",
+      "category": "serif",
+      "license": "OFL-1.1",
+      "licenseFile": "playfair-display.txt",
+      "coverage": "full",
+      "faces": [
+        {
+          "style": "regular",
+          "weight": 400,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "1dadbb714fa93cbbdde4e9683015f5251bb5c3faa50f93c872b27c897691a0ef",
+          "file": "playfair-display-regular.ttf"
+        },
+        {
+          "style": "bold",
+          "weight": 700,
+          "italic": false,
+          "embedding": "installable",
+          "sha256": "776abc75d8ee90f94714a155e806668674db01f35faf7d5fd63213a9951759d0",
+          "file": "playfair-display-bold.ttf"
+        },
+        {
+          "style": "italic",
+          "weight": 400,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "4aa9988ed8c0320dc1c7c14b89eb572fa8358eba80730e65d660c2f758ce3f88",
+          "file": "playfair-display-italic.ttf"
+        },
+        {
+          "style": "boldItalic",
+          "weight": 700,
+          "italic": true,
+          "embedding": "installable",
+          "sha256": "f9c7b37d7489f88f861b1d1737a74132d31e0e7d6f9a1a866a4df3f0dc9e3ef6",
+          "file": "playfair-display-boldItalic.ttf"
+        }
+      ]
+    }
+  ]
 }

@@ -7,6 +7,7 @@ use tauri_plugin_single_instance::init as single_instance_init;
 #[derive(Default)]
 pub struct AppState {
     allowed_paths: Mutex<HashSet<PathBuf>>,
+    trusted_paths: Mutex<HashSet<PathBuf>>,
     launch_paths: Mutex<Vec<String>>,
 }
 
@@ -19,6 +20,26 @@ pub struct PathStatus {
 }
 
 impl AppState {
+    fn trust_path<P: AsRef<Path>>(&self, app: &tauri::AppHandle, path: P) {
+        let path = path.as_ref().to_path_buf();
+        self.allow_path(&path);
+        let mut trusted = self.trusted_paths.lock().unwrap();
+        trusted.insert(path);
+        if let Ok(root) = app.path().app_data_dir() {
+            let _ = std::fs::create_dir_all(&root);
+            let paths: Vec<String> = trusted.iter().map(|p| p.to_string_lossy().to_string()).collect();
+            if let Ok(bytes) = serde_json::to_vec(&paths) {
+                let _ = std::fs::write(root.join("trusted_paths.json"), bytes);
+            }
+        }
+    }
+
+    fn is_trusted<P: AsRef<Path>>(&self, path: P) -> bool {
+        let path = path.as_ref();
+        let trusted = self.trusted_paths.lock().unwrap();
+        trusted.contains(path) || path.canonicalize().map(|p| trusted.contains(&p)).unwrap_or(false)
+    }
+
     pub fn allow_path<P: AsRef<Path>>(&self, path: P) {
         let p = path.as_ref();
         let mut set = self.allowed_paths.lock().unwrap();
@@ -43,6 +64,22 @@ impl AppState {
     }
 }
 
+#[cfg(test)]
+mod path_grant_tests {
+    use super::*;
+
+    #[test]
+    fn session_access_does_not_create_a_trusted_grant() {
+        let state = AppState::default();
+        let path = PathBuf::from("untrusted.docx");
+        state.allow_path(&path);
+        assert!(state.is_allowed(&path));
+        assert!(!state.is_trusted(&path));
+        state.trusted_paths.lock().unwrap().insert(path.clone());
+        assert!(state.is_trusted(&path));
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct FilePayload {
     pub path: String,
@@ -51,7 +88,7 @@ pub struct FilePayload {
 }
 
 #[tauri::command]
-fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, String> {
+fn folio_pick_open(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<Vec<FilePayload>, String> {
     let files = rfd::FileDialog::new()
         .add_filter(
             "Supported Office Files",
@@ -86,7 +123,7 @@ fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, St
                 .to_string_lossy()
                 .to_string();
             let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
-            state.allow_path(&path);
+            state.trust_path(&app, &path);
             opened.push(FilePayload {
                 path: path_str,
                 name,
@@ -177,6 +214,7 @@ pub struct SaveFilter {
 
 #[tauri::command]
 fn folio_pick_save(
+    app: tauri::AppHandle,
     default_name: Option<String>,
     format: Option<String>,
     filters: Option<Vec<SaveFilter>>,
@@ -197,7 +235,7 @@ fn folio_pick_save(
     let file = dialog.save_file();
     if let Some(path) = file {
         let path_str = path.to_string_lossy().to_string();
-        state.allow_path(&path);
+        state.trust_path(&app, &path);
         Ok(Some(path_str))
     } else {
         Ok(None)
@@ -311,6 +349,9 @@ fn folio_user_region() -> String {
 
 #[tauri::command]
 fn folio_allow_path(path: String, state: tauri::State<AppState>) -> Result<(), String> {
+    if !state.is_trusted(&path) {
+        return Err("Access denied: path was not granted by a native file action.".to_string());
+    }
     state.allow_path(PathBuf::from(path));
     Ok(())
 }
@@ -466,6 +507,23 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(app_state)
+        .setup(|app| {
+            if let Ok(root) = app.path().app_data_dir() {
+                if let Ok(bytes) = std::fs::read(root.join("trusted_paths.json")) {
+                    if let Ok(paths) = serde_json::from_slice::<Vec<String>>(&bytes) {
+                        let state = app.state::<AppState>();
+                        let mut trusted = state.trusted_paths.lock().unwrap();
+                        trusted.extend(paths.into_iter().map(PathBuf::from));
+                    }
+                }
+            }
+            let state = app.state::<AppState>();
+            let launches = state.launch_paths.lock().unwrap().clone();
+            for path in launches {
+                state.trust_path(app.handle(), path);
+            }
+            Ok(())
+        })
         .plugin(single_instance_init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
@@ -475,7 +533,7 @@ pub fn run() {
                     let p = PathBuf::from(arg);
                     if p.exists() && p.is_file() {
                         let state = app.state::<AppState>();
-                        state.allow_path(&p);
+                        state.trust_path(app, &p);
                         paths.push(arg.clone());
                     }
                 }
@@ -488,7 +546,7 @@ pub fn run() {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 let state = window.state::<AppState>();
                 for p in paths {
-                    state.allow_path(p);
+                    state.trust_path(window.app_handle(), p);
                 }
             }
         })

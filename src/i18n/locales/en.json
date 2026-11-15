@@ -1,4 +1,5 @@
 {
+  "loading": "Loading editor…",
   "lang": {
     "switchToEnglish": "English",
     "switchToUkrainian": "Українська"
@@ -433,6 +434,8 @@
     "lossyTxt": "Saving as plain text will remove all formatting, images, and layout.",
     "lossyMd": "Saving as Markdown may remove rich text formatting, styles, and layout.",
     "lossyGeneric": "Some formatting or content may be lost in this format.",
+    "sourceLossCopy": "This file contains features Folio could not preserve: {{items}}. Save an edited copy to keep the original intact.",
+    "sourceLossOriginal": "The original file must stay intact because its imported features cannot all be preserved. Choose a different file name or location.",
     "badExtension": "Folio cannot save \"{{name}}\". The extension \"{{ext}}\" is not supported for {{kind}}s.",
     "layoutDiscarded": "Layout was discarded and reading order may be wrong.",
     "skippedPages": "Pages with no selectable text were skipped: {{pages}}",

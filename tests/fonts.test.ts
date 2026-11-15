@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { createHash } from 'crypto';
 import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument } from 'pdf-lib';
 import catalogJson from '../src/fonts/catalog.json';
 import type { FontCatalogFile } from '../src/fonts/types';
 
@@ -78,7 +79,7 @@ describe('Font library', () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   it('keeps an explicit quoted Times New Roman and rewrites the sheet default prefix', () => {
     const rewritten = rewriteSheetFont('normal normal normal 11pt Times New Roman,"Helvetica Neue", sans-serif');
@@ -223,7 +224,9 @@ describe('Font library', () => {
       },
     };
     const { bytes, omissions } = await exportPdf(state);
-    const raw = new TextDecoder('latin1').decode(bytes);
+    // pdf-lib normally packs font dictionaries in compressed object streams.
+    const parsed = await PDFDocument.load(bytes);
+    const raw = new TextDecoder('latin1').decode(await parsed.save({ useObjectStreams: false }));
     expect(raw).toMatch(/NotoSans|Noto Sans/);
     expect(raw).toMatch(/Manrope/);
     expect(omissions.some((item) => item.includes('U+4E16'))).toBe(true);

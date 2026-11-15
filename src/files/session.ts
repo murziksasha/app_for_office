@@ -1,4 +1,4 @@
-import { DocumentKind, SupportedFormat } from '../types';
+import { DocumentKind, ImportReport, SupportedFormat } from '../types';
 import { t } from '../i18n/instance';
 
 export interface DiskStamp {
@@ -421,6 +421,10 @@ export function resolvePickedName(
 }
 
 const LOSSY_FORMATS = new Set<SupportedFormat>(['txt', 'md', 'csv', 'tsv']);
+
+export function importRequiresSaveCopy(report?: ImportReport | null): boolean {
+  return Boolean(report?.fallbackUsed || report?.skippedFeatures.length || report?.warnings.length);
+}
 
 export function isLossySave(currentFormat: SupportedFormat, targetFormat: SupportedFormat): boolean {
   if (currentFormat === targetFormat) return false;

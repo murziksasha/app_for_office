@@ -7,6 +7,11 @@ import { exportPptx } from '../src/slides/pptxAdapter';
 import { PresentationModel } from '../src/types';
 
 export async function buildFixtures() {
+  if (typeof DOMParser === 'undefined') {
+    const { JSDOM } = await import('jsdom');
+    const window = new JSDOM('').window;
+    Object.assign(globalThis, { DOMParser: window.DOMParser, Node: window.Node });
+  }
   const fixturesDir = path.resolve(import.meta.dirname, '.');
 
   const files = [

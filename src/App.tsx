@@ -67,12 +67,14 @@ import { SaveAsDialog } from './shell/SaveAsDialog';
 import { ChoiceDialog } from './shell/ChoiceDialog';
 import { TabStrip } from './shell/TabStrip';
 import { PrintView } from './shell/PrintView';
-import { DocumentEditor } from './document/DocumentEditor';
-import { SpreadsheetEditor } from './spreadsheet/SpreadsheetEditor';
-import { SlideEditor, emptySlideCommandState, type SlideCommandState, type SlideEditorHandle } from './slides/SlideEditor';
-import { Slideshow } from './slides/Slideshow';
+import type { SlideCommandState, SlideEditorHandle } from './slides/SlideEditor';
 import type { WorkbookInstance } from '@fortune-sheet/react';
-import { PdfViewer } from './pdf/PdfViewer';
+const DocumentEditor = React.lazy(() => import('./document/DocumentEditor').then((module) => ({ default: module.DocumentEditor })));
+const SpreadsheetEditor = React.lazy(() => import('./spreadsheet/SpreadsheetEditor').then((module) => ({ default: module.SpreadsheetEditor })));
+const SlideEditor = React.lazy(() => import('./slides/SlideEditor').then((module) => ({ default: module.SlideEditor })));
+const Slideshow = React.lazy(() => import('./slides/Slideshow').then((module) => ({ default: module.Slideshow })));
+const PdfViewer = React.lazy(() => import('./pdf/PdfViewer').then((module) => ({ default: module.PdfViewer })));
+const emptySlideCommandState: SlideCommandState = { canUndo: false, slideCount: 0, slideIndex: 0, element: null, slideSize: '16:9' };
 import { applyStoredTheme, readThemePreference, watchSystemTheme } from './shell/theme';
 import { familiesInState, defaultFontFor, missingFontNames } from './fonts/collect';
 import { ensureFamilies, getFontPackState, retryFontPackCache, startFontPackCache, subscribeFontPack } from './fonts/load';
@@ -279,6 +281,8 @@ export const App: React.FC = () => {
           path: tab.filePath,
           cleanHash: tab.cleanHash,
           diskStamp: tab.diskStamp,
+          importReport: tab.importReport,
+          requiresSaveCopy: tab.requiresSaveCopy,
         }).then(() => {
           refreshLists();
           setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -375,6 +379,13 @@ export const App: React.FC = () => {
     tab: EditorState,
     target: { path?: string; handle?: FileSystemFileHandle; rawName: string; formatHint?: SupportedFormat }
   ): Promise<SaveOutcome> => {
+    if (tab.requiresSaveCopy && (
+      (target.path && tab.filePath && pathsMatch(target.path, tab.filePath)) ||
+      (target.handle && tab.fileHandle && await target.handle.isSameEntry(tab.fileHandle))
+    )) {
+      await ask(t('dialog.cannotSave'), t('dialog.sourceLossOriginal'), ['OK']);
+      return 'failed';
+    }
     const resolved = resolvePickedName(target.rawName, tab.kind, tab.fileName, target.formatHint || tab.format);
     if (!resolved.ok) {
       await ask(t('dialog.cannotSave'), resolved.message, ['OK']);
@@ -434,6 +445,7 @@ export const App: React.FC = () => {
         fileHandle: target.handle,
         fileName: resolved.fileName,
         format: resolved.format,
+        requiresSaveCopy: false,
       };
 
       if (lossy && result.bytes) {
@@ -516,7 +528,14 @@ export const App: React.FC = () => {
       const current = tabsRef.current.find((item) => item.id === tab.id) || tab;
       const hasSafe = current.filePath ? isSafeSavePath(current.filePath) : Boolean(current.fileHandle);
 
-      if (mode === 'save-as' || !hasSafe) {
+      if (current.requiresSaveCopy && mode === 'save') {
+        const items = current.importReport?.skippedFeatures.slice(0, 4).join(', ') ||
+          current.importReport?.warnings.slice(0, 4).map((warning) => warning.item).join(', ') ||
+          t('import.fallback');
+        const choice = await ask(t('dialog.saveAs'), t('dialog.sourceLossCopy', { items }), ['Save a Copy', 'Cancel']);
+        if (choice !== 'Save a Copy') return 'cancelled';
+      }
+      if (mode === 'save-as' || !hasSafe || current.requiresSaveCopy) {
         return pickAndSave(current);
       }
 
@@ -744,6 +763,10 @@ export const App: React.FC = () => {
           return;
         }
       } catch (err: any) {
+        if (String(err?.message || err).includes('native file action')) {
+          await openPicked(await pickFilesToOpen(), true);
+          return;
+        }
         await ask(t('dialog.cannotOpen'), err?.message || t('dialog.couldNotOpen'), ['OK']);
         return;
       }
@@ -1285,6 +1308,7 @@ export const App: React.FC = () => {
             docPageInfo={docPageInfo}
           />
           <main className="folio-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+            <React.Suspense fallback={<div role="status" style={{ padding: 24 }}>{t('loading')}</div>}>
             {activeTab.kind === 'document' && (
               <DocumentEditor
                 key={`${activeTab.id}-${activeTab.historyEpoch || 0}`}
@@ -1333,6 +1357,7 @@ export const App: React.FC = () => {
                 onEditAsDocument={() => void actionsRef.current.editAsDocumentActive()}
               />
             )}
+            </React.Suspense>
           </main>
           <StatusBar
             editorState={activeTab}
@@ -1381,13 +1406,13 @@ export const App: React.FC = () => {
         />
       )}
       {slideshowState?.active && activeTab?.kind === 'presentation' && (
-        <Slideshow
+        <React.Suspense fallback={null}><Slideshow
           slides={activeTab.presentationData?.slides || []}
           slideSize={activeTab.presentationData?.slideSize}
           mode={slideshowState.mode}
           initialIndex={slideIndex}
           onExit={() => setSlideshowState(null)}
-        />
+        /></React.Suspense>
       )}
     </div>
   );
