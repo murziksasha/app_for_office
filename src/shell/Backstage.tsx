@@ -800,7 +800,7 @@ export const Backstage: React.FC<BackstageProps> = ({
                   gap: 8,
                   padding: '10px 20px',
                   backgroundColor: 'var(--folio-teal)',
-                  color: '#ffffff',
+                  color: 'var(--folio-accent-contrast, #ffffff)',
                   border: 'none',
                   borderRadius: 6,
                   fontSize: 14,

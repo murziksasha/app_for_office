@@ -1155,7 +1155,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
                 border: idx === activeSlideIndex ? '2px solid var(--folio-teal)' : '1px solid var(--folio-border)',
                 borderRadius: '6px',
                 padding: '6px',
-                backgroundColor: idx === activeSlideIndex ? 'var(--folio-teal-tint)' : '#ffffff',
+                backgroundColor: idx === activeSlideIndex ? 'var(--folio-teal-tint)' : 'var(--folio-panel)',
                 boxShadow: 'var(--folio-shadow-sm)',
                 transition: 'all 0.1s ease',
               }}
@@ -1241,15 +1241,15 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
               marginBottom: '12px',
               maxWidth: `${canvasWidth}px`,
               width: '100%',
-              background: '#fff8e8',
-              border: '1px solid #e6d3a1',
+              background: 'var(--folio-amber-light)',
+              border: '1px solid var(--folio-border)',
               borderRadius: '4px',
               padding: '8px 12px',
               display: 'flex',
               justifyContent: 'space-between',
               gap: '12px',
               fontSize: '13px',
-              color: '#5c4a1f',
+              color: 'var(--folio-amber)',
             }}
           >
             <span>{notice}</span>
@@ -1632,7 +1632,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
           style={{
             width: `${canvasWidth}px`,
             marginTop: '16px',
-            backgroundColor: '#ffffff',
+            backgroundColor: 'var(--folio-panel)',
             borderRadius: '4px',
             boxShadow: 'var(--folio-shadow-sm)',
             border: '1px solid var(--folio-border)',
@@ -1669,6 +1669,7 @@ export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>
               borderRadius: '3px',
               padding: '6px 8px',
               fontSize: '13px',
+              backgroundColor: 'var(--folio-bg)',
               color: 'var(--folio-ink)',
               resize: 'vertical',
               outline: 'none',

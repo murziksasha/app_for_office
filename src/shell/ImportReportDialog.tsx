@@ -31,7 +31,7 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
         style={{
           width: '460px',
           maxWidth: '90vw',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--folio-panel)',
           borderRadius: 'var(--folio-radius-lg)',
           boxShadow: 'var(--folio-shadow-md)',
           border: '1px solid var(--folio-border)',
@@ -76,11 +76,11 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
               style={{
                 marginBottom: '16px',
                 padding: '10px 14px',
-                backgroundColor: '#fffbeb',
-                border: '1px solid #fde68a',
+                backgroundColor: 'var(--folio-amber-light)',
+                border: '1px solid var(--folio-border)',
                 borderRadius: '6px',
                 fontSize: '12px',
-                color: '#92400e',
+                color: 'var(--folio-amber)',
               }}
             >
               {t('import.fallbackBody')}
@@ -142,7 +142,7 @@ export const ImportReportDialog: React.FC<ImportReportDialogProps> = ({ report, 
             style={{
               padding: '6px 16px',
               backgroundColor: 'var(--folio-teal)',
-              color: 'white',
+              color: 'var(--folio-accent-contrast, white)',
               borderRadius: 'var(--folio-radius-md)',
               fontWeight: 500,
               fontSize: '13px',

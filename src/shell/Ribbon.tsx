@@ -42,6 +42,7 @@ import { SheetHome, SheetInsert, SheetLayout, SheetData, SheetView } from './rib
 import { SlideHome, SlideInsert, SlideDesign, SlideShowTab, SlideView } from './ribbon/slideRibbon';
 import { RibbonButton, ribbonFieldStyle } from './ribbon/RibbonButton';
 import { LanguageButton } from './LanguageButton';
+import { ThemeToggle } from './ThemeToggle';
 import { i18n, t } from '../i18n/instance';
 import { Backstage } from './Backstage';
 import { LinkDialog } from './LinkDialog';
@@ -495,7 +496,7 @@ function TabButton({
         fontSize: 13,
         fontWeight: active || file ? 600 : 500,
         backgroundColor: file && active ? 'var(--folio-accent)' : active ? 'var(--folio-panel)' : 'transparent',
-        color: file ? (active ? 'white' : 'var(--folio-teal)') : active ? 'var(--folio-ink)' : 'var(--folio-ink-muted)',
+        color: file ? (active ? 'var(--folio-accent-contrast, white)' : 'var(--folio-teal)') : active ? 'var(--folio-ink)' : 'var(--folio-ink-muted)',
         borderTopLeftRadius: 4,
         borderTopRightRadius: 4,
         borderBottom: !file && active ? '2px solid var(--folio-accent)' : '2px solid transparent',
@@ -540,7 +541,7 @@ function TitleBar(props: RibbonProps & { onInsertLink: () => void }) {
             height: 18,
             borderRadius: 3,
             backgroundColor: 'var(--folio-accent)',
-            color: 'white',
+            color: 'var(--folio-accent-contrast, white)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -554,6 +555,8 @@ function TitleBar(props: RibbonProps & { onInsertLink: () => void }) {
         editorState={editorState}
         onSave={props.onSave}
         onPrint={props.onPrint}
+        onNew={() => props.onNew(editorState.kind)}
+        onOpen={props.onOpen}
         documentEditor={props.documentEditor}
         sheetApi={props.sheetApi}
         slideCommands={props.slideCommands}
@@ -624,6 +627,7 @@ function TitleBar(props: RibbonProps & { onInsertLink: () => void }) {
         }}
       />
       <LanguageButton />
+      <ThemeToggle />
     </div>
   );
 }

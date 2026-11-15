@@ -49,10 +49,11 @@ export const ChoiceDialog: React.FC<ChoiceDialogProps> = ({ title, message, butt
       <div
         style={{
           width: 'min(440px, calc(100vw - 32px))',
-          background: '#fff',
+          background: 'var(--folio-panel)',
+          border: '1px solid var(--folio-border)',
           borderRadius: '10px',
           padding: '20px',
-          boxShadow: '0 16px 40px rgba(0,0,0,0.18)',
+          boxShadow: 'var(--folio-shadow-popup)',
         }}
       >
         <h2 style={{ fontSize: '16px', marginBottom: '8px', color: 'var(--folio-ink)' }}>{title}</h2>
@@ -69,7 +70,7 @@ export const ChoiceDialog: React.FC<ChoiceDialogProps> = ({ title, message, butt
                 padding: '7px 12px',
                 borderRadius: '6px',
                 background: index === 0 ? 'var(--folio-teal)' : 'var(--folio-bg)',
-                color: index === 0 ? 'white' : 'var(--folio-ink)',
+                color: index === 0 ? 'var(--folio-accent-contrast, white)' : 'var(--folio-ink)',
                 fontWeight: 600,
                 fontSize: '13px',
               }}

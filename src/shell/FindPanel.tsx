@@ -82,7 +82,7 @@ export const FindPanel: React.FC<FindPanelProps> = ({
         top: '180px',
         right: '24px',
         zIndex: 100,
-        backgroundColor: 'var(--folio-page)',
+        backgroundColor: 'var(--folio-panel)',
         border: '1px solid var(--folio-border)',
         borderRadius: '6px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
@@ -148,7 +148,7 @@ export const FindPanel: React.FC<FindPanelProps> = ({
           style={{
             padding: '4px 10px',
             background: 'var(--folio-teal)',
-            color: 'white',
+            color: 'var(--folio-accent-contrast, white)',
             border: 'none',
             borderRadius: '4px',
             fontSize: '12px',

@@ -586,6 +586,66 @@ export function TableTab({ editor }: { editor: any }) {
         <RibbonButton title={t('ribbon.splitCell')} label={t('ribbon.splitCell')} icon={<Split size={14} />} disabled={!editor} onClick={() => editor.chain().focus().splitCell().run()} />
         <RibbonButton title={t('ribbon.deleteTable')} label={t('ribbon.deleteTable')} icon={<Trash2 size={14} />} disabled={!editor} onClick={() => editor.chain().focus().deleteTable().run()} />
       </RibbonGroup>
+      <RibbonGroup label={t('ribbon.shading')}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {[
+            { color: '#ffffff', title: t('ribbon.noShading'), border: '1px solid var(--folio-border)' },
+            { color: '#e0f2fe', title: 'Blue' },
+            { color: '#dcfce7', title: 'Green' },
+            { color: '#fef3c7', title: 'Yellow' },
+            { color: '#f1f5f9', title: 'Gray' },
+          ].map((item, idx) => (
+            <button
+              key={idx}
+              type="button"
+              title={item.title}
+              disabled={!editor}
+              onClick={() => {
+                editor?.chain?.().focus?.().setCellAttribute?.('backgroundColor', item.color === '#ffffff' ? null : item.color)?.run?.();
+              }}
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 3,
+                backgroundColor: item.color,
+                border: item.border || '1px solid rgba(0,0,0,0.15)',
+                cursor: editor ? 'pointer' : 'default',
+                padding: 0,
+              }}
+            />
+          ))}
+          <input
+            type="color"
+            title={t('ribbon.shading')}
+            aria-label={t('ribbon.shading')}
+            disabled={!editor}
+            onChange={(e) => {
+              editor?.chain?.().focus?.().setCellAttribute?.('backgroundColor', e.target.value)?.run?.();
+            }}
+            style={{ width: 22, height: 22, padding: 0, border: 'none', background: 'transparent', cursor: editor ? 'pointer' : 'default' }}
+          />
+        </div>
+      </RibbonGroup>
+      <RibbonGroup label={t('ribbon.cellAlignment')}>
+        <RibbonButton
+          title={t('ribbon.valignTop')}
+          icon={<AlignStartVertical size={14} />}
+          disabled={!editor}
+          onClick={() => editor?.chain?.().focus?.().setCellAttribute?.('verticalAlign', 'top')?.run?.()}
+        />
+        <RibbonButton
+          title={t('ribbon.valignCenter')}
+          icon={<AlignCenterVertical size={14} />}
+          disabled={!editor}
+          onClick={() => editor?.chain?.().focus?.().setCellAttribute?.('verticalAlign', 'middle')?.run?.()}
+        />
+        <RibbonButton
+          title={t('ribbon.valignBottom')}
+          icon={<AlignEndVertical size={14} />}
+          disabled={!editor}
+          onClick={() => editor?.chain?.().focus?.().setCellAttribute?.('verticalAlign', 'bottom')?.run?.()}
+        />
+      </RibbonGroup>
     </>,
   );
 }

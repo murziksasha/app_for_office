@@ -5,7 +5,7 @@
 ### The Rule
 Interface chrome uses neutral surfaces, hairline borders, and one editor accent. Document is blue (`#0f6cbd`), Spreadsheet is green (`#107c41`), and Presentation is orange (`#c43e1c`). Home and PDF use the document blue. `--folio-accent` carries the active accent. `--folio-teal` is an alias of that accent so older chrome rules follow the open editor.
 
-A `ThemePreference` of `system`, `light`, or `dark` is stored as `folio_theme`. The default is `system`. `src/shell/theme.ts` writes `data-theme` on the document element. Settings offers the three choices. Theme changes recolor chrome only: document pages, cell values, slide artwork, and exported files keep their authored colors. The page surface stays white.
+A `ThemePreference` of `system`, `light`, or `dark` is stored as `folio_theme`. The default is `system`. `src/shell/theme.ts` writes `data-theme` on the document element. Settings offers the three choices. In addition, a quick two-state theme toggle sits immediately to the right of the UA/EN language button on the start screen header and in the title row of an open file. It displays a sun icon in dark mode and a moon icon in light mode with localized tooltip and accessible name, switching between light and dark on click and persisting an explicit choice in `folio_theme` (if `system` was active, clicking saves the opposite of the current resolved theme). Theme changes recolor chrome only: document pages, cell values, slide artwork, and exported files keep their authored colors. The page surface stays white.
 
 ### The Reason
 The refreshed office chrome stays quiet so the file, not the frame, carries the color. Light and dark themes match the system without recoloring saved work.
@@ -49,7 +49,7 @@ File groups are New, Open, Save, Print, and Settings. Save as PDF is absent on a
 
 A chevron at the right of the tab row, Ctrl+F1, or a double-click on a ribbon tab collapses or expands the tool strip. A single click selects that tab. When the strip is hidden, a single click also shows that tab’s tools. Tab names stay. PDF’s only tab is File, so collapsing hides the File pane until File is clicked again. The choice is stored on this machine as `folio_ribbon_collapsed` (`1` or `0`) and restored the next time the ribbon mounts.
 
-The title row combines the Folio mark, Quick Access (Save, Undo, Redo, Print), the file name, command search, and the language control. Save As, Print setup, and the other file operations stay in File. The language button shows `EN` or `UA` for the language in use. Its tooltip names the other language. One click switches every Folio-owned label immediately. Document, cell, and slide text stays as written. The last choice is stored as `folio_ui_lang` and wins over detection on the next launch. With no saved choice, the desktop build reads the Windows country and starts in Ukrainian when that country is `UA`. Any other country follows the Windows display language. The browser build uses `navigator.language`.
+The title row combines the Folio mark, Quick Access (Save, Undo, Redo, Print), the file name, command search, the language control, and the quick theme toggle immediately to the right of the language control. Save As, Print setup, and the other file operations stay in File. The language button shows `EN` or `UA` for the language in use. Its tooltip names the other language. One click switches every Folio-owned label immediately. Document, cell, and slide text stays as written. The last choice is stored as `folio_ui_lang` and wins over detection on the next launch. With no saved choice, the desktop build reads the Windows country and starts in Ukrainian when that country is `UA`. Any other country follows the Windows display language. The browser build uses `navigator.language`.
 
 The ribbon does not include dictation, designer assistance, add-ins, sharing, ink drawing, transitions, animations, a presenter view, mailings, or comments.
 
@@ -74,7 +74,7 @@ Settings is a dialog rendered with the interface theme and a single section list
    - Author email: `1versuses1@gmail.com` (presented as plain text and a `mailto:` link, without network requests).
    - Author phone: `063 556 70 90` (plain text).
    - Author place: `Ukraine, Chornomorsk` in English, `Україна, Чорноморськ` in Ukrainian.
-2. **General**: Repeats the existing language switch (`EN` / `UA`) and the appearance switch (`System` / `Light` / `Dark`). Language updates UI strings immediately and is stored in `folio_ui_lang`. Appearance is stored in `folio_theme`. The title-bar and start-screen language buttons stay.
+2. **General**: Repeats the existing language switch (`EN` / `UA`) and the appearance switch (`System` / `Light` / `Dark`). Language updates UI strings immediately and is stored in `folio_ui_lang`. Appearance is stored in `folio_theme`. The title-bar and start-screen language buttons and quick theme toggles stay.
 
 Settings is reachable from:
 - The start screen header, beside the language button.

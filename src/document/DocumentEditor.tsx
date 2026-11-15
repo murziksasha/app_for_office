@@ -5,7 +5,7 @@ import { documentExtensions, defaultDocumentModel } from './model';
 import { MarginRuler } from './MarginRuler';
 import { formatMargin, mergePageSetup, mmToPx, PAGE_MM, pageSetupFromDoc, type PageSetup } from './pageSetup';
 import { bandState } from './bandState';
-import { X } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 import { i18n, t } from '../i18n/instance';
 import { FindPanel } from '../shell/FindPanel';
 import { ContextMenu, getContextMenuItems } from '../shell/ContextMenu';
@@ -66,6 +66,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         }
       );
       const page = getPageAtPosition(gapPositions, ed.state.selection.from);
+      setTotalPagesState(totalPages);
       onPageInfoChangeRef.current?.({ page, totalPages });
     } catch {
       // safe fallback
@@ -84,6 +85,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [miniToolbarPos, setMiniToolbarPos] = useState<{ x: number; y: number } | null>(null);
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [footnotes, setFootnotes] = useState<Array<{ id: string; text: string }>>([]);
+  const [navTab, setNavTab] = useState<'headings' | 'pages' | 'search'>('headings');
+  const [navSearchQuery, setNavSearchQuery] = useState('');
+  const [totalPagesState, setTotalPagesState] = useState(1);
 
   const editor = useEditor({
     extensions: documentExtensions,
@@ -287,7 +291,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           className="folio-outline-pane"
           data-testid="outline-pane"
           style={{
-            width: 240,
+            width: 260,
             flexShrink: 0,
             borderRight: '1px solid var(--folio-border)',
             backgroundColor: '#ffffff',
@@ -298,6 +302,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             zIndex: 5,
           }}
         >
+          {/* Header */}
           <div
             style={{
               display: 'flex',
@@ -310,7 +315,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               color: 'var(--folio-ink)',
             }}
           >
-            <span>{t('document.headings')}</span>
+            <span>{t('navPane.title') || t('document.headings')}</span>
             {onToggleOutline && (
               <button
                 type="button"
@@ -329,53 +334,247 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               </button>
             )}
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-            {headings.length === 0 ? (
-              <div
-                className="folio-outline-empty"
-                style={{
-                  padding: '16px 14px',
-                  color: 'var(--folio-ink-muted)',
-                  fontSize: 12,
-                  fontStyle: 'italic',
-                }}
-              >
-                {t('document.noHeadings')}
-              </div>
-            ) : (
-              headings.map((item, idx) => (
+
+          {/* Navigation Tabs: Headings | Pages | Search */}
+          <div
+            style={{
+              display: 'flex',
+              borderBottom: '1px solid var(--folio-border-light)',
+              backgroundColor: 'var(--folio-ribbon-bg, #f6f8fa)',
+            }}
+          >
+            {[
+              { id: 'headings', label: t('navPane.headings'), testId: 'nav-tab-headings' },
+              { id: 'pages', label: t('navPane.pages'), testId: 'nav-tab-pages' },
+              { id: 'search', label: t('navPane.search'), testId: 'nav-tab-search' },
+            ].map((tab) => {
+              const active = navTab === tab.id;
+              return (
                 <button
-                  key={`${item.pos}-${idx}`}
+                  key={tab.id}
                   type="button"
-                  className="folio-outline-item"
-                  data-heading-level={item.level}
-                  data-heading-pos={item.pos}
-                  onClick={() => {
-                    if (editor) {
-                      const posInside = Math.min(item.pos + 1, editor.state.doc.content.size);
-                      editor.chain().focus().setTextSelection(posInside).scrollIntoView().run();
-                    }
-                  }}
+                  data-testid={tab.testId}
+                  onClick={() => setNavTab(tab.id as any)}
                   style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
+                    flex: 1,
+                    padding: '8px 4px',
+                    fontSize: 11,
+                    fontWeight: active ? 600 : 400,
+                    color: active ? 'var(--folio-teal, #0f6cbd)' : 'var(--folio-ink-muted, #57606a)',
                     border: 'none',
-                    background: 'transparent',
+                    borderBottom: active ? '2px solid var(--folio-teal, #0f6cbd)' : '2px solid transparent',
+                    background: 'none',
                     cursor: 'pointer',
-                    padding: '6px 14px',
-                    paddingLeft: (item.level - 1) * 12 + 14,
-                    fontSize: item.level === 1 ? 13 : item.level === 2 ? 12.5 : 12,
-                    fontWeight: item.level === 1 ? 600 : item.level === 2 ? 500 : 400,
-                    color: 'var(--folio-ink)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    textAlign: 'center',
                   }}
                 >
-                  {item.text || `Heading ${item.level}`}
+                  {tab.label}
                 </button>
-              ))
+              );
+            })}
+          </div>
+
+          {/* Tab Content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+            {navTab === 'headings' && (
+              headings.length === 0 ? (
+                <div
+                  className="folio-outline-empty"
+                  style={{
+                    padding: '16px 14px',
+                    color: 'var(--folio-ink-muted)',
+                    fontSize: 12,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {t('document.noHeadings')}
+                </div>
+              ) : (
+                headings.map((item, idx) => (
+                  <button
+                    key={`${item.pos}-${idx}`}
+                    type="button"
+                    className="folio-outline-item"
+                    data-heading-level={item.level}
+                    data-heading-pos={item.pos}
+                    onClick={() => {
+                      if (editor) {
+                        const posInside = Math.min(item.pos + 1, editor.state.doc.content.size);
+                        editor.chain().focus().setTextSelection(posInside).scrollIntoView().run();
+                      }
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '6px 14px',
+                      paddingLeft: (item.level - 1) * 12 + 14,
+                      fontSize: item.level === 1 ? 13 : item.level === 2 ? 12.5 : 12,
+                      fontWeight: item.level === 1 ? 600 : item.level === 2 ? 500 : 400,
+                      color: 'var(--folio-ink)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {item.text || `Heading ${item.level}`}
+                  </button>
+                ))
+              )
+            )}
+
+            {navTab === 'pages' && (
+              <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {Array.from({ length: Math.max(1, totalPagesState) }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    data-testid={`nav-page-item-${pageNum}`}
+                    onClick={() => {
+                      if (editor?.view) {
+                        const gapEls = editor.view.dom.querySelectorAll('.folio-page-gap');
+                        if (pageNum === 1) {
+                          editor.view.dom.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        } else if (gapEls[pageNum - 2]) {
+                          (gapEls[pageNum - 2] as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '1px solid var(--folio-border, #d0d7de)',
+                      backgroundColor: 'var(--folio-ribbon-bg, #f6f8fa)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontSize: 12,
+                      color: 'var(--folio-ink, #24292f)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 24,
+                        height: 32,
+                        backgroundColor: '#ffffff',
+                        border: '1px solid var(--folio-border, #d0d7de)',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: 'var(--folio-teal, #0f6cbd)',
+                      }}
+                    >
+                      {pageNum}
+                    </div>
+                    <span>{t('navPane.pageNumber', { number: pageNum })}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {navTab === 'search' && (
+              <div style={{ padding: '4px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    border: '1px solid var(--folio-border, #d0d7de)',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <Search size={14} color="var(--folio-ink-muted, #57606a)" />
+                  <input
+                    type="text"
+                    value={navSearchQuery}
+                    placeholder={t('navPane.searchPlaceholder')}
+                    onChange={(e) => setNavSearchQuery(e.target.value)}
+                    data-testid="nav-search-input"
+                    style={{
+                      border: 'none',
+                      outline: 'none',
+                      background: 'transparent',
+                      width: '100%',
+                      fontSize: 12,
+                      color: 'var(--folio-ink, #24292f)',
+                    }}
+                  />
+                  {navSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setNavSearchQuery('')}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                    >
+                      <X size={12} color="var(--folio-ink-muted, #57606a)" />
+                    </button>
+                  )}
+                </div>
+
+                {navSearchQuery.trim() ? (
+                  (() => {
+                    const matches = editor?.state?.doc ? findTextRanges(editor.state.doc, navSearchQuery.trim()) : [];
+                    if (matches.length === 0) {
+                      return (
+                        <div style={{ padding: '12px 4px', fontSize: 12, color: 'var(--folio-ink-muted)', fontStyle: 'italic' }}>
+                          {t('navPane.noResults')}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ fontSize: 11, color: 'var(--folio-ink-muted)', fontWeight: 600, padding: '2px 4px' }}>
+                          {matches.length} {matches.length === 1 ? 'match' : 'matches'}
+                        </div>
+                        {matches.slice(0, 50).map((range, idx) => {
+                          const doc = editor.state.doc;
+                          const start = Math.max(0, range.from - 20);
+                          const end = Math.min(doc.content.size, range.to + 20);
+                          const snippet = doc.textBetween(start, end, ' ', ' ');
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              data-testid={`nav-search-match-${idx}`}
+                              onClick={() => {
+                                editor.chain().focus().setTextSelection({ from: range.from, to: range.to }).scrollIntoView().run();
+                              }}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                border: '1px solid var(--folio-border-light, #e1e4e8)',
+                                borderRadius: 4,
+                                backgroundColor: '#ffffff',
+                                padding: '6px 8px',
+                                cursor: 'pointer',
+                                fontSize: 11.5,
+                                color: 'var(--folio-ink, #24292f)',
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              ...{snippet}...
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div style={{ padding: '12px 4px', fontSize: 12, color: 'var(--folio-ink-muted)', fontStyle: 'italic' }}>
+                    {t('navPane.searchPlaceholder')}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </aside>

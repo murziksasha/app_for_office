@@ -443,12 +443,21 @@ export async function exportDocx(
         const cells = Array.from(r.querySelectorAll('th, td'));
         return new TableRow({
           children: cells.map((c) => {
+            const bgAttr = c.getAttribute('data-background') || (c as HTMLElement).style.backgroundColor;
+            let shadingHex: string | undefined;
+            if (bgAttr) {
+              const hexMatch = bgAttr.match(/#?([a-f\d]{6})/i);
+              if (hexMatch) {
+                shadingHex = hexMatch[1].toUpperCase();
+              }
+            }
             return new TableCell({
               children: [
                 new Paragraph({
                   children: extractRuns(c),
                 }),
               ],
+              shading: shadingHex ? { fill: shadingHex } : undefined,
               borders: {
                 top: { style: BorderStyle.SINGLE, size: 1, color: 'D8D3C8' },
                 bottom: { style: BorderStyle.SINGLE, size: 1, color: 'D8D3C8' },

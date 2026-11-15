@@ -44,7 +44,7 @@ export const ZoomPopover: React.FC<ZoomPopoverProps> = ({
         position: 'absolute',
         bottom: '32px',
         right: '16px',
-        backgroundColor: 'var(--folio-page)',
+        backgroundColor: 'var(--folio-panel)',
         border: '1px solid var(--folio-border)',
         borderRadius: '6px',
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.16)',

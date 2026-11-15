@@ -96,7 +96,7 @@ export const ShortcutPanel: React.FC<ShortcutPanelProps> = ({ open, onClose, act
         style={{
           width: '640px',
           maxHeight: '80vh',
-          backgroundColor: 'var(--folio-page)',
+          backgroundColor: 'var(--folio-panel)',
           border: '1px solid var(--folio-border)',
           borderRadius: '8px',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
@@ -214,7 +214,7 @@ export const ShortcutPanel: React.FC<ShortcutPanelProps> = ({ open, onClose, act
                             key={kIdx}
                             style={{
                               padding: '2px 6px',
-                              backgroundColor: 'var(--folio-page)',
+                              backgroundColor: 'var(--folio-panel)',
                               border: '1px solid var(--folio-border)',
                               borderRadius: '3px',
                               fontSize: '10px',

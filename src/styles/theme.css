@@ -4,6 +4,7 @@
   --folio-bg-alt: #e8e8e8;
   --folio-bg-subtle: #f3f3f3;
   --folio-panel: #ffffff;
+  --folio-page: var(--folio-panel);
   --folio-ribbon-bg: #fafafa;
   --folio-ribbon-border: #d6d6d6;
   --folio-ink: #242424;
@@ -15,13 +16,23 @@
   --folio-accent-hover: #115ea3;
   --folio-accent-light: #deecf9;
   --folio-accent-tint: #f5f9fd;
+  --folio-accent-contrast: #ffffff;
   --folio-focus: #0f6cbd;
   --folio-teal: var(--folio-accent);
   --folio-teal-hover: var(--folio-accent-hover);
   --folio-teal-light: var(--folio-accent-light);
   --folio-teal-tint: var(--folio-accent-tint);
+  --folio-teal-contrast: var(--folio-accent-contrast);
   --folio-amber: #8a5a00;
   --folio-amber-light: #fff4ce;
+  --folio-badge-doc-bg: #e0f2fe;
+  --folio-badge-doc-color: #0369a1;
+  --folio-badge-sheet-bg: #dcfce7;
+  --folio-badge-sheet-color: #15803d;
+  --folio-badge-slides-bg: #ffedd5;
+  --folio-badge-slides-color: #c2410c;
+  --folio-badge-pdf-bg: #fee2e2;
+  --folio-badge-pdf-color: #b91c1c;
   --folio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
   --folio-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.12);
   --folio-shadow-paper: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -39,6 +50,7 @@
   --folio-bg-alt: #161616;
   --folio-bg-subtle: #252525;
   --folio-panel: #2b2b2b;
+  --folio-page: var(--folio-panel);
   --folio-ribbon-bg: #2b2b2b;
   --folio-ribbon-border: #3f3f3f;
   --folio-ink: #f3f3f3;
@@ -50,9 +62,23 @@
   --folio-accent-hover: #6cb4f5;
   --folio-accent-light: #0e3a5f;
   --folio-accent-tint: #12324a;
+  --folio-accent-contrast: #121212;
   --folio-focus: #4ea3f1;
+  --folio-teal: var(--folio-accent);
+  --folio-teal-hover: var(--folio-accent-hover);
+  --folio-teal-light: var(--folio-accent-light);
+  --folio-teal-tint: var(--folio-accent-tint);
+  --folio-teal-contrast: var(--folio-accent-contrast);
   --folio-amber: #fde047;
   --folio-amber-light: #3f3508;
+  --folio-badge-doc-bg: #0e3a5f;
+  --folio-badge-doc-color: #4ea3f1;
+  --folio-badge-sheet-bg: #0e3b1c;
+  --folio-badge-sheet-color: #54b054;
+  --folio-badge-slides-bg: #5a2416;
+  --folio-badge-slides-color: #f07a55;
+  --folio-badge-pdf-bg: #4a1515;
+  --folio-badge-pdf-color: #f87171;
   --folio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --folio-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
   --folio-shadow-paper: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.35);
@@ -65,6 +91,7 @@
   --folio-accent-hover: #115ea3;
   --folio-accent-light: #deecf9;
   --folio-accent-tint: #f5f9fd;
+  --folio-accent-contrast: #ffffff;
   --folio-focus: #0f6cbd;
 }
 
@@ -73,6 +100,7 @@
   --folio-accent-hover: #0b5c30;
   --folio-accent-light: #dff6dd;
   --folio-accent-tint: #f3faf4;
+  --folio-accent-contrast: #ffffff;
   --folio-focus: #107c41;
 }
 
@@ -81,6 +109,7 @@
   --folio-accent-hover: #a33316;
   --folio-accent-light: #fde7e0;
   --folio-accent-tint: #fff6f3;
+  --folio-accent-contrast: #ffffff;
   --folio-focus: #c43e1c;
 }
 
@@ -89,6 +118,7 @@
   --folio-accent-hover: #6cb4f5;
   --folio-accent-light: #0e3a5f;
   --folio-accent-tint: #12324a;
+  --folio-accent-contrast: #121212;
   --folio-focus: #4ea3f1;
 }
 
@@ -97,6 +127,7 @@
   --folio-accent-hover: #6ec46e;
   --folio-accent-light: #0e3b1c;
   --folio-accent-tint: #14301c;
+  --folio-accent-contrast: #121212;
   --folio-focus: #54b054;
 }
 
@@ -105,6 +136,7 @@
   --folio-accent-hover: #f5997a;
   --folio-accent-light: #5a2416;
   --folio-accent-tint: #3a1c14;
+  --folio-accent-contrast: #121212;
   --folio-focus: #f07a55;
 }
 
@@ -335,4 +367,38 @@ input, select, textarea {
     letter-spacing: 0.5px;
   }
 }
+
+.folio-action-card:hover {
+  border-color: var(--folio-border);
+  box-shadow: var(--folio-shadow-md);
+  transform: translateY(-1px);
+}
+
+.folio-card-icon-doc {
+  background-color: #e0f2fe;
+  color: #0284c7;
+}
+[data-theme='dark'] .folio-card-icon-doc {
+  background-color: #0e3a5f;
+  color: #4ea3f1;
+}
+
+.folio-card-icon-sheet {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+[data-theme='dark'] .folio-card-icon-sheet {
+  background-color: #0e3b1c;
+  color: #54b054;
+}
+
+.folio-card-icon-slides {
+  background-color: #ffedd5;
+  color: #ea580c;
+}
+[data-theme='dark'] .folio-card-icon-slides {
+  background-color: #5a2416;
+  color: #f07a55;
+}
+
 

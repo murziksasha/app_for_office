@@ -4,6 +4,7 @@ import { getRecentFiles, clearRecentFiles } from '../files/recent';
 import { getAllDrafts } from '../files/drafts';
 import { t } from '../i18n/instance';
 import { LanguageButton } from './LanguageButton';
+import { ThemeToggle } from './ThemeToggle';
 import { DROP_TARGET_ATTR, HOME_DRAG_EVENT } from './dropTarget';
 import {
   FileText,
@@ -89,17 +90,17 @@ export const StartScreen: React.FC<StartScreenProps> = ({
       case 'md':
       case 'html':
       case 'txt':
-        return { bg: '#e0f2fe', color: '#0369a1' };
+        return { bg: 'var(--folio-badge-doc-bg, #e0f2fe)', color: 'var(--folio-badge-doc-color, #0369a1)' };
       case 'xlsx':
       case 'pmdx':
       case 'csv':
       case 'tsv':
-        return { bg: '#dcfce7', color: '#15803d' };
+        return { bg: 'var(--folio-badge-sheet-bg, #dcfce7)', color: 'var(--folio-badge-sheet-color, #15803d)' };
       case 'pptx':
       case 'prdx':
-        return { bg: '#ffedd5', color: '#c2410c' };
+        return { bg: 'var(--folio-badge-slides-bg, #ffedd5)', color: 'var(--folio-badge-slides-color, #c2410c)' };
       case 'pdf':
-        return { bg: '#fee2e2', color: '#b91c1c' };
+        return { bg: 'var(--folio-badge-pdf-bg, #fee2e2)', color: 'var(--folio-badge-pdf-color, #b91c1c)' };
       default:
         return { bg: 'var(--folio-bg-alt)', color: 'var(--folio-ink)' };
     }
@@ -142,7 +143,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'white',
+              color: 'var(--folio-accent-contrast, white)',
               boxShadow: 'var(--folio-shadow-sm)',
             }}
           >
@@ -183,6 +184,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             <span>{t('settings.title')}</span>
           </button>
           <LanguageButton />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -202,8 +204,8 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         {drafts.length > 0 && (
           <div
             style={{
-              backgroundColor: '#fffbeb',
-              border: '1px solid #fde68a',
+              backgroundColor: 'var(--folio-amber-light)',
+              border: '1px solid var(--folio-border)',
               borderRadius: 'var(--folio-radius-md)',
               padding: '16px 20px',
               display: 'flex',
@@ -212,17 +214,17 @@ export const StartScreen: React.FC<StartScreenProps> = ({
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-              <strong style={{ fontSize: '13px', color: '#92400e' }}>{t('start.recovered')}</strong>
+              <strong style={{ fontSize: '13px', color: 'var(--folio-amber)' }}>{t('start.recovered')}</strong>
               {drafts.map((draft) => (
                 <div key={draft.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#92400e' }}>{draft.name}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--folio-ink)' }}>{draft.name}</span>
                   <span style={{ display: 'flex', gap: '6px' }}>
                     <button
                       onClick={() => onRestoreDraft(draft)}
                       style={{
                         padding: '4px 10px',
-                        backgroundColor: '#b45309',
-                        color: 'white',
+                        backgroundColor: 'var(--folio-amber)',
+                        color: 'var(--folio-panel)',
                         borderRadius: 'var(--folio-radius-md)',
                         fontSize: '12px',
                       }}
@@ -231,7 +233,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                     </button>
                     <button
                       onClick={() => onDismissDraft(draft)}
-                      style={{ padding: '4px 10px', fontSize: '12px', color: '#92400e' }}
+                      style={{ padding: '4px 10px', fontSize: '12px', color: 'var(--folio-amber)' }}
                     >
                       {t('start.dismiss')}
                     </button>
@@ -259,7 +261,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               onClick={() => onNew('document')}
               className="folio-action-card"
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--folio-panel)',
                 border: '1px solid var(--folio-border)',
                 borderRadius: 'var(--folio-radius-lg)',
                 padding: '24px 20px',
@@ -272,15 +274,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               }}
             >
               <div
+                className="folio-card-icon-doc"
                 style={{
                   width: '42px',
                   height: '42px',
                   borderRadius: '8px',
-                  backgroundColor: '#e0f2fe',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#0284c7',
                 }}
               >
                 <FileText size={24} />
@@ -298,7 +299,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               onClick={() => onNew('spreadsheet')}
               className="folio-action-card"
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--folio-panel)',
                 border: '1px solid var(--folio-border)',
                 borderRadius: 'var(--folio-radius-lg)',
                 padding: '24px 20px',
@@ -311,15 +312,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               }}
             >
               <div
+                className="folio-card-icon-sheet"
                 style={{
                   width: '42px',
                   height: '42px',
                   borderRadius: '8px',
-                  backgroundColor: '#dcfce7',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#16a34a',
                 }}
               >
                 <TableIcon size={24} />
@@ -337,7 +337,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               onClick={() => onNew('presentation')}
               className="folio-action-card"
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--folio-panel)',
                 border: '1px solid var(--folio-border)',
                 borderRadius: 'var(--folio-radius-lg)',
                 padding: '24px 20px',
@@ -350,15 +350,14 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               }}
             >
               <div
+                className="folio-card-icon-slides"
                 style={{
                   width: '42px',
                   height: '42px',
                   borderRadius: '8px',
-                  backgroundColor: '#ffedd5',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#ea580c',
                 }}
               >
                 <PresentationIcon size={24} />
@@ -376,7 +375,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
               onClick={onOpen}
               className="folio-action-card"
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--folio-panel)',
                 border: '1px dashed var(--folio-teal)',
                 borderRadius: 'var(--folio-radius-lg)',
                 padding: '24px 20px',
@@ -417,7 +416,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           style={{
             border: isDragging ? '2px dashed var(--folio-teal)' : '2px dashed var(--folio-border)',
             borderRadius: 'var(--folio-radius-lg)',
-            backgroundColor: isDragging ? 'var(--folio-teal-tint)' : '#ffffff',
+            backgroundColor: isDragging ? 'var(--folio-teal-tint)' : 'var(--folio-panel)',
             padding: '32px 24px',
             textAlign: 'center',
             display: 'flex',
@@ -471,7 +470,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           {recentFiles.length === 0 ? (
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--folio-panel)',
                 border: '1px solid var(--folio-border)',
                 borderRadius: 'var(--folio-radius-md)',
                 padding: '32px',
@@ -485,7 +484,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           ) : (
             <div
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--folio-panel)',
                 border: '1px solid var(--folio-border)',
                 borderRadius: 'var(--folio-radius-md)',
                 overflow: 'hidden',
@@ -514,7 +513,7 @@ export const StartScreen: React.FC<StartScreenProps> = ({
                       transition: 'background-color 0.1s ease',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--folio-bg)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--folio-panel)')}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                       <span

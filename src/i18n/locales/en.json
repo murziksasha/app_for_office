@@ -94,6 +94,12 @@
     "deleteTable": "Delete table",
     "mergeCells": "Merge cells",
     "splitCell": "Split cell",
+    "shading": "Shading",
+    "noShading": "No color",
+    "cellAlignment": "Cell Alignment",
+    "valignTop": "Align Top",
+    "valignCenter": "Align Center",
+    "valignBottom": "Align Bottom",
     "deletePicture": "Delete picture",
     "alignPictureLeft": "Align left",
     "alignPictureCenter": "Align center",
@@ -460,6 +466,10 @@
     "themeDark": "Dark",
     "close": "Close"
   },
+  "theme": {
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme"
+  },
   "document": {
     "headings": "Headings",
     "noHeadings": "No headings",
@@ -518,5 +528,38 @@
     "formatting": "Text & Formatting",
     "navigation": "Navigation & View",
     "close": "Close"
+  },
+  "wordCountDialog": {
+    "title": "Word Count",
+    "pages": "Pages",
+    "words": "Words",
+    "charactersNoSpaces": "Characters (no spaces)",
+    "charactersWithSpaces": "Characters (with spaces)",
+    "paragraphs": "Paragraphs",
+    "lines": "Lines",
+    "statistic": "Statistic",
+    "selection": "Selection",
+    "document": "Entire document",
+    "close": "Close"
+  },
+  "qat": {
+    "customize": "Customize Quick Access Toolbar",
+    "save": "Save",
+    "undo": "Undo",
+    "redo": "Redo",
+    "print": "Print",
+    "new": "New",
+    "open": "Open",
+    "spellCheck": "Spelling",
+    "reset": "Reset to Default"
+  },
+  "navPane": {
+    "title": "Navigation",
+    "headings": "Headings",
+    "pages": "Pages",
+    "search": "Search",
+    "searchPlaceholder": "Search document...",
+    "noResults": "No matches found.",
+    "pageNumber": "Page {{number}}"
   }
 }

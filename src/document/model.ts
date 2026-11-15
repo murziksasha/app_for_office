@@ -5,8 +5,7 @@ import { Superscript } from '@tiptap/extension-superscript';
 import { Subscript } from '@tiptap/extension-subscript';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
-import { TableHeader } from '@tiptap/extension-table-header';
-import { TableCell } from '@tiptap/extension-table-cell';
+import { FolioTableCell, FolioTableHeader } from './extensions/tableCellCustom';
 import { Image } from '@tiptap/extension-image';
 import { Link } from '@tiptap/extension-link';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -57,8 +56,8 @@ export const documentExtensions: AnyExtension[] = [
     resizable: true,
   }),
   TableRow,
-  TableHeader,
-  TableCell,
+  FolioTableHeader,
+  FolioTableCell,
   Image.configure({
     inline: true,
     allowBase64: true,

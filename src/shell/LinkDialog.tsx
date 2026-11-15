@@ -109,7 +109,7 @@ export const LinkDialog: React.FC<LinkDialogProps> = ({ initialUrl, onApply, onR
               padding: '6px 14px',
               borderRadius: 4,
               background: 'var(--folio-accent)',
-              color: '#ffffff',
+              color: 'var(--folio-accent-contrast, #ffffff)',
               fontWeight: 600,
             }}
           >

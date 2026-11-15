@@ -6,6 +6,8 @@ import { pageSetupFromDoc } from '../document/pageSetup';
 import type { SheetSelectionStats } from '../spreadsheet/sheetCommands';
 import { ZoomPopover } from './ZoomPopover';
 import type { FontPackState } from '../fonts/load';
+import { WordCountDialog } from '../document/WordCountDialog';
+import { getEditorStats } from '../document/wordCount';
 
 export interface PageInfo {
   page: number;
@@ -45,6 +47,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const wordCount = documentEditor?.storage?.characterCount?.words?.() ?? 0;
   const charCount = documentEditor?.storage?.characterCount?.characters?.() ?? 0;
   const [showZoomPopover, setShowZoomPopover] = useState(false);
+  const [showWordCountDialog, setShowWordCountDialog] = useState(false);
 
   const isSaving = saveState === 'saving';
   const isDirty = saveState === 'dirty' || (saveState === undefined && editorState.isDirty);
@@ -75,9 +78,27 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
         {isDoc && (
           <>
-            <span>
+            <button
+              type="button"
+              className="folio-status-word-count"
+              data-testid="status-word-count-btn"
+              onClick={() => setShowWordCountDialog(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: 'var(--folio-ink-muted)',
+                padding: '2px 4px',
+                borderRadius: '3px',
+              }}
+              title={t('wordCountDialog.title')}
+            >
               {t(wordCount === 1 ? 'status.wordOne' : 'status.wordMany', { count: wordCount, chars: charCount })}
-            </span>
+            </button>
             <span>{t('status.pageNumber', { page: pageInfo?.page || 1, total: pageInfo?.totalPages || 1 })}</span>
             <span>{t('status.page', { size: pageSetupFromDoc(editorState.documentContent).size === 'a4' ? 'A4' : 'LETTER' })}</span>
             <button
@@ -242,6 +263,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           </div>
         )}
       </div>
+      {showWordCountDialog && (
+        <WordCountDialog
+          stats={getEditorStats(documentEditor, pageInfo?.totalPages || 1)}
+          onClose={() => setShowWordCountDialog(false)}
+        />
+      )}
     </footer>
   );
 };

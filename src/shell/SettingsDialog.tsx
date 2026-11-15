@@ -11,7 +11,7 @@ import {
   AUTHOR_PHONE,
   getAuthorPlace,
 } from './about';
-import { readThemePreference, setThemePreference, type ThemePreference } from './theme';
+import { readThemePreference, setThemePreference, THEME_CHANGE_EVENT, type ThemePreference } from './theme';
 import { FontSettings } from '../fonts/FontSettings';
 
 interface SettingsDialogProps {
@@ -24,6 +24,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ onClose }) => {
   const isUkrainian = currentLang.toLowerCase().startsWith('uk');
   const place = getAuthorPlace(currentLang);
   const [theme, setTheme] = useState<ThemePreference>(() => readThemePreference());
+
+  useEffect(() => {
+    const sync = () => setTheme(readThemePreference());
+    window.addEventListener(THEME_CHANGE_EVENT, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -258,6 +268,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ onClose }) => {
                       borderRadius: 4,
                       border: theme === value ? '1px solid var(--folio-accent)' : '1px solid var(--folio-border)',
                       background: theme === value ? 'var(--folio-accent-light)' : 'transparent',
+                      color: 'var(--folio-ink)',
                       fontWeight: theme === value ? 650 : 500,
                     }}
                   >
@@ -289,7 +300,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ onClose }) => {
               padding: '6px 18px',
               borderRadius: 'var(--folio-radius-md)',
               backgroundColor: 'var(--folio-teal)',
-              color: '#ffffff',
+              color: 'var(--folio-accent-contrast, #ffffff)',
               border: 'none',
               fontSize: '13px',
               fontWeight: 600,

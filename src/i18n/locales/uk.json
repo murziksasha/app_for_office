@@ -94,6 +94,12 @@
     "deleteTable": "Видалити таблицю",
     "mergeCells": "Об'єднати клітинки",
     "splitCell": "Розділити клітинку",
+    "shading": "Заливка",
+    "noShading": "Без заливки",
+    "cellAlignment": "Вирівнювання в комірці",
+    "valignTop": "По верхньому краю",
+    "valignCenter": "По центру",
+    "valignBottom": "По нижньому краю",
     "deletePicture": "Видалити рисунок",
     "alignPictureLeft": "Вирівняти ліворуч",
     "alignPictureCenter": "Вирівняти по центру",
@@ -460,6 +466,10 @@
     "themeDark": "Темна",
     "close": "Закрити"
   },
+  "theme": {
+    "switchToLight": "Перемкнути на світлу тему",
+    "switchToDark": "Перемкнути на темну тему"
+  },
   "document": {
     "headings": "Заголовки",
     "noHeadings": "Немає заголовків",
@@ -518,5 +528,38 @@
     "formatting": "Текст і форматування",
     "navigation": "Навігація та вигляд",
     "close": "Закрити"
+  },
+  "wordCountDialog": {
+    "title": "Статистика",
+    "pages": "Сторінки",
+    "words": "Слова",
+    "charactersNoSpaces": "Знаки (без пробілів)",
+    "charactersWithSpaces": "Знаки (з пробілами)",
+    "paragraphs": "Абзаци",
+    "lines": "Рядки",
+    "statistic": "Показник",
+    "selection": "Виділення",
+    "document": "Весь документ",
+    "close": "Закрити"
+  },
+  "qat": {
+    "customize": "Налаштування панелі швидкого доступу",
+    "save": "Зберегти",
+    "undo": "Скасувати",
+    "redo": "Повторити",
+    "print": "Друк",
+    "new": "Створити",
+    "open": "Відкрити",
+    "spellCheck": "Правопис",
+    "reset": "Скинути за замовчуванням"
+  },
+  "navPane": {
+    "title": "Навігація",
+    "headings": "Заголовки",
+    "pages": "Сторінки",
+    "search": "Пошук",
+    "searchPlaceholder": "Пошук у документі...",
+    "noResults": "Збігів не знайдено.",
+    "pageNumber": "Сторінка {{number}}"
   }
 }

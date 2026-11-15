@@ -43,17 +43,18 @@ export const PrintSetupDialog: React.FC<PrintSetupDialogProps> = ({
     >
       <div
         style={{
-          backgroundColor: '#fff',
+          backgroundColor: 'var(--folio-panel)',
+          border: '1px solid var(--folio-border)',
           borderRadius: 8,
           padding: 24,
           width: 360,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+          boxShadow: 'var(--folio-shadow-popup)',
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: 'var(--folio-ink, #1f2937)' }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: 'var(--folio-ink)' }}>
           {t('ribbon.printSetup') || 'Print Setup'}
         </h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24, color: 'var(--folio-ink)' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -89,8 +90,9 @@ export const PrintSetupDialog: React.FC<PrintSetupDialogProps> = ({
             style={{
               padding: '6px 14px',
               borderRadius: 4,
-              border: '1px solid var(--folio-border, #d1d5db)',
-              background: '#fff',
+              border: '1px solid var(--folio-border)',
+              background: 'var(--folio-bg)',
+              color: 'var(--folio-ink)',
               fontSize: 13,
               cursor: 'pointer',
             }}
@@ -104,8 +106,8 @@ export const PrintSetupDialog: React.FC<PrintSetupDialogProps> = ({
               padding: '6px 14px',
               borderRadius: 4,
               border: 'none',
-              background: 'var(--folio-teal, #0f766e)',
-              color: '#fff',
+              background: 'var(--folio-teal)',
+              color: 'var(--folio-accent-contrast, #ffffff)',
               fontSize: 13,
               fontWeight: 500,
               cursor: 'pointer',

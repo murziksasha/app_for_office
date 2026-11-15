@@ -54,7 +54,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
         style={{
           width: '420px',
           maxWidth: '90vw',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--folio-panel)',
           borderRadius: 'var(--folio-radius-lg)',
           boxShadow: 'var(--folio-shadow-md)',
           border: '1px solid var(--folio-border)',
@@ -94,6 +94,8 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
                 border: '1px solid var(--folio-border)',
                 borderRadius: 'var(--folio-radius-md)',
                 outline: 'none',
+                backgroundColor: 'var(--folio-bg)',
+                color: 'var(--folio-ink)',
               }}
             />
           </div>
@@ -113,7 +115,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
                     padding: '8px 12px',
                     borderRadius: 'var(--folio-radius-md)',
                     border: selectedFormat === opt.format ? '1px solid var(--folio-teal)' : '1px solid var(--folio-border-light)',
-                    backgroundColor: selectedFormat === opt.format ? 'var(--folio-teal-tint)' : '#ffffff',
+                    backgroundColor: selectedFormat === opt.format ? 'var(--folio-teal-tint)' : 'var(--folio-panel)',
                     cursor: 'pointer',
                     fontSize: '13px',
                   }}
@@ -160,7 +162,7 @@ export const SaveAsDialog: React.FC<SaveAsDialogProps> = ({
               gap: '6px',
               padding: '6px 16px',
               backgroundColor: 'var(--folio-teal)',
-              color: 'white',
+              color: 'var(--folio-accent-contrast, white)',
               borderRadius: 'var(--folio-radius-md)',
               fontWeight: 500,
               fontSize: '13px',
