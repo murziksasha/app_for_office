@@ -143,7 +143,15 @@ export function SheetHome({
       const sheet = book();
       const sel = sheet?.getSelection()?.[0];
       if (!sheet || !sel?.row?.length || !sel.column?.length) return;
-      const ff = sheet.getCellValue(Math.min(...sel.row), Math.min(...sel.column), { type: 'ff' });
+      const row = Math.min(...sel.row);
+      const column = Math.min(...sel.column);
+      if (!Number.isSafeInteger(row) || row < 0 || !Number.isSafeInteger(column) || column < 0) return;
+      let ff: unknown;
+      try {
+        ff = sheet.getCellValue(row, column, { type: 'ff' });
+      } catch {
+        return;
+      }
       const name = typeof ff === 'string' && ff ? canonicalFamilyName(ff) : DEFAULT_SPREADSHEET_FONT;
       setSheetFont((prev) => (prev === name ? prev : name));
     }, 400);
@@ -289,7 +297,12 @@ export function SheetInsert({ api }: { api?: React.RefObject<WorkbookInstance | 
 export function SheetLayout({ api }: { api?: React.RefObject<WorkbookInstance | null> }) {
   const [printSetupOpen, setPrintSetupOpen] = useState(false);
   const book = sheetFrom(api);
-  const currentSetup = (book()?.getSheet?.() as any)?.printSetup || defaultPrintSetup;
+  let currentSetup = defaultPrintSetup;
+  try {
+    currentSetup = (book()?.getSheet?.() as any)?.printSetup || defaultPrintSetup;
+  } catch {
+    // FortuneSheet throws until its first sheet is mounted.
+  }
 
   return commandRow(
     <>

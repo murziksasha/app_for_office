@@ -200,7 +200,8 @@ def static_style(name: str) -> str | None:
 
 def choose_sources(paths: list[str]) -> dict[str, tuple[str, int | None]]:
     fonts = [p for p in paths if p.lower().endswith((".ttf", ".otf"))]
-    static = [p for p in fonts if "/static/" in p.replace("\\", "/")]
+    static = [p for p in fonts if "[" not in Path(p).name]
+    static.sort(key=lambda p: ("/static/" not in p.replace("\\", "/"), p))
     chosen: dict[str, tuple[str, int | None]] = {}
     for path in static:
         style = static_style(path)
@@ -400,6 +401,13 @@ def main() -> int:
                     cache[src] = git_bytes(src)
                 except subprocess.CalledProcessError as err:
                     print(f"  skip {meta['family']}: cannot read {src} ({err})")
+                    return False
+            if meta["family"] not in SEEDS:
+                if len(cache[src]) > 4_000_000:
+                    print(f"  skip {meta['family']}: source exceeds 4 MB")
+                    return False
+                if len(TTFont(io_bytes(cache[src])).getBestCmap() or {}) > 5000:
+                    print(f"  skip {meta['family']}: oversized glyph set")
                     return False
             built = build_face(cache[src], weight, meta["family"], style)
             if built is None:

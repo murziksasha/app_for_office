@@ -55,6 +55,7 @@ On desktop, file reading and writing occurs exclusively through Rust commands in
   2. Selected by the user in `folio_pick_save`.
   3. Dropped by the user onto the window (via Tauri file-drop event).
   4. Passed as command-line arguments on initial launch or second launch.
+- Native file actions also record trusted paths in the app-data directory. `folio_allow_path` can restore access only to a path already recorded by a native action; frontend code cannot grant an arbitrary path.
 - `folio_read` and `folio_write` verify that the target path is present in the allow-list before opening a file handle. Unlisted paths return `Err("Access denied")`.
 
 ### The Reason

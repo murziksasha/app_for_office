@@ -293,17 +293,9 @@ export async function exportDocx(
   chrome?: DocumentChrome | null,
   footnotes?: Array<{ id: string; text: string }> | null
 ): Promise<Blob> {
-  let docElement: HTMLElement;
-  if (typeof DOMParser !== 'undefined') {
-    const parser = new DOMParser();
-    const parsed = parser.parseFromString(htmlContent, 'text/html');
-    docElement = parsed.body;
-  } else {
-    // Node.js testing environment fallback
-    const { JSDOM } = await import('jsdom');
-    const dom = new JSDOM(htmlContent);
-    docElement = dom.window.document.body;
-  }
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(htmlContent, 'text/html');
+  const docElement = parsed.body;
 
   const paragraphsOrTables: Array<Paragraph | Table | TableOfContents> = [];
 

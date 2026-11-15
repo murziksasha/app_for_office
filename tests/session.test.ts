@@ -9,6 +9,7 @@ import {
   isDiskNewer,
   isDirtyHash,
   isLossySave,
+  importRequiresSaveCopy,
   isMacroPath,
   isSafeSavePath,
   lossyWarningMessage,
@@ -36,6 +37,16 @@ describe('path identity', () => {
     expect(pathsMatch('C:\\Docs\\Report.docx', 'c:/docs/report.docx')).toBe(true);
     expect(pathsMatch('C:\\Docs\\Report.docx', 'C:\\Other\\Report.docx')).toBe(false);
     expect(normalizePath('\\\\server\\share\\A.docx')).toBe('\\\\server\\share\\a.docx');
+  });
+});
+
+describe('import preservation', () => {
+  it('requires a copy when import dropped or substituted source features', () => {
+    const report = { fileName: 'x.docx', format: 'docx', importedAt: '', warnings: [], skippedFeatures: [] };
+    expect(importRequiresSaveCopy(report)).toBe(false);
+    expect(importRequiresSaveCopy({ ...report, skippedFeatures: ['Comments'] })).toBe(true);
+    expect(importRequiresSaveCopy({ ...report, warnings: [{ item: 'Chart', reason: 'Omitted' }] })).toBe(true);
+    expect(importRequiresSaveCopy({ ...report, fallbackUsed: true })).toBe(true);
   });
 });
 

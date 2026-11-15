@@ -49,6 +49,8 @@ Prevents regressions across document parsers when modifying schemas or adding ne
 ### The Check
 Running `npm test` must execute all unit test suites without failures or memory leaks.
 
+An optional private corpus run uses `FOLIO_COMPAT_DIR` with at least one DOCX, XLSX, and PPTX. `tests/compatibility_corpus.test.ts` verifies an in-memory import/export/import cycle without writing or uploading the source files. Keep private samples outside the repository.
+
 ---
 
 ## 2. End-to-End Testing (Playwright)

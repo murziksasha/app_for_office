@@ -12,6 +12,7 @@ import { importXlsx, importCsvTsv } from '../spreadsheet/adapters';
 import { importPptx } from '../slides/pptxAdapter';
 import { t } from '../i18n/instance';
 import { stampClean } from './tabs';
+import { importRequiresSaveCopy } from './session';
 
 function documentWithSetup(
   html: string,
@@ -166,6 +167,10 @@ export async function loadFileToEditor(
     });
     editorState.importReport.skippedFeatures.push(t('dialog.vbaItem'));
   }
+
+  // Importers rebuild these packages from the editable model. A reported omission
+  // means writing to the original path could permanently remove source content.
+  editorState.requiresSaveCopy = importRequiresSaveCopy(editorState.importReport);
 
   // Register in recent files
   await addRecentFile({

@@ -58,7 +58,7 @@ Ctrl+S saves the active tab. Save, Save As, F12, or Ctrl+Shift+S on a tab with n
 - Save As opens one system dialog (folder, name, type) listing every format that kind can write, with the current type first. Type labels use neutral names (Document, Spreadsheet, Presentation). A host without a save picker keeps an in-app name-and-type fallback step with the same neutral labels.
 - The tab becomes the new file. Unsaved edits are written only there; the old path is left at its last save.
 - A successful save clears that tab's draft. Recents keeps the old file and puts the new path first. A download with no path is not added to Recents.
-- Same-type saves and saves to docx, odt, rtf, html, xlsx, or pptx do not warn and do not reload. Editing history stays; Ctrl+Z changes the new file and marks it dirty.
+- Same-type saves and saves to docx, odt, rtf, html, xlsx, or pptx do not reload. Editing history stays; Ctrl+Z changes the new file and marks it dirty. When import reported skipped features, warnings, or a fallback parse, Save explains the risk and requires Save a Copy. Save As cannot target the original path or handle in this case. Draft recovery retains that protection.
 - Switching to txt, md, csv, or tsv warns on lossy switch with Save and Cancel. Cancel writes nothing and leaves the tab alone. Save writes, reloads the editor from written bytes through format importers, and bumps `historyEpoch` so the editor remounts with an empty undo stack.
 - CSV and TSV write the sheet on screen (`status === 1`, otherwise the first sheet) as displayed values, and the warning names that sheet.
 - The extension on the picked name wins. `.htm` is HTML. A bare name gets the open file's current extension. Any other extension writes nothing and is refused with an OK message.
@@ -76,7 +76,7 @@ Names for new files are `DocumentN.docx`, `WorkbookN.xlsx`, and `PresentationN.p
 One path cannot have two tabs, a silent overwrite can destroy a save made by another program, and lossy format conversions must be acknowledged before discarding document structure.
 
 ### The Check
-`tests/session.test.ts` covers the save decision, macro suggestions, lossy warnings, active sheet resolution, the missing path, the newer-disk conflict, and Save As onto an open path.
+`tests/session.test.ts` covers the save decision, macro suggestions, lossy warnings, import-loss copy protection, active sheet resolution, the missing path, the newer-disk conflict, and Save As onto an open path.
 
 ---
 

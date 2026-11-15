@@ -55,6 +55,8 @@ export interface DraftItem {
   path?: string;
   cleanHash?: string;
   diskStamp?: { modifiedMs: number; len: number } | null;
+  importReport?: ImportReport | null;
+  requiresSaveCopy?: boolean;
 }
 
 // Slide model
@@ -114,6 +116,7 @@ export interface EditorState {
   diskStamp?: { modifiedMs: number; len: number } | null;
   lastSavedAt?: Date;
   importReport?: ImportReport | null;
+  requiresSaveCopy?: boolean;
   historyEpoch?: number;
   // Payload for document, spreadsheet, presentation, or pdf
   documentContent?: JSONContent; // Tiptap JSON
