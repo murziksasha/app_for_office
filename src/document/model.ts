@@ -1,6 +1,8 @@
 import { generateJSON, generateHTML, JSONContent, AnyExtension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Underline } from '@tiptap/extension-underline';
+import { Superscript } from '@tiptap/extension-superscript';
+import { Subscript } from '@tiptap/extension-subscript';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
@@ -16,23 +18,41 @@ import { CharacterCount } from '@tiptap/extension-character-count';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { FontSize } from './extensions/fontSize';
 import { Indent } from './extensions/indent';
+import { LineSpacing } from './extensions/lineSpacing';
+import { StyleName } from './extensions/styleName';
+import { TableOfContentsExtension } from './extensions/toc';
+import { FootnoteRef } from './extensions/footnote';
 import { PageBreak } from './extensions/pageBreak';
+import { FolioDocument } from './extensions/folioDocument';
+import { PageGaps } from './extensions/pageGaps';
+import { SpellCheck } from './spell/spellPlugin';
+import { applyPageSetup, DEFAULT_PAGE_SETUP } from './pageSetup';
+import { applyDocChrome, createEmptyChrome } from './chrome';
 import { sanitizeHtml } from './sanitize';
 
 export type DocumentModel = JSONContent;
 
 export const defaultDocumentModel: DocumentModel = {
   type: 'doc',
+  attrs: {
+    pageSetup: { ...DEFAULT_PAGE_SETUP },
+    chrome: { ...createEmptyChrome() },
+    footnotes: [],
+  },
   content: [{ type: 'paragraph' }],
 };
 
 export const documentExtensions: AnyExtension[] = [
+  FolioDocument,
   StarterKit.configure({
+    document: false,
     heading: { levels: [1, 2, 3, 4, 5, 6] },
     link: false,
     underline: false,
   }),
   Underline,
+  Superscript,
+  Subscript,
   Table.configure({
     resizable: true,
   }),
@@ -62,7 +82,13 @@ export const documentExtensions: AnyExtension[] = [
   }),
   FontSize,
   Indent,
+  LineSpacing,
+  StyleName,
+  TableOfContentsExtension,
+  FootnoteRef,
   PageBreak,
+  PageGaps,
+  SpellCheck,
 ];
 
 /**
@@ -85,7 +111,7 @@ export function htmlToDocument(rawHtml: string): DocumentModel {
     if (!json || !json.content || json.content.length === 0) {
       return defaultDocumentModel;
     }
-    return json;
+    return applyDocChrome(applyPageSetup(json));
   } catch (err) {
     console.warn('Failed to parse HTML to document JSON, returning default model:', err);
     return defaultDocumentModel;
@@ -108,4 +134,3 @@ export function documentToHtml(doc: DocumentModel): string {
     return '<p></p>';
   }
 }
-

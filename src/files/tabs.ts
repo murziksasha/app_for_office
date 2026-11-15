@@ -3,6 +3,7 @@ import { defaultDocumentModel } from '../document/model';
 import { createEmptySheet } from '../spreadsheet/adapters';
 import { createEmptySlide } from '../slides/pptxAdapter';
 import { contentHash, nextFileName } from './session';
+export { nextFileName };
 
 export function editorPayload(
   state: Pick<EditorState, 'kind' | 'documentContent' | 'spreadsheetData' | 'presentationData'>

@@ -1,3 +1,4 @@
+import { get, set } from 'idb-keyval';
 import { FormatFilter, PathStatus, PlatformAdapter, PlatformFileResult, PlatformSaveResult, SaveTarget } from './types';
 
 export const FORMAT_MIME_TYPES: Record<string, { description: string; mime: string; extensions: string[] }> = {
@@ -55,6 +56,21 @@ export const FORMAT_MIME_TYPES: Record<string, { description: string; mime: stri
     description: 'PDF Document (.pdf)',
     mime: 'application/pdf',
     extensions: ['.pdf'],
+  },
+  tmdx: {
+    description: 'Document (.tmdx)',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    extensions: ['.tmdx'],
+  },
+  pmdx: {
+    description: 'Spreadsheet (.pmdx)',
+    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    extensions: ['.pmdx'],
+  },
+  prdx: {
+    description: 'Presentation (.prdx)',
+    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    extensions: ['.prdx'],
   },
 };
 
@@ -126,7 +142,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
             {
               description: 'All Supported Office Files',
               accept: {
-                'application/*': ['.docx', '.odt', '.xlsx', '.pptx', '.pdf'],
+                'application/*': ['.docx', '.odt', '.xlsx', '.pptx', '.pdf', '.tmdx', '.pmdx', '.prdx', '.tmd', '.pmd', '.prd'],
                 'text/*': ['.rtf', '.txt', '.md', '.html', '.htm', '.csv', '.tsv'],
               },
             },
@@ -153,7 +169,7 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
       input.type = 'file';
       input.multiple = true;
       input.accept =
-        '.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.csv,.tsv,.pptx,.pdf,.doc,.xls,.ppt,.docm,.xlsm,.pptm';
+        '.docx,.odt,.rtf,.txt,.md,.html,.htm,.xlsx,.csv,.tsv,.pptx,.pdf,.tmdx,.pmdx,.prdx,.tmd,.pmd,.prd,.doc,.xls,.ppt,.docm,.xlsm,.pptm';
       input.onchange = () => {
         const files = input.files ? Array.from(input.files) : [];
         resolve(files.map((file) => ({ file, name: file.name })));
@@ -296,7 +312,88 @@ export class BrowserPlatformAdapter implements PlatformAdapter {
   setupOpenRequestHandler(_onOpen: (paths: string[]) => void): () => void {
     return () => {};
   }
+
+  async userRegion(): Promise<string | null> {
+    return null;
+  }
+
+  async pickFontFiles(): Promise<PlatformFileResult[]> {
+    if (hasFileSystemAccess()) {
+      try {
+        // @ts-ignore
+        const handles = await window.showOpenFilePicker({
+          multiple: true,
+          types: [
+            {
+              description: 'Fonts',
+              accept: {
+                'font/ttf': ['.ttf'],
+                'font/otf': ['.otf'],
+              },
+            },
+          ],
+        });
+        const opened: PlatformFileResult[] = [];
+        for (const handle of handles || []) {
+          const file = await handle.getFile();
+          opened.push({ file, name: file.name, handle });
+        }
+        return opened;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return [];
+      }
+    }
+    return new Promise((resolve) => {
+      if (typeof document === 'undefined') {
+        resolve([]);
+        return;
+      }
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = '.ttf,.otf';
+      input.onchange = () => {
+        const files = input.files ? Array.from(input.files) : [];
+        resolve(files.map((file) => ({ file, name: file.name })));
+      };
+      input.oncancel = () => resolve([]);
+      input.click();
+    });
+  }
+
+  async fontList(): Promise<string> {
+    const stored = await get<{ families?: unknown[] }>(BROWSER_FONT_KEY);
+    return JSON.stringify({ families: stored?.families || [] });
+  }
+
+  async fontPut(indexJson: string, files: Array<{ fileName: string; bytes: Uint8Array }>): Promise<void> {
+    const parsed = JSON.parse(indexJson) as { families?: unknown[] };
+    const previous = (await get<{ files?: Record<string, Uint8Array> }>(BROWSER_FONT_KEY)) || {};
+    const storedFiles = { ...(previous.files || {}) };
+    for (const file of files) storedFiles[file.fileName] = file.bytes;
+    await set(BROWSER_FONT_KEY, { families: parsed.families || [], files: storedFiles });
+  }
+
+  async fontRead(fileName: string): Promise<Uint8Array> {
+    const stored = await get<{ files?: Record<string, Uint8Array> }>(BROWSER_FONT_KEY);
+    const bytes = stored?.files?.[fileName];
+    if (!bytes) throw new Error('The stored font is missing.');
+    return bytes;
+  }
+
+  async fontRemove(family: string): Promise<void> {
+    const stored = (await get<{ families?: Array<{ family: string; faces?: Array<{ file: string }> }>; files?: Record<string, Uint8Array> }>(BROWSER_FONT_KEY)) || {};
+    const families = (stored.families || []).filter((item) => item.family.toLowerCase() !== family.toLowerCase());
+    const keep = new Set(families.flatMap((item) => (item.faces || []).map((face) => face.file)));
+    const files = { ...(stored.files || {}) };
+    for (const name of Object.keys(files)) {
+      if (!keep.has(name)) delete files[name];
+    }
+    await set(BROWSER_FONT_KEY, { families, files });
+  }
 }
+
+const BROWSER_FONT_KEY = 'folio_custom_fonts';
 
 export const browserAdapter = new BrowserPlatformAdapter();
 

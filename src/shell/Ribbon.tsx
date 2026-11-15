@@ -1,5 +1,55 @@
-import React, { useState } from 'react';
-import { DraftItem, EditorState, DocumentKind, RecentItem, SupportedFormat } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import type { WorkbookInstance } from '@fortune-sheet/react';
+import { DraftItem, EditorState, DocumentKind, RecentItem, SlideElement } from '../types';
+import type { SlideCommandState, SlideEditorHandle } from '../slides/SlideEditor';
+import {
+  autoSumSheet,
+  clearSheetSelection,
+  deleteSheetAxis,
+  fillSheetSelection,
+  freezeSheet,
+  freezeSheetAtSelection,
+  insertSheetAxis,
+  mergeSheetSelection,
+  setSheetBorder,
+  setSheetFill,
+  setSheetNumberFormat,
+  setSheetPrintSetup,
+  setSheetStyle,
+  sortSheetSelection,
+  toggleSheetFilter,
+  toggleSheetMark,
+  toggleSheetWrap,
+  unfreezeSheet,
+  unmergeSheetSelection,
+  addSheetDataValidation,
+} from '../spreadsheet/sheetCommands';
+import { PrintSetupDialog } from '../spreadsheet/PrintSetupDialog';
+import { defaultPrintSetup } from '../spreadsheet/sheetPrint';
+import { clearFormatting } from '../document/clearFormatting';
+import { applyDocumentStyle } from '../document/styles';
+import {
+  useFormatPainter,
+  formatPainter,
+  captureDocumentFormat,
+  captureSheetFormat,
+} from './formatPainter';
+import { RibbonGroup } from './ribbon/RibbonGroup';
+import { tabsFor, type RibbonTab } from './ribbon/tabs';
+import { commandRow } from './ribbon/shared';
+import { DocumentHome, DocumentInsert, DocumentReferences, DocumentLayout, DocumentView, TableTab, PictureTab } from './ribbon/documentRibbon';
+import { SheetHome, SheetInsert, SheetLayout, SheetData, SheetView } from './ribbon/sheetRibbon';
+import { SlideHome, SlideInsert, SlideDesign, SlideShowTab, SlideView } from './ribbon/slideRibbon';
+import { RibbonButton, ribbonFieldStyle } from './ribbon/RibbonButton';
+import { LanguageButton } from './LanguageButton';
+import { i18n, t } from '../i18n/instance';
+import { Backstage } from './Backstage';
+import { LinkDialog } from './LinkDialog';
+import { CommandSearch } from './CommandSearch';
+import { QuickAccess } from './QuickAccess';
+import { handleKeyTipKey, TAB_KEY_TIPS, type KeyTipMode } from './keyTips';
+import type { JSONContent } from '@tiptap/core';
+import { formatMargin, marginUnit, pageSetupFromDoc, parseMargin, type PageSetup } from '../document/pageSetup';
 import {
   Save,
   Printer,
@@ -26,17 +76,60 @@ import {
   FileText,
   Search,
   Highlighter,
-  Palette,
   Indent as IndentIcon,
   Outdent as OutdentIcon,
   SeparatorHorizontal,
+  Scissors,
+  Copy,
+  ClipboardPaste,
+  Presentation,
+  Type,
+  Video,
+  Square,
+  Circle,
+  Triangle,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  WrapText,
+  Eraser,
+  Plus,
+  Grid,
+  LayoutGrid,
+  Palette,
+  BringToFront,
+  SendToBack,
+  AlignStartHorizontal,
+  AlignCenterHorizontal,
+  AlignEndHorizontal,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignHorizontalDistributeCenter,
+  AlignVerticalDistributeCenter,
+  Paintbrush,
+  Superscript,
+  Subscript,
+  RemoveFormatting,
+  Merge,
+  Split,
+  Grid2x2,
+  Pin,
+  PinOff,
+  ArrowDownAZ,
+  ArrowDownZA,
+  ListFilter,
+  Sigma,
+  SpellCheck,
 } from 'lucide-react';
+
+const DOC_FONT_SIZES = ['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt', '28pt', '36pt', '48pt', '72pt'];
+const SHEET_FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36];
+const SLIDE_FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 44, 54, 72];
 
 interface RibbonProps {
   editorState: EditorState;
-  documentEditor: any; // Tiptap editor instance
-  pageSize: 'letter' | 'a4';
-  onPageSizeChange: (size: 'letter' | 'a4') => void;
+  documentEditor: any;
   zoom: number;
   onZoomChange: (zoom: number) => void;
   onSave: () => void;
@@ -48,68 +141,156 @@ interface RibbonProps {
   onSavePdf?: () => void;
   onEditAsDocument?: () => void;
   onOpenReport?: () => void;
+  onFind?: () => void;
   recentFiles?: RecentItem[];
   drafts?: DraftItem[];
   onOpenRecent?: (item: RecentItem) => void;
   onRestoreDraft?: (draft: DraftItem) => void;
   onDismissDraft?: (draft: DraftItem) => void;
+  slideCommands?: React.RefObject<SlideEditorHandle | null>;
+  slideState?: SlideCommandState;
+  sheetApi?: React.RefObject<WorkbookInstance | null>;
+  onStartSlideshow?: (mode: 'beginning' | 'current') => void;
+  onOpenSettings?: () => void;
+  docPageInfo?: { page: number; totalPages: number; words?: number } | null;
+  templates?: any[];
+  showOutline?: boolean;
+  onToggleOutline?: () => void;
 }
 
-export const Ribbon: React.FC<RibbonProps> = ({
-  editorState,
-  documentEditor,
-  pageSize,
-  onPageSizeChange,
-  zoom,
-  onZoomChange,
-  onSave,
-  onSaveAs,
-  onPrint,
-  onSavePdf,
-  onEditAsDocument,
-  onCloseFile,
-  onNew,
-  onOpen,
-  onOpenReport,
-  recentFiles = [],
-  drafts = [],
-  onOpenRecent,
-  onRestoreDraft,
-  onDismissDraft,
-}) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'insert' | 'layout' | 'file'>('home');
+export function getContextualTabs(isTable?: boolean, isPicture?: boolean): string[] {
+  const tabs: string[] = [];
+  if (isTable) tabs.push('table');
+  if (isPicture) tabs.push('picture');
+  return tabs;
+}
 
-  const isDoc = editorState.kind === 'document';
+const RIBBON_COLLAPSED_KEY = 'folio_ribbon_collapsed';
 
-  const insertImage = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file && documentEditor) {
-        const reader = new FileReader();
-        reader.onload = (re) => {
-          const src = re.target?.result as string;
-          documentEditor.chain().focus().setImage({ src }).run();
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-    input.click();
+export const Ribbon: React.FC<RibbonProps> = (props) => {
+  const { editorState } = props;
+  const [activeTab, setActiveTab] = useState<RibbonTab>(editorState.kind === 'pdf' ? 'file' : 'home');
+  const [keyTipMode, setKeyTipMode] = useState<KeyTipMode>('none');
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(RIBBON_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [linkOpen, setLinkOpen] = useState(false);
+  const expandTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setActiveTab(editorState.kind === 'pdf' ? 'file' : 'home');
+  }, [editorState.kind, editorState.id]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RIBBON_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      // The ribbon still collapses for this visit when storage is blocked.
+    }
+  }, [collapsed]);
+
+  const isTableActive = editorState.kind === 'document' && Boolean(props.documentEditor?.isActive?.('table'));
+  const isImageActive = editorState.kind === 'document' && Boolean(props.documentEditor?.isActive?.('image'));
+  const contextual = editorState.kind === 'document' ? getContextualTabs(isTableActive, isImageActive) : [];
+  const tabs = [...tabsFor(editorState.kind), ...contextual] as RibbonTab[];
+
+  useEffect(() => {
+    if (activeTab === 'table' && !isTableActive) {
+      setActiveTab('home');
+    } else if (activeTab === 'picture' && !isImageActive) {
+      setActiveTab('home');
+    }
+  }, [activeTab, isTableActive, isImageActive]);
+
+  const clearExpandTimer = () => {
+    if (expandTimer.current !== null) {
+      window.clearTimeout(expandTimer.current);
+      expandTimer.current = null;
+    }
   };
 
-  const insertLink = () => {
-    if (!documentEditor) return;
-    const previousUrl = documentEditor.getAttributes('link').href;
-    const url = window.prompt('Enter link URL', previousUrl || 'https://');
-    if (url === null) return;
-    if (url === '') {
-      documentEditor.chain().focus().unsetLink().run();
+  const selectTab = (tab: RibbonTab) => {
+    if (tab === 'file' && editorState.kind !== 'pdf') {
+      clearExpandTimer();
+      setActiveTab('file');
       return;
     }
-    documentEditor.chain().focus().setLink({ href: url }).run();
+    setActiveTab(tab);
+    if (collapsed) {
+      clearExpandTimer();
+      expandTimer.current = window.setTimeout(() => setCollapsed(false), 220);
+    }
   };
+
+  const toggleRibbon = () => {
+    clearExpandTimer();
+    setCollapsed((value) => !value);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'F1') {
+        e.preventDefault();
+        toggleRibbon();
+        return;
+      }
+
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+
+      if (e.key === 'Alt') {
+        e.preventDefault();
+        setKeyTipMode((prev) => (prev === 'none' ? 'tabs' : 'none'));
+        return;
+      }
+
+      if (keyTipMode !== 'none') {
+        const availableTabs = tabsFor(editorState.kind);
+        const commandsForTab: Record<string, () => void> = {
+          B: () => props.documentEditor?.chain().focus().toggleBold().run(),
+          I: () => props.documentEditor?.chain().focus().toggleItalic().run(),
+          U: () => props.documentEditor?.chain().focus().toggleUnderline().run(),
+        };
+        const quickAccessCommands: Record<string, () => void> = {
+          save: props.onSave,
+          undo: () => props.documentEditor?.chain().focus().undo().run(),
+          redo: () => props.documentEditor?.chain().focus().redo().run(),
+          print: props.onPrint,
+        };
+
+        const result = handleKeyTipKey(
+          e.key,
+          { mode: keyTipMode, activeTab },
+          availableTabs,
+          commandsForTab,
+          quickAccessCommands,
+          (tab) => {
+            setCollapsed(false);
+            selectTab(tab as RibbonTab);
+          },
+        );
+
+        if (result.nextState.mode !== keyTipMode || result.nextState.activeTab !== activeTab) {
+          e.preventDefault();
+          setKeyTipMode(result.nextState.mode);
+          if (result.nextState.activeTab !== activeTab) {
+            setActiveTab(result.nextState.activeTab as RibbonTab);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [keyTipMode, activeTab, editorState.kind, props]);
 
   return (
     <div
@@ -122,775 +303,391 @@ export const Ribbon: React.FC<RibbonProps> = ({
         userSelect: 'none',
       }}
     >
-      {/* Top Application Bar */}
+      <TitleBar {...props} onInsertLink={() => setLinkOpen(true)} />
       <div
+        className="folio-tab-strip"
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '6px 16px',
-          borderBottom: '1px solid var(--folio-border-light)',
-          fontSize: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Logo */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 700,
-              color: 'var(--folio-teal)',
-            }}
-          >
-            <div
-              style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-teal)',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <FileText size={13} />
-            </div>
-            <span>Folio</span>
-          </div>
-
-          <span style={{ color: 'var(--folio-border)' }}>|</span>
-
-          {/* Document Title & State */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontWeight: 600, color: 'var(--folio-ink)' }}>{editorState.fileName}</span>
-            {editorState.isDirty && (
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  padding: '2px 6px',
-                  borderRadius: '10px',
-                  backgroundColor: 'var(--folio-amber-light)',
-                  color: 'var(--folio-amber)',
-                }}
-              >
-                Unsaved changes
-              </span>
-            )}
-            {editorState.importReport && (
-              <button
-                onClick={onOpenReport}
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--folio-teal)',
-                  textDecoration: 'underline',
-                  padding: '0 4px',
-                }}
-              >
-                Import notices
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Actions Right */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            onClick={onSave}
-            title="Save (Ctrl+S)"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 10px',
-              borderRadius: '4px',
-              backgroundColor: editorState.isDirty ? 'var(--folio-teal)' : 'var(--folio-bg)',
-              color: editorState.isDirty ? 'white' : 'var(--folio-ink)',
-              fontWeight: 500,
-            }}
-          >
-            <Save size={14} /> Save
-          </button>
-          <button
-            onClick={onSaveAs}
-            title="Save As (F12 or Ctrl+Shift+S)"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 10px',
-              borderRadius: '4px',
-              backgroundColor: 'var(--folio-bg)',
-              color: 'var(--folio-ink)',
-              fontWeight: 500,
-            }}
-          >
-            <SaveAll size={14} /> Save As
-          </button>
-          <button
-            onClick={onPrint}
-            title="Print Document"
-            style={{
-              padding: '4px 8px',
-              borderRadius: '4px',
-              color: 'var(--folio-ink-muted)',
-            }}
-          >
-            <Printer size={14} />
-          </button>
-          <button
-            onClick={onCloseFile}
-            title="Close File"
-            style={{
-              padding: '4px 8px',
-              borderRadius: '4px',
-              color: 'var(--folio-ink-muted)',
-            }}
-          >
-            <X size={15} />
-          </button>
-        </div>
-      </div>
-
-      {/* Ribbon Navigation Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '2px',
+          gap: 2,
           padding: '0 12px',
           borderBottom: '1px solid var(--folio-border)',
         }}
       >
+        {tabs.map((tab) => (
+          <TabButton
+            key={tab}
+            tab={tab}
+            active={activeTab === tab}
+            keyTip={keyTipMode === 'tabs' ? TAB_KEY_TIPS[tab] : undefined}
+            onClick={() => selectTab(tab)}
+            onDoubleClick={() => {
+              if (tab !== 'file') toggleRibbon();
+            }}
+          />
+        ))}
         <button
-          onClick={() => setActiveTab('file')}
+          type="button"
+          aria-label={collapsed ? t('ribbon.expand') : t('ribbon.collapse')}
+          onClick={toggleRibbon}
           style={{
-            padding: '6px 14px',
-            fontSize: '12px',
-            fontWeight: 600,
-            backgroundColor: activeTab === 'file' ? 'var(--folio-teal)' : 'transparent',
-            color: activeTab === 'file' ? 'white' : 'var(--folio-teal)',
-            borderTopLeftRadius: '4px',
-            borderTopRightRadius: '4px',
-            transition: 'background-color 0.1s ease',
+            marginLeft: 'auto',
+            marginBottom: 2,
+            padding: '4px 8px',
+            color: 'var(--folio-ink-muted)',
+            borderRadius: 4,
           }}
         >
-          File
-        </button>
-        <button
-          onClick={() => setActiveTab('home')}
-          style={{
-            padding: '6px 14px',
-            fontSize: '12px',
-            fontWeight: activeTab === 'home' ? 600 : 500,
-            color: activeTab === 'home' ? 'var(--folio-ink)' : 'var(--folio-ink-muted)',
-            borderBottom: activeTab === 'home' ? '2px solid var(--folio-teal)' : 'none',
-            backgroundColor: activeTab === 'home' ? '#ffffff' : 'transparent',
-          }}
-        >
-          Home
-        </button>
-        <button
-          onClick={() => setActiveTab('insert')}
-          style={{
-            padding: '6px 14px',
-            fontSize: '12px',
-            fontWeight: activeTab === 'insert' ? 600 : 500,
-            color: activeTab === 'insert' ? 'var(--folio-ink)' : 'var(--folio-ink-muted)',
-            borderBottom: activeTab === 'insert' ? '2px solid var(--folio-teal)' : 'none',
-            backgroundColor: activeTab === 'insert' ? '#ffffff' : 'transparent',
-          }}
-        >
-          Insert
-        </button>
-        <button
-          onClick={() => setActiveTab('layout')}
-          style={{
-            padding: '6px 14px',
-            fontSize: '12px',
-            fontWeight: activeTab === 'layout' ? 600 : 500,
-            color: activeTab === 'layout' ? 'var(--folio-ink)' : 'var(--folio-ink-muted)',
-            borderBottom: activeTab === 'layout' ? '2px solid var(--folio-teal)' : 'none',
-            backgroundColor: activeTab === 'layout' ? '#ffffff' : 'transparent',
-          }}
-        >
-          Page & View
+          {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </button>
       </div>
-
-      {/* Ribbon Command Strip */}
+      {activeTab === 'file' && editorState.kind !== 'pdf' && (
+        <Backstage
+          editorState={editorState}
+          docPageInfo={props.docPageInfo}
+          onClose={() => setActiveTab('home')}
+          onNew={props.onNew}
+          onOpen={props.onOpen}
+          onSave={props.onSave}
+          onSaveAs={props.onSaveAs}
+          onSavePdf={props.onSavePdf || (() => {})}
+          onEditAsDocument={props.onEditAsDocument}
+          onPrint={props.onPrint}
+          onCloseFile={props.onCloseFile}
+          onOpenSettings={props.onOpenSettings}
+          recentFiles={props.recentFiles as any}
+          drafts={props.drafts as any}
+          onOpenRecent={props.onOpenRecent as any}
+          onRestoreDraft={props.onRestoreDraft as any}
+          onDismissDraft={props.onDismissDraft as any}
+          templates={props.templates}
+        />
+      )}
+      {!collapsed && (
       <div
         style={{
-          minHeight: '44px',
-          backgroundColor: '#ffffff',
+          minHeight: activeTab === 'file' ? undefined : 104,
+          backgroundColor: 'var(--folio-panel)',
           display: 'flex',
-          alignItems: 'center',
-          padding: '6px 14px',
-          gap: '12px',
+          flexDirection: 'column',
           overflowX: 'auto',
         }}
       >
-        {/* FILE TAB */}
-        {activeTab === 'file' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => onNew('document')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <FilePlus size={14} /> New Document
-            </button>
-            <button
-              onClick={() => onNew('spreadsheet')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <TableIcon size={14} /> New Spreadsheet
-            </button>
-            <button
-              onClick={onOpen}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <FolderOpen size={14} /> Open File...
-            </button>
-            <button
-              onClick={onSave}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <Save size={14} /> Save
-            </button>
-            <button
-              onClick={onSaveAs}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <SaveAll size={14} /> Save As...
-            </button>
-            <button
-              onClick={onPrint}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <Printer size={14} /> Print
-            </button>
-            {editorState.kind !== 'pdf' ? (
-              <button
-                onClick={onSavePdf}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '4px',
-                  backgroundColor: 'var(--folio-bg)',
-                }}
-              >
-                <FileText size={14} /> Save as PDF
-              </button>
-            ) : (
-              <button
-                onClick={onEditAsDocument}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '4px',
-                  backgroundColor: 'var(--folio-bg)',
-                }}
-              >
-                <FileText size={14} /> Edit as Document
-              </button>
-            )}
-          </div>
-          {(recentFiles.length > 0 || drafts.length > 0) && (
-            <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', fontSize: '12px' }}>
-              {drafts.length > 0 && (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>Recovered drafts</span>
-                  {drafts.map((draft) => (
-                    <span key={draft.id} style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
-                      <button onClick={() => onRestoreDraft?.(draft)} style={{ textDecoration: 'underline', color: 'var(--folio-teal)' }}>
-                        {draft.name}
-                      </button>
-                      <button aria-label={`Dismiss ${draft.name}`} onClick={() => onDismissDraft?.(draft)} style={{ color: 'var(--folio-ink-muted)' }}>
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              {recentFiles.length > 0 && (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>Recent</span>
-                  {recentFiles.slice(0, 8).map((item) => (
-                    <button key={item.id} onClick={() => onOpenRecent?.(item)} style={{ textDecoration: 'underline', color: 'var(--folio-ink)' }}>
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          </div>
+        {activeTab === 'file' && editorState.kind === 'pdf' && <FilePane {...props} />}
+        {activeTab === 'home' && editorState.kind === 'document' && (
+          <DocumentHome editor={props.documentEditor} onFind={props.onFind} keyTipMode={keyTipMode} />
         )}
-
-        {/* HOME TAB (Rich text when Document is active) */}
-        {activeTab === 'home' && isDoc && documentEditor && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* History */}
-            <button
-              onClick={() => documentEditor.chain().focus().undo().run()}
-              disabled={!documentEditor.can().undo()}
-              title="Undo (Ctrl+Z)"
-              style={{ padding: '4px', borderRadius: '4px', opacity: documentEditor.can().undo() ? 1 : 0.3 }}
-            >
-              <Undo2 size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().redo().run()}
-              disabled={!documentEditor.can().redo()}
-              title="Redo (Ctrl+Y)"
-              style={{ padding: '4px', borderRadius: '4px', opacity: documentEditor.can().redo() ? 1 : 0.3 }}
-            >
-              <Redo2 size={16} />
-            </button>
-
-            <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--folio-border)' }} />
-
-            {/* Paragraph / Heading selector */}
-            <select
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === 'p') documentEditor.chain().focus().setParagraph().run();
-                else if (val.startsWith('h')) {
-                  const level = parseInt(val.replace('h', ''), 10) as any;
-                  documentEditor.chain().focus().setHeading({ level }).run();
-                }
-              }}
-              style={{
-                padding: '4px 8px',
-                borderRadius: '4px',
-                border: '1px solid var(--folio-border)',
-                outline: 'none',
-              }}
-            >
-              <option value="p">Paragraph</option>
-              <option value="h1">Heading 1</option>
-              <option value="h2">Heading 2</option>
-              <option value="h3">Heading 3</option>
-            </select>
-
-            {/* Font family */}
-            <select
-              onChange={(e) => {
-                documentEditor.chain().focus().setFontFamily(e.target.value).run();
-              }}
-              style={{
-                padding: '4px 8px',
-                borderRadius: '4px',
-                border: '1px solid var(--folio-border)',
-                outline: 'none',
-              }}
-            >
-              <option value="Georgia, serif">Georgia (Serif)</option>
-              <option value="system-ui, sans-serif">Segoe UI (Sans)</option>
-              <option value="'Courier New', monospace">Courier (Mono)</option>
-            </select>
-
-            {/* Font size */}
-            <select
-              title="Font Size"
-              defaultValue="11pt"
-              onChange={(e) => {
-                documentEditor.chain().focus().setFontSize(e.target.value).run();
-              }}
-              style={{
-                padding: '4px 6px',
-                borderRadius: '4px',
-                border: '1px solid var(--folio-border)',
-                outline: 'none',
-              }}
-            >
-              {['8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', '20pt', '24pt', '28pt', '36pt', '48pt', '72pt'].map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-
-            <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--folio-border)' }} />
-
-            {/* Formatting marks */}
-            <button
-              onClick={() => documentEditor.chain().focus().toggleBold().run()}
-              title="Bold (Ctrl+B)"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('bold') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <Bold size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().toggleItalic().run()}
-              title="Italic (Ctrl+I)"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('italic') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <Italic size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().toggleUnderline().run()}
-              title="Underline (Ctrl+U)"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('underline') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <Underline size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().toggleStrike().run()}
-              title="Strikethrough"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('strike') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <Strikethrough size={16} />
-            </button>
-
-            {/* Color picker */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-              <input
-                type="color"
-                title="Text Color"
-                onChange={(e) => documentEditor.chain().focus().setColor(e.target.value).run()}
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  padding: 0,
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: 'transparent',
-                }}
-              />
-            </div>
-
-            {/* Highlight */}
-            <button
-              onClick={() => documentEditor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()}
-              title="Highlight Yellow"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('highlight') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <Highlighter size={16} />
-            </button>
-
-            <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--folio-border)' }} />
-
-            {/* Alignment */}
-            <button
-              onClick={() => documentEditor.chain().focus().setTextAlign('left').run()}
-              title="Align Left"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive({ textAlign: 'left' }) ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <AlignLeft size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().setTextAlign('center').run()}
-              title="Align Center"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive({ textAlign: 'center' }) ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <AlignCenter size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().setTextAlign('right').run()}
-              title="Align Right"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive({ textAlign: 'right' }) ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <AlignRight size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().setTextAlign('justify').run()}
-              title="Align Justify"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive({ textAlign: 'justify' }) ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <AlignJustify size={16} />
-            </button>
-
-            <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--folio-border)' }} />
-
-            {/* Lists */}
-            <button
-              onClick={() => documentEditor.chain().focus().toggleBulletList().run()}
-              title="Bullet List"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('bulletList') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <List size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().toggleOrderedList().run()}
-              title="Numbered List"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-                backgroundColor: documentEditor.isActive('orderedList') ? 'var(--folio-teal-light)' : 'transparent',
-              }}
-            >
-              <ListOrdered size={16} />
-            </button>
-
-            <button
-              onClick={() => documentEditor.chain().focus().outdent().run()}
-              title="Decrease Indent"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-              }}
-            >
-              <OutdentIcon size={16} />
-            </button>
-            <button
-              onClick={() => documentEditor.chain().focus().indent().run()}
-              title="Increase Indent"
-              style={{
-                padding: '4px',
-                borderRadius: '4px',
-              }}
-            >
-              <IndentIcon size={16} />
-            </button>
-          </div>
+        {activeTab === 'insert' && editorState.kind === 'document' && (
+          <DocumentInsert editor={props.documentEditor} onInsertLink={() => setLinkOpen(true)} />
         )}
-
-        {/* HOME TAB (When Spreadsheet or Presentation active) */}
-        {activeTab === 'home' && !isDoc && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--folio-ink-muted)' }}>
-            <span>Tools are available directly in the {editorState.kind} workspace below.</span>
-          </div>
+        {activeTab === 'references' && editorState.kind === 'document' && (
+          <DocumentReferences editor={props.documentEditor} />
         )}
-
-        {/* INSERT TAB */}
-        {activeTab === 'insert' && isDoc && documentEditor && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() =>
-                documentEditor
-                  .chain()
-                  .focus()
-                  .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-                  .run()
-              }
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <TableIcon size={16} /> Table (3x3)
-            </button>
-
-            {documentEditor.isActive('table') && (
-              <>
-                <button
-                  onClick={() => documentEditor.chain().focus().addRowAfter().run()}
-                  style={{ padding: '4px 8px', borderRadius: '4px', background: 'var(--folio-bg)' }}
-                >
-                  + Row
-                </button>
-                <button
-                  onClick={() => documentEditor.chain().focus().addColumnAfter().run()}
-                  style={{ padding: '4px 8px', borderRadius: '4px', background: 'var(--folio-bg)' }}
-                >
-                  + Column
-                </button>
-                <button
-                  onClick={() => documentEditor.chain().focus().deleteTable().run()}
-                  style={{ padding: '4px 8px', borderRadius: '4px', color: '#dc2626' }}
-                >
-                  Delete Table
-                </button>
-              </>
-            )}
-
-            <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--folio-border)' }} />
-
-            <button
-              onClick={insertImage}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <ImageIcon size={16} /> Picture
-            </button>
-
-            <button
-              onClick={insertLink}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <LinkIcon size={16} /> Link
-            </button>
-
-            <button
-              onClick={() => documentEditor.chain().focus().setHorizontalRule().run()}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <Minus size={16} /> Divider
-            </button>
-
-            <button
-              onClick={() => documentEditor.chain().focus().setPageBreak().run()}
-              title="Page Break"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                backgroundColor: 'var(--folio-bg)',
-              }}
-            >
-              <SeparatorHorizontal size={16} /> Page Break
-            </button>
-          </div>
+        {activeTab === 'layout' && editorState.kind === 'document' && (
+          <DocumentLayout
+            editor={props.documentEditor}
+            documentContent={props.editorState.documentContent}
+            zoom={props.zoom}
+            onZoomChange={props.onZoomChange}
+          />
         )}
-
-        {/* LAYOUT & VIEW TAB */}
-        {activeTab === 'layout' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {isDoc && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--folio-ink)' }}>Page Size:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => onPageSizeChange(e.target.value as 'letter' | 'a4')}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--folio-border)',
-                  }}
-                >
-                  <option value="letter">Letter (8.5 × 11 in)</option>
-                  <option value="a4">A4 (210 × 297 mm)</option>
-                </select>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--folio-ink)' }}>Zoom:</span>
-              {[75, 100, 125, 150].map((z) => (
-                <button
-                  key={z}
-                  onClick={() => onZoomChange(z)}
-                  style={{
-                    padding: '3px 8px',
-                    borderRadius: '4px',
-                    backgroundColor: zoom === z ? 'var(--folio-teal)' : 'var(--folio-bg)',
-                    color: zoom === z ? 'white' : 'var(--folio-ink)',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                  }}
-                >
-                  {z}%
-                </button>
-              ))}
-            </div>
-          </div>
+        {activeTab === 'view' && editorState.kind === 'document' && (
+          <DocumentView
+            editor={props.documentEditor}
+            showOutline={props.showOutline}
+            onToggleOutline={props.onToggleOutline}
+            zoom={props.zoom}
+            onZoomChange={props.onZoomChange}
+          />
+        )}
+        {activeTab === 'table' && editorState.kind === 'document' && (
+          <TableTab editor={props.documentEditor} />
+        )}
+        {activeTab === 'picture' && editorState.kind === 'document' && (
+          <PictureTab editor={props.documentEditor} />
+        )}
+        {activeTab === 'home' && editorState.kind === 'spreadsheet' && (
+          <SheetHome api={props.sheetApi} onFind={props.onFind} />
+        )}
+        {activeTab === 'insert' && editorState.kind === 'spreadsheet' && <SheetInsert api={props.sheetApi} />}
+        {activeTab === 'layout' && editorState.kind === 'spreadsheet' && <SheetLayout api={props.sheetApi} />}
+        {activeTab === 'data' && editorState.kind === 'spreadsheet' && <SheetData api={props.sheetApi} />}
+        {activeTab === 'view' && editorState.kind === 'spreadsheet' && <SheetView api={props.sheetApi} />}
+        {activeTab === 'home' && editorState.kind === 'presentation' && (
+          <SlideHome commands={props.slideCommands} state={props.slideState} />
+        )}
+        {activeTab === 'insert' && editorState.kind === 'presentation' && <SlideInsert commands={props.slideCommands} />}
+        {activeTab === 'design' && editorState.kind === 'presentation' && (
+          <SlideDesign commands={props.slideCommands} state={props.slideState} />
+        )}
+        {activeTab === 'slideshow' && editorState.kind === 'presentation' && (
+          <SlideShowTab commands={props.slideCommands} onStartSlideshow={props.onStartSlideshow} />
+        )}
+        {activeTab === 'view' && editorState.kind === 'presentation' && (
+          <SlideView commands={props.slideCommands} state={props.slideState} />
         )}
       </div>
+      )}
+      {linkOpen && editorState.kind === 'document' && (
+        <LinkDialog
+          initialUrl={props.documentEditor?.getAttributes?.('link')?.href || ''}
+          onCancel={() => {
+            setLinkOpen(false);
+            props.documentEditor?.commands?.focus?.();
+          }}
+          onRemove={() => {
+            props.documentEditor?.chain().focus().unsetLink().run();
+            setLinkOpen(false);
+          }}
+          onApply={(url) => {
+            if (!props.documentEditor) {
+              setLinkOpen(false);
+              return;
+            }
+            if (!url) props.documentEditor.chain().focus().unsetLink().run();
+            else props.documentEditor.chain().focus().setLink({ href: url }).run();
+            setLinkOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };
+
+function tabLabel(tab: RibbonTab): string {
+  if (tab === 'file') return t('ribbon.file');
+  if (tab === 'home') return t('ribbon.home');
+  if (tab === 'insert') return t('ribbon.insert');
+  if (tab === 'layout') return t('ribbon.layout');
+  if (tab === 'references') return t('ribbon.references');
+  if (tab === 'data') return t('ribbon.data');
+  if (tab === 'design') return t('ribbon.design');
+  if (tab === 'slideshow') return t('ribbon.slideshow');
+  if (tab === 'view') return t('ribbon.view');
+  if (tab === 'table') return t('ribbon.table');
+  if (tab === 'picture') return t('ribbon.picture');
+  return tab;
+}
+
+function TabButton({
+  tab,
+  active,
+  keyTip,
+  onClick,
+  onDoubleClick,
+}: {
+  tab: RibbonTab;
+  active: boolean;
+  keyTip?: string;
+  onClick: () => void;
+  onDoubleClick?: () => void;
+}) {
+  const label = tabLabel(tab);
+  const file = tab === 'file';
+  return (
+    <button
+      type="button"
+      data-testid={`ribbon-tab-${tab}`}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      style={{
+        position: 'relative',
+        padding: '6px 12px',
+        fontSize: 13,
+        fontWeight: active || file ? 600 : 500,
+        backgroundColor: file && active ? 'var(--folio-accent)' : active ? 'var(--folio-panel)' : 'transparent',
+        color: file ? (active ? 'white' : 'var(--folio-teal)') : active ? 'var(--folio-ink)' : 'var(--folio-ink-muted)',
+        borderTopLeftRadius: 4,
+        borderTopRightRadius: 4,
+        borderBottom: !file && active ? '2px solid var(--folio-accent)' : '2px solid transparent',
+      }}
+    >
+      {label}
+      {keyTip && (
+        <span
+          data-testid={`keytip-tab-${tab}`}
+          style={{
+            position: 'absolute',
+            bottom: -6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '1px 5px',
+            borderRadius: 3,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+            zIndex: 1200,
+            lineHeight: 1.2,
+          }}
+        >
+          {keyTip}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function TitleBar(props: RibbonProps & { onInsertLink: () => void }) {
+  const { editorState, onOpenReport, onInsertLink } = props;
+  return (
+    <div className="folio-titlebar">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--folio-accent)', flexShrink: 0 }}>
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 3,
+            backgroundColor: 'var(--folio-accent)',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <FileText size={12} />
+        </div>
+        <span>Folio</span>
+      </div>
+      <QuickAccess
+        editorState={editorState}
+        onSave={props.onSave}
+        onPrint={props.onPrint}
+        documentEditor={props.documentEditor}
+        sheetApi={props.sheetApi}
+        slideCommands={props.slideCommands}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <span style={{ fontWeight: 600, color: 'var(--folio-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {editorState.fileName}
+        </span>
+        {editorState.isDirty && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '1px 6px',
+              borderRadius: 10,
+              backgroundColor: 'var(--folio-amber-light)',
+              color: 'var(--folio-amber)',
+              flexShrink: 0,
+            }}
+          >
+            {t('ribbon.unsaved')}
+          </span>
+        )}
+        {editorState.importReport && (
+          <button
+            type="button"
+            onClick={onOpenReport}
+            style={{ fontSize: 11, color: 'var(--folio-accent)', textDecoration: 'underline', padding: '0 4px', flexShrink: 0 }}
+          >
+            {t('ribbon.importNotices')}
+          </button>
+        )}
+      </div>
+      <CommandSearch
+        kind={editorState.kind}
+        context={{
+          kind: editorState.kind,
+          editor: props.documentEditor,
+          api: props.sheetApi?.current,
+          workbook: props.sheetApi?.current,
+          slideHandle: props.slideCommands?.current,
+          save: props.onSave,
+          onSave: props.onSave,
+          saveAs: props.onSaveAs,
+          onSaveAs: props.onSaveAs,
+          print: props.onPrint,
+          onPrint: props.onPrint,
+          onSavePdf: props.onSavePdf,
+          insertLink: onInsertLink,
+          undo: () => {
+            if (editorState.kind === 'document') props.documentEditor?.chain().focus().undo().run();
+            else if (editorState.kind === 'spreadsheet') (props.sheetApi?.current as { handleUndo?: () => void } | null)?.handleUndo?.();
+            else props.slideCommands?.current?.undo?.();
+          },
+          redo: () => {
+            if (editorState.kind === 'document') props.documentEditor?.chain().focus().redo().run();
+            else if (editorState.kind === 'spreadsheet') (props.sheetApi?.current as { handleRedo?: () => void } | null)?.handleRedo?.();
+          },
+          startSlideshow: props.onStartSlideshow,
+          toggleSnapToGrid: props.slideCommands?.current?.toggleSnapToGrid,
+          alignSelected: props.slideCommands?.current?.alignSelected,
+          distributeSelected: props.slideCommands?.current?.distributeSelected,
+          bringForward: props.slideCommands?.current?.bringForward,
+          sendBackward: props.slideCommands?.current?.sendBackward,
+          applyPalette: props.slideCommands?.current?.applyPalette,
+          toggleViewMode: props.slideCommands?.current?.toggleViewMode,
+          toggleOutline: props.onToggleOutline,
+        }}
+      />
+      <LanguageButton />
+    </div>
+  );
+}
+
+function FilePane(props: RibbonProps) {
+  const { editorState, onNew, onOpen, onSave, onSaveAs, onPrint, onSavePdf, onEditAsDocument } = props;
+  const recentFiles = props.recentFiles || [];
+  const drafts = props.drafts || [];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 6 }}>
+      {commandRow(
+        <>
+          <RibbonGroup label={t('ribbon.new')}>
+            <RibbonButton title={t('ribbon.newDocument')} label={t('ribbon.document')} icon={<FilePlus size={16} />} onClick={() => onNew('document')} />
+            <RibbonButton title={t('ribbon.newSpreadsheet')} label={t('ribbon.spreadsheet')} icon={<TableIcon size={16} />} onClick={() => onNew('spreadsheet')} />
+            <RibbonButton title={t('ribbon.newPresentation')} label={t('ribbon.presentation')} icon={<Presentation size={16} />} onClick={() => onNew('presentation')} />
+          </RibbonGroup>
+          <RibbonGroup label={t('ribbon.open')}>
+            <RibbonButton title={t('ribbon.openFile')} label={t('ribbon.open')} icon={<FolderOpen size={16} />} onClick={onOpen} />
+          </RibbonGroup>
+          <RibbonGroup label={t('ribbon.save')}>
+            <RibbonButton title={t('ribbon.save')} label={t('ribbon.save')} icon={<Save size={16} />} onClick={onSave} />
+            <RibbonButton title={t('ribbon.saveAsEllipsis')} label={t('ribbon.saveAs')} icon={<SaveAll size={16} />} onClick={onSaveAs} />
+            {editorState.kind !== 'pdf' ? (
+              <RibbonButton title={t('ribbon.savePdf')} label={t('ribbon.savePdf')} icon={<FileText size={16} />} onClick={onSavePdf} />
+            ) : (
+              <RibbonButton title={t('ribbon.editAsDocument')} label={t('ribbon.editAsDocument')} icon={<FileText size={16} />} onClick={onEditAsDocument} />
+            )}
+          </RibbonGroup>
+          <RibbonGroup label={t('ribbon.print')}>
+            <RibbonButton title={t('ribbon.print')} label={t('ribbon.print')} icon={<Printer size={16} />} onClick={onPrint} />
+          </RibbonGroup>
+        </>,
+      )}
+      {(recentFiles.length > 0 || drafts.length > 0) && (
+        <div style={{ display: 'flex', gap: 16, overflowX: 'auto', fontSize: 12, padding: '0 14px 6px' }}>
+          {drafts.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>{t('ribbon.recoveredDrafts')}</span>
+              {drafts.map((draft) => (
+                <span key={draft.id} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                  <button type="button" onClick={() => props.onRestoreDraft?.(draft)} style={{ textDecoration: 'underline', color: 'var(--folio-teal)' }}>
+                    {draft.name}
+                  </button>
+                  <button type="button" aria-label={t('ribbon.dismiss', { name: draft.name })} onClick={() => props.onDismissDraft?.(draft)} style={{ color: 'var(--folio-ink-muted)' }}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {recentFiles.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontWeight: 650, color: 'var(--folio-ink-muted)' }}>{t('ribbon.recent')}</span>
+              {recentFiles.slice(0, 8).map((item) => (
+                <button key={item.id} type="button" onClick={() => props.onOpenRecent?.(item)} style={{ textDecoration: 'underline', color: 'var(--folio-ink)' }}>
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 

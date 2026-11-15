@@ -2,13 +2,14 @@ import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import { ImportReport, ImportWarning } from '../../types';
 import { sanitizeHtml } from '../sanitize';
+import { pageSizeLabel, readOdtPageSetup, type PageSetup } from '../pageSetup';
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
   isArray: (name) => {
-    return ['p', 'h', 'span', 'list', 'list-item', 'table', 'table-row', 'table-cell', 'style'].includes(name);
+    return ['p', 'h', 'span', 'list', 'list-item', 'table', 'table-row', 'table-cell', 'style', 'note'].includes(name);
   },
 });
 
@@ -19,16 +20,37 @@ interface StyleDef {
   strike?: boolean;
   color?: string;
   fontSize?: string;
+  fontFamily?: string;
 }
 
 export async function importOdt(
   buffer: ArrayBuffer,
   fileName: string
-): Promise<{ html: string; report: ImportReport }> {
+): Promise<{ html: string; report: ImportReport; pageSetup?: PageSetup | null; footnotes?: Array<{ id: string; text: string }> }> {
   const warnings: ImportWarning[] = [];
   const skippedFeatures: string[] = [];
+  const footnotes: Array<{ id: string; text: string }> = [];
 
   const zip = await JSZip.loadAsync(buffer);
+  let pageSetup: PageSetup | null = null;
+  const stylesFile = zip.file('styles.xml');
+  if (stylesFile) {
+    try {
+      const stylesText = await stylesFile.async('text');
+      const section = readOdtPageSetup(xmlParser.parse(stylesText));
+      if (section) {
+        pageSetup = section.setup;
+        if (section.adjusted) {
+          warnings.push({
+            item: 'Page size',
+            reason: `Page size was adjusted to ${pageSizeLabel(section.setup.size)}.`,
+          });
+        }
+      }
+    } catch {
+      pageSetup = null;
+    }
+  }
   const contentFile = zip.file('content.xml');
   if (!contentFile) {
     throw new Error('Invalid ODT package: content.xml not found');
@@ -36,6 +58,18 @@ export async function importOdt(
 
   const xmlText = await contentFile.async('text');
   const parsed = xmlParser.parse(xmlText);
+  if (!pageSetup) {
+    const fromContent = readOdtPageSetup(parsed);
+    if (fromContent) {
+      pageSetup = fromContent.setup;
+      if (fromContent.adjusted) {
+        warnings.push({
+          item: 'Page size',
+          reason: `Page size was adjusted to ${pageSizeLabel(fromContent.setup.size)}.`,
+        });
+      }
+    }
+  }
   const doc = parsed?.['document-content'] || parsed?.document;
 
   if (!doc) {
@@ -44,6 +78,7 @@ export async function importOdt(
 
   // Parse automatic styles
   const styleMap: Record<string, StyleDef> = {};
+  const paragraphStyleMap: Record<string, string> = {};
   const autoStyles = doc['automatic-styles']?.style || [];
   const styleList = Array.isArray(autoStyles) ? autoStyles : [autoStyles];
 
@@ -58,7 +93,18 @@ export async function importOdt(
         strike: tp['@_text-line-through-style'] === 'solid',
         color: tp['@_color'],
         fontSize: tp['@_font-size'],
+        fontFamily: tp['@_font-family'] || tp['@_font-name'],
       };
+    }
+    const pp = st['paragraph-properties'];
+    if (name && pp) {
+      const lh = pp['@_line-height'];
+      if (lh) {
+        if (lh === '115%') paragraphStyleMap[name] = 'line-height: 1.15;';
+        else if (lh === '150%') paragraphStyleMap[name] = 'line-height: 1.5;';
+        else if (lh === '200%') paragraphStyleMap[name] = 'line-height: 2;';
+        else if (lh === '100%') paragraphStyleMap[name] = 'line-height: 1;';
+      }
     }
   }
 
@@ -72,6 +118,7 @@ export async function importOdt(
   if (!bodyText) {
     return {
       html: '<p></p>',
+      pageSetup,
       report: { fileName, format: 'odt', importedAt: new Date().toISOString(), warnings, skippedFeatures },
     };
   }
@@ -107,6 +154,7 @@ export async function importOdt(
 
     let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     if (sDef) {
+      if (sDef.fontFamily) html = `<span style="font-family: '${String(sDef.fontFamily).replace(/'/g, '')}'">${html}</span>`;
       if (sDef.color) html = `<span style="color: ${sDef.color}">${html}</span>`;
       if (sDef.bold) html = `<strong>${html}</strong>`;
       if (sDef.italic) html = `<em>${html}</em>`;
@@ -143,6 +191,24 @@ export async function importOdt(
       });
     }
 
+    if (p.note) {
+      const notes = Array.isArray(p.note) ? p.note : [p.note];
+      notes.forEach((nt: any) => {
+        const citation = nt['note-citation'] || nt.citation || '1';
+        const citStr = typeof citation === 'object' ? citation['#text'] || '1' : String(citation);
+        const bodyObj = nt['note-body'] || nt.body;
+        const noteP = bodyObj?.p || bodyObj;
+        let noteText = '';
+        if (typeof noteP === 'string') noteText = noteP;
+        else if (noteP?.['#text']) noteText = String(noteP['#text']);
+        else if (Array.isArray(noteP)) {
+          noteText = noteP.map((item: any) => (typeof item === 'string' ? item : item['#text'] || '')).join(' ');
+        }
+        footnotes.push({ id: citStr, text: noteText.trim() });
+        content += `<sup data-footnote-id="${citStr}" class="folio-footnote-ref">[${citStr}]</sup>`;
+      });
+    }
+
     return content || '<br>';
   };
 
@@ -162,7 +228,9 @@ export async function importOdt(
 
   // Paragraphs
   pList.forEach((p: any) => {
-    resultHtml += `<p>${renderParagraphContent(p)}</p>`;
+    const sName = p['@_style-name'];
+    const pStyle = sName && paragraphStyleMap[sName] ? ` style="${paragraphStyleMap[sName]}"` : '';
+    resultHtml += `<p${pStyle}>${renderParagraphContent(p)}</p>`;
   });
 
   // Lists
@@ -199,6 +267,8 @@ export async function importOdt(
 
   return {
     html: sanitized,
+    pageSetup,
+    footnotes: footnotes.length ? footnotes : undefined,
     report: {
       fileName,
       format: 'odt',

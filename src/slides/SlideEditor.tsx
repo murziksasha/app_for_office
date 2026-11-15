@@ -1,39 +1,114 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { PresentationModel, Slide, SlideElement } from '../types';
-import { createEmptySlide } from './pptxAdapter';
-import { Box, ResizeDir, minPercents, moveBox, resizeBox } from './geometry';
-import { VIDEO_MSG, bytesToBase64, probeVideoPlayable, sniffMp4 } from './videoFile';
+import { createEmptySlide, createSlideLayout, type SlideLayoutType } from './pptxAdapter';
 import {
-  Plus,
-  Trash2,
-  Copy,
-  ChevronUp,
-  ChevronDown,
-  Type,
-  Image as ImageIcon,
-  Video,
-  Bold,
-  Italic,
-  Underline,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Undo2,
-  Play,
-  Pause,
-} from 'lucide-react';
+  Box,
+  ResizeDir,
+  minPercents,
+  moveBox,
+  resizeBox,
+  alignBoxes,
+  distributeBoxes,
+  reorder,
+  snapBox,
+  type Alignment,
+  type DistributionAxis,
+  type ZOrderAction,
+} from './geometry';
+import { VIDEO_MSG, bytesToBase64, probeVideoPlayable, sniffMp4 } from './videoFile';
+import { Plus, Trash2, Copy, ChevronUp, ChevronDown, Play, Pause } from 'lucide-react';
+import { t } from '../i18n/instance';
+import { FindPanel } from '../shell/FindPanel';
+import { ContextMenu, getContextMenuItems } from '../shell/ContextMenu';
+import { findInPresentation, findNextIndex, findPreviousIndex, type SlideMatch } from './findSlides';
+import { applyPalette } from './palettes';
+import { cssFamily } from '../fonts/names';
+
+export interface SlideEditorHandle {
+  addSlide: (layout?: SlideLayoutType) => void;
+  duplicateSlide: () => void;
+  deleteSlide: () => void;
+  moveSlide: (direction: 'up' | 'down') => void;
+  addText: () => void;
+  addImage: () => void;
+  addVideo: () => void;
+  addShape: (shape?: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line') => void;
+  addTable: () => void;
+  addTableRow: () => void;
+  addTableColumn: () => void;
+  deleteTableRow: () => void;
+  deleteTableColumn: () => void;
+  setSlideSize: (size: '16:9' | '16:10' | '4:3') => void;
+  undo: () => void;
+  deleteSelected: () => void;
+  duplicateSelected?: () => void;
+  patchSelected: (updates: Partial<SlideElement>) => void;
+  alignSelected?: (alignment: Alignment) => void;
+  distributeSelected?: (axis: DistributionAxis) => void;
+  reorderSelected?: (action: ZOrderAction) => void;
+  bringForward?: () => void;
+  sendBackward?: () => void;
+  bringToFront?: () => void;
+  sendToBack?: () => void;
+  toggleSnapToGrid?: () => void;
+  setSnapToGrid?: (snap: boolean) => void;
+  setViewMode?: (mode: 'normal' | 'sorter') => void;
+  toggleViewMode?: () => void;
+  applyPalette?: (paletteName: 'paper' | 'ink' | 'teal') => void;
+}
+
+export interface SlideCommandState {
+  canUndo: boolean;
+  slideCount: number;
+  slideIndex: number;
+  element: Pick<
+    SlideElement,
+    | 'id'
+    | 'type'
+    | 'shape'
+    | 'bold'
+    | 'italic'
+    | 'underline'
+    | 'fontSize'
+    | 'fontFamily'
+    | 'color'
+    | 'align'
+    | 'fill'
+    | 'borderColor'
+    | 'borderWidth'
+    | 'rows'
+  > | null;
+  selectedCount?: number;
+  canAlign?: boolean;
+  canDistribute?: boolean;
+  canReorder?: boolean;
+  snapToGrid?: boolean;
+  viewMode?: 'normal' | 'sorter';
+  slideSize?: '16:9' | '16:10' | '4:3';
+}
+
+export const emptySlideCommandState: SlideCommandState = {
+  canUndo: false,
+  slideCount: 0,
+  slideIndex: 0,
+  element: null,
+  slideSize: '16:9',
+};
 
 interface SlideEditorProps {
   presentation: PresentationModel;
   onChange: (presentation: PresentationModel) => void;
   onSaveShortcut?: () => void;
   onActiveSlideChange?: (index: number) => void;
+  onSelectionChange?: (state: SlideCommandState) => void;
+  findSignal?: number;
 }
 
 interface UndoSlot {
   slideIndex: number;
   elementId: string;
   box: Box;
+  props?: Partial<SlideElement>;
 }
 
 interface Gesture {
@@ -106,17 +181,38 @@ function boxOf(elem: SlideElement): Box {
   return { x: elem.x, y: elem.y, width: elem.width, height: elem.height };
 }
 
-export const SlideEditor: React.FC<SlideEditorProps> = ({
-  presentation,
-  onChange,
-  onSaveShortcut,
-  onActiveSlideChange,
-}) => {
+export const SlideEditor = React.forwardRef<SlideEditorHandle, SlideEditorProps>(function SlideEditor(
+  { presentation, onChange, onSaveShortcut, onActiveSlideChange, onSelectionChange, findSignal = 0 },
+  ref,
+) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [selectedElementIds, setSelectedElementIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [undoSlot, setUndoSlot] = useState<UndoSlot | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [viewMode, setViewMode] = useState<'normal' | 'sorter'>('normal');
+  const [activeGuides, setActiveGuides] = useState<{ vertical: boolean; horizontal: boolean }>({
+    vertical: false,
+    horizontal: false,
+  });
+
+  const [showFind, setShowFind] = useState(false);
+  const [findText, setFindText] = useState('');
+  const [matchCase, setMatchCase] = useState(false);
+  const [matchCount, setMatchCount] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const matchesRef = useRef<SlideMatch[]>([]);
+  const seenFindSignal = useRef(findSignal);
+
+  useEffect(() => {
+    if (findSignal !== seenFindSignal.current) {
+      seenFindSignal.current = findSignal;
+      setShowFind(true);
+    }
+  }, [findSignal]);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -154,6 +250,9 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
 
   const slides = presentation.slides || [];
   const currentSlide = slides[activeSlideIndex] || slides[0];
+  const slideSize = presentation.slideSize || '16:9';
+  const canvasWidth = 960;
+  const canvasHeight = slideSize === '4:3' ? 720 : slideSize === '16:10' ? 600 : 540;
 
   const commit = (nextSlides: Slide[]) => {
     const updated = { ...presentationRef.current, slides: nextSlides };
@@ -178,7 +277,9 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
       if (i !== slot.slideIndex) return slide;
       return {
         ...slide,
-        elements: slide.elements.map((el) => (el.id === slot.elementId ? { ...el, ...slot.box } : el)),
+        elements: slide.elements.map((el) =>
+          el.id === slot.elementId ? { ...el, ...slot.box, ...slot.props } : el
+        ),
       };
     });
     commit(next);
@@ -218,12 +319,14 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
 
   const focusShell = () => shellRef.current?.focus({ preventScroll: true });
 
-  const handleAddSlide = () => {
+  const handleAddSlide = (layout: SlideLayoutType = 'titleContent') => {
     clearUndo();
-    const next = [...(presentationRef.current.slides || []), createEmptySlide((presentationRef.current.slides || []).length + 1)];
+    const count = (presentationRef.current.slides || []).length;
+    const next = [...(presentationRef.current.slides || []), createSlideLayout(layout, count + 1)];
     commit(next);
     setActiveSlideIndex(next.length - 1);
     setSelectedElementId(null);
+    setSelectedElementIds([]);
     setEditingId(null);
   };
 
@@ -245,9 +348,11 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
       ...source,
       id: `slide_${Date.now()}`,
       title: `${source.title || 'Slide'} (Copy)`,
+      notes: source.notes,
       elements: source.elements.map((e) => ({
         ...e,
         id: `elem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        ...(e.rows ? { rows: e.rows.map((r) => [...r]) } : {}),
       })),
     };
     const next = [...existing.slice(0, index + 1), dup, ...existing.slice(index + 1)];
@@ -280,6 +385,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
       height: 20,
       text: 'Click to edit text',
       fontSize: 22,
+      fontFamily: 'Noto Sans',
       color: '#1e2022',
       align: 'left',
     };
@@ -375,19 +481,217 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
     input.click();
   };
 
-  const handleDeleteSelectedElement = () => {
-    if (!selectedElementId) return;
-    const id = selectedElementId;
+  const handleAddShape = (shape: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line' = 'rect') => {
     clearUndo();
-    mapActive((elements) => elements.filter((el) => el.id !== id));
-    const cached = urlCacheRef.current.get(id);
-    if (cached) {
-      URL.revokeObjectURL(cached);
-      urlCacheRef.current.delete(id);
-    }
-    delete playheadsRef.current[id];
-    setSelectedElementId(null);
+    const isLine = shape === 'line';
+    const newEl: SlideElement = {
+      id: `shape_${Date.now()}`,
+      type: 'rect',
+      shape,
+      x: 30,
+      y: 30,
+      width: isLine ? 30 : 28,
+      height: isLine ? 2 : 18,
+      fill: isLine ? 'transparent' : '#d6f3ef',
+      borderColor: '#0f766e',
+      borderWidth: 2,
+    };
+    mapActive((elements) => [...elements, newEl]);
+    setSelectedElementId(newEl.id);
     setEditingId(null);
+  };
+
+  const handleAddTable = () => {
+    clearUndo();
+    const newEl: SlideElement = {
+      id: `tbl_${Date.now()}`,
+      type: 'table',
+      x: 20,
+      y: 25,
+      width: 60,
+      height: 30,
+      rows: [
+        ['', '', ''],
+        ['', '', ''],
+        ['', '', ''],
+      ],
+    };
+    mapActive((elements) => [...elements, newEl]);
+    setSelectedElementId(newEl.id);
+    setEditingId(null);
+  };
+
+  const handleAddTableRow = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows) return el;
+        const cols = el.rows[0]?.length || 3;
+        const newRow = Array(cols).fill('');
+        return { ...el, rows: [...el.rows, newRow] };
+      })
+    );
+  };
+
+  const handleAddTableColumn = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows) return el;
+        return { ...el, rows: el.rows.map((row) => [...row, '']) };
+      })
+    );
+  };
+
+  const handleDeleteTableRow = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows || el.rows.length <= 1) return el;
+        return { ...el, rows: el.rows.slice(0, -1) };
+      })
+    );
+  };
+
+  const handleDeleteTableColumn = () => {
+    if (!selectedElementId) return;
+    clearUndo();
+    mapActive((elements) =>
+      elements.map((el) => {
+        if (el.id !== selectedElementId || el.type !== 'table' || !el.rows || (el.rows[0]?.length || 0) <= 1) return el;
+        return { ...el, rows: el.rows.map((row) => row.slice(0, -1)) };
+      })
+    );
+  };
+
+  const handleSetSlideSize = (size: '16:9' | '16:10' | '4:3') => {
+    const updated = { ...presentationRef.current, slideSize: size };
+    presentationRef.current = updated;
+    onChangeRef.current(updated);
+  };
+
+  const handleApplyPalette = (paletteName: 'paper' | 'ink' | 'teal') => {
+    clearUndo();
+    const updated = applyPalette(presentationRef.current, paletteName);
+    presentationRef.current = updated;
+    onChangeRef.current(updated);
+  };
+
+  const handleDeleteSelectedElement = () => {
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length === 0) return;
+    clearUndo();
+    const idSet = new Set(ids);
+    mapActive((elements) => elements.filter((el) => !idSet.has(el.id)));
+    for (const id of ids) {
+      const cached = urlCacheRef.current.get(id);
+      if (cached) {
+        URL.revokeObjectURL(cached);
+        urlCacheRef.current.delete(id);
+      }
+      delete playheadsRef.current[id];
+    }
+    setSelectedElementId(null);
+    setSelectedElementIds([]);
+    setEditingId(null);
+  };
+
+  const handleDuplicateSelectedElement = () => {
+    const slide = presentation.slides[activeSlideIndex];
+    if (!slide) return;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length === 0) return;
+    const toDuplicate = slide.elements.filter((el) => ids.includes(el.id));
+    if (toDuplicate.length === 0) return;
+    const newElements: SlideElement[] = [];
+    const newIds: string[] = [];
+    toDuplicate.forEach((elem) => {
+      const newId = `el_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      newIds.push(newId);
+      newElements.push({
+        ...JSON.parse(JSON.stringify(elem)),
+        id: newId,
+        x: Math.min(elem.x + 2, 90),
+        y: Math.min(elem.y + 2, 90),
+      });
+    });
+    mapActive((elements) => [...elements, ...newElements]);
+    setSelectedElementIds(newIds);
+    setSelectedElementId(newIds[0]);
+  };
+
+  const handleAlign = (alignment: Alignment) => {
+    const slide = (presentationRef.current.slides || [])[indexRef.current];
+    if (!slide) return;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length === 0) return;
+
+    clearUndo();
+    if (ids.length === 1) {
+      const id = ids[0];
+      mapActive((elements) =>
+        elements.map((el) => {
+          if (el.id !== id) return el;
+          let x = el.x;
+          let y = el.y;
+          switch (alignment) {
+            case 'left': x = 0; break;
+            case 'center': x = (100 - el.width) / 2; break;
+            case 'right': x = 100 - el.width; break;
+            case 'top': y = 0; break;
+            case 'middle': y = (100 - el.height) / 2; break;
+            case 'bottom': y = 100 - el.height; break;
+          }
+          return { ...el, x, y };
+        })
+      );
+    } else {
+      const targetElements = slide.elements.filter((el) => ids.includes(el.id));
+      const boxes = targetElements.map(boxOf);
+      const aligned = alignBoxes(boxes, alignment);
+      const boxMap = new Map<string, Box>();
+      targetElements.forEach((el, i) => boxMap.set(el.id, aligned[i]));
+
+      mapActive((elements) =>
+        elements.map((el) => {
+          const newBox = boxMap.get(el.id);
+          if (!newBox) return el;
+          return { ...el, x: newBox.x, y: newBox.y };
+        })
+      );
+    }
+  };
+
+  const handleDistribute = (axis: DistributionAxis) => {
+    const slide = (presentationRef.current.slides || [])[indexRef.current];
+    if (!slide) return;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    if (ids.length < 3) return;
+
+    clearUndo();
+    const targetElements = slide.elements.filter((el) => ids.includes(el.id));
+    const boxes = targetElements.map(boxOf);
+    const distributed = distributeBoxes(boxes, axis);
+    const boxMap = new Map<string, Box>();
+    targetElements.forEach((el, i) => boxMap.set(el.id, distributed[i]));
+
+    mapActive((elements) =>
+      elements.map((el) => {
+        const newBox = boxMap.get(el.id);
+        if (!newBox) return el;
+        return { ...el, x: newBox.x, y: newBox.y };
+      })
+    );
+  };
+
+  const handleReorder = (action: ZOrderAction) => {
+    const id = selectedElementId || selectedElementIds[0];
+    if (!id) return;
+    clearUndo();
+    mapActive((elements) => reorder(elements, id, action));
   };
 
   const beginGesture = (
@@ -414,8 +718,21 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
       canvasH: rect.height,
     };
     gesturingRef.current = true;
-    setSelectedElementId(elem.id);
-    if (!(elem.type === 'text' && selectedElementId === elem.id)) setEditingId(null);
+    const isMulti = event.shiftKey || event.ctrlKey || event.metaKey;
+    if (isMulti) {
+      setSelectedElementIds((prev) =>
+        prev.includes(elem.id) ? prev.filter((id) => id !== elem.id) : [...prev, elem.id]
+      );
+      setSelectedElementId(elem.id);
+    } else {
+      setSelectedElementIds((prev) =>
+        prev.includes(elem.id) && prev.length > 1 ? prev : [elem.id]
+      );
+      setSelectedElementId(elem.id);
+    }
+    if (!((elem.type === 'text' || elem.type === 'rect') && selectedElementId === elem.id)) {
+      setEditingId(null);
+    }
     focusShell();
 
     const move = (ev: PointerEvent) => {
@@ -432,9 +749,20 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         gesture.mode === 'move'
           ? moveBox(gesture.orig, dx, dy, minWidth, minHeight)
           : resizeBox(gesture.orig, gesture.dir || 'se', dx, dy, minWidth, minHeight);
-      updateElementBox(gesture.id, next);
+      if (gesture.mode === 'move' && snapToGrid) {
+        const snapped = snapBox(next, 2, true);
+        updateElementBox(gesture.id, snapped.box);
+        setActiveGuides({
+          vertical: snapped.snappedVerticalCenter,
+          horizontal: snapped.snappedHorizontalCenter,
+        });
+      } else {
+        updateElementBox(gesture.id, next);
+        setActiveGuides({ vertical: false, horizontal: false });
+      }
     };
     const end = (ev: PointerEvent) => {
+      setActiveGuides({ vertical: false, horizontal: false });
       const gesture = gestureRef.current;
       if (!gesture || ev.pointerId !== gesture.pointerId) return;
       stopGestureRef.current?.();
@@ -452,12 +780,13 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         if (moved) setUndoSlot({ slideIndex: indexRef.current, elementId: gesture.id, box: gesture.orig });
         return;
       }
-      if (gesture.mode === 'move' && gesture.elementType === 'text' && gesture.wasSelected) {
+      if (gesture.mode === 'move' && (gesture.elementType === 'text' || gesture.elementType === 'rect') && gesture.wasSelected) {
         pendingEditRef.current = gesture.id;
         setEditingId(gesture.id);
       }
     };
     const stop = () => {
+      setActiveGuides({ vertical: false, horizontal: false });
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
     };
@@ -466,7 +795,150 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
     window.addEventListener('pointerup', end);
   };
 
-  const selectedElem = currentSlide?.elements.find((e) => e.id === selectedElementId);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      addSlide: handleAddSlide,
+      duplicateSlide: () => handleDuplicateSlide(indexRef.current),
+      deleteSlide: () => handleDeleteSlide(indexRef.current),
+      moveSlide: (direction) => handleMoveSlide(indexRef.current, direction),
+      addText: handleAddTextBox,
+      addImage: handleAddImage,
+      addVideo: handleAddVideo,
+      addShape: handleAddShape,
+      addTable: handleAddTable,
+      addTableRow: handleAddTableRow,
+      addTableColumn: handleAddTableColumn,
+      deleteTableRow: handleDeleteTableRow,
+      deleteTableColumn: handleDeleteTableColumn,
+      setSlideSize: handleSetSlideSize,
+      undo: applyUndo,
+      deleteSelected: handleDeleteSelectedElement,
+      duplicateSelected: handleDuplicateSelectedElement,
+      alignSelected: handleAlign,
+      distributeSelected: handleDistribute,
+      reorderSelected: handleReorder,
+      bringForward: () => handleReorder('forward'),
+      sendBackward: () => handleReorder('backward'),
+      bringToFront: () => handleReorder('front'),
+      sendToBack: () => handleReorder('back'),
+      toggleSnapToGrid: () => setSnapToGrid((prev) => !prev),
+      setSnapToGrid: (snap: boolean) => setSnapToGrid(snap),
+      setViewMode,
+      toggleViewMode: () => setViewMode((prev) => (prev === 'normal' ? 'sorter' : 'normal')),
+      applyPalette: handleApplyPalette,
+      patchSelected: (updates) => {
+        const id = selectedElementId;
+        if (!id) return;
+        const slide = (presentationRef.current.slides || [])[indexRef.current];
+        const current = slide?.elements.find((item) => item.id === id);
+        if (!current) return;
+        const before: Partial<SlideElement> = {};
+        for (const key of Object.keys(updates) as Array<keyof SlideElement>) {
+          before[key] = current[key] as never;
+        }
+        setUndoSlot({ slideIndex: indexRef.current, elementId: id, box: boxOf(current), props: before });
+        patchElement(id, updates, false);
+      },
+    }),
+    [selectedElementId, selectedElementIds, activeSlideIndex, viewMode],
+  );
+
+  useEffect(() => {
+    const slide = (presentationRef.current.slides || [])[indexRef.current];
+    const el = slide?.elements.find((item) => item.id === selectedElementId) || null;
+    const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
+    onSelectionChangeRef.current?.({
+      canUndo: Boolean(undoSlot),
+      slideCount: (presentationRef.current.slides || []).length,
+      slideIndex: indexRef.current,
+      element: el
+        ? {
+            id: el.id,
+            type: el.type,
+            shape: el.shape,
+            bold: el.bold,
+            italic: el.italic,
+            underline: el.underline,
+            fontSize: el.fontSize,
+            fontFamily: el.fontFamily,
+            color: el.color,
+            align: el.align,
+            fill: el.fill,
+            borderColor: el.borderColor,
+            borderWidth: el.borderWidth,
+            rows: el.rows,
+          }
+        : null,
+      selectedCount: ids.length,
+      canAlign: ids.length >= 1,
+      canDistribute: ids.length >= 3,
+      canReorder: ids.length >= 1,
+      snapToGrid,
+      viewMode,
+      slideSize: presentationRef.current.slideSize || '16:9',
+    });
+  }, [selectedElementId, selectedElementIds, undoSlot, presentation, activeSlideIndex, snapToGrid, viewMode]);
+
+  const selectMatch = (idx: number, matches: SlideMatch[]) => {
+    const match = matches[idx];
+    if (!match) return;
+    setActiveSlideIndex(match.slideIndex);
+    if (match.elementId) {
+      setSelectedElementId(match.elementId);
+    } else {
+      setSelectedElementId(null);
+    }
+  };
+
+  const handleFind = () => {
+    if (!findText) {
+      setMatchCount(0);
+      setCurrentIndex(-1);
+      matchesRef.current = [];
+      return;
+    }
+    const matches = findInPresentation(presentation, findText, { matchCase });
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    if (matches.length > 0) {
+      setCurrentIndex(0);
+      selectMatch(0, matches);
+    } else {
+      setCurrentIndex(-1);
+    }
+  };
+
+  const handleFindNext = () => {
+    if (!findText) return;
+    const matches = findInPresentation(presentation, findText, { matchCase });
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    if (matches.length === 0) {
+      setCurrentIndex(-1);
+      return;
+    }
+    const nextIdx = findNextIndex(matches.length, currentIndex);
+    setCurrentIndex(nextIdx);
+    selectMatch(nextIdx, matches);
+  };
+
+  const handleFindPrevious = () => {
+    if (!findText) return;
+    const matches = findInPresentation(presentation, findText, { matchCase });
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    if (matches.length === 0) {
+      setCurrentIndex(-1);
+      return;
+    }
+    const prevIdx = findPreviousIndex(matches.length, currentIndex);
+    setCurrentIndex(prevIdx);
+    selectMatch(prevIdx, matches);
+  };
 
   return (
     <div
@@ -502,10 +974,132 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
           e.preventDefault();
           handleDeleteSelectedElement();
         }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          setShowFind(true);
+        }
       }}
     >
-      <div
-        className="folio-slides-sidebar"
+      <FindPanel
+        open={showFind}
+        onClose={() => setShowFind(false)}
+        supportsReplace={false}
+        findText={findText}
+        setFindText={setFindText}
+        matchCase={matchCase}
+        setMatchCase={(mc) => {
+          setMatchCase(mc);
+          if (findText) {
+            const matches = findInPresentation(presentation, findText, { matchCase: mc });
+            matchesRef.current = matches;
+            setMatchCount(matches.length);
+            if (matches.length > 0) {
+              setCurrentIndex(0);
+              selectMatch(0, matches);
+            } else {
+              setCurrentIndex(-1);
+            }
+          }
+        }}
+        matchCount={matchCount}
+        currentIndex={currentIndex}
+        onFind={handleFind}
+        onFindNext={handleFindNext}
+        onFindPrevious={handleFindPrevious}
+      />
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          commandIds={getContextMenuItems('slideObject')}
+          context={{
+            kind: 'presentation',
+            duplicate: handleDuplicateSelectedElement,
+            delete: handleDeleteSelectedElement,
+            bringForward: () => handleReorder('forward'),
+            sendBackward: () => handleReorder('backward'),
+            bringToFront: () => handleReorder('front'),
+            sendToBack: () => handleReorder('back'),
+          }}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+      {viewMode === 'sorter' ? (
+        <div
+          className="folio-slide-sorter"
+          data-testid="folio-slide-sorter"
+          style={{
+            flex: 1,
+            padding: 24,
+            overflowY: 'auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: 24,
+            alignContent: 'start',
+            backgroundColor: 'var(--folio-bg)',
+          }}
+        >
+          {presentation.slides.map((slide, idx) => {
+            const isCurrent = idx === activeSlideIndex;
+            return (
+              <div
+                key={slide.id}
+                data-testid={`sorter-slide-${idx}`}
+                onClick={() => {
+                  setActiveSlideIndex(idx);
+                  setSelectedElementId(null);
+                  setSelectedElementIds([]);
+                  setViewMode('normal');
+                }}
+                style={{
+                  aspectRatio: slideSize === '4:3' ? '4 / 3' : slideSize === '16:10' ? '16 / 10' : '16 / 9',
+                  backgroundColor: slide.background || '#ffffff',
+                  borderRadius: 6,
+                  boxShadow: isCurrent ? '0 0 0 3px var(--folio-teal)' : 'var(--folio-shadow-paper)',
+                  border: isCurrent ? '1px solid var(--folio-teal)' : '1px solid var(--folio-border)',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  padding: 12,
+                  transition: 'box-shadow 0.15s ease',
+                }}
+              >
+                <div style={{ fontSize: 12, color: 'var(--folio-text-muted)', fontWeight: 600 }}>
+                  {idx + 1}. {slide.title || `Slide ${idx + 1}`}
+                </div>
+                <div style={{ position: 'relative', flex: 1, width: '100%' }}>
+                  {slide.elements.slice(0, 6).map((el) => (
+                    <div
+                      key={el.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${el.x}%`,
+                        top: `${el.y}%`,
+                        width: `${el.width}%`,
+                        height: `${Math.min(el.height || 10, 35)}%`,
+                        backgroundColor: el.type === 'rect' ? (el.fill || '#ccc') : 'transparent',
+                        border: el.borderColor ? `1px solid ${el.borderColor}` : undefined,
+                        overflow: 'hidden',
+                        fontSize: 8,
+                        color: el.color || '#333',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {el.text ? el.text.slice(0, 24) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div
+            className="folio-slides-sidebar"
         style={{
           width: '220px',
           backgroundColor: 'var(--folio-panel)',
@@ -525,11 +1119,11 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
           }}
         >
           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--folio-ink-muted)' }}>
-            SLIDES ({slides.length})
+            {t('slides.count', { count: slides.length })}
           </span>
           <button
             type="button"
-            onClick={handleAddSlide}
+            onClick={() => handleAddSlide()}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -575,7 +1169,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
                 }}
               >
                 <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--folio-ink-muted)' }}>
-                  Slide {idx + 1}
+                  {t('slides.slide', { n: idx + 1 })}
                 </span>
                 <div style={{ display: 'flex', gap: '2px' }} onClick={(e) => e.stopPropagation()}>
                   <button
@@ -594,14 +1188,14 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
                   >
                     <ChevronDown size={12} />
                   </button>
-                  <button type="button" onClick={() => handleDuplicateSlide(idx)} title="Duplicate" style={{ padding: '2px' }}>
+                  <button type="button" onClick={() => handleDuplicateSlide(idx)} title={t('slides.duplicate')} style={{ padding: '2px' }}>
                     <Copy size={12} />
                   </button>
                   {slides.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleDeleteSlide(idx)}
-                      title="Delete"
+                      title={t('slides.delete')}
                       style={{ padding: '2px', color: '#dc2626' }}
                     >
                       <Trash2 size={12} />
@@ -612,7 +1206,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
               <div
                 style={{
                   width: '100%',
-                  aspectRatio: '16 / 9',
+                  aspectRatio: slideSize === '4:3' ? '4 / 3' : slideSize === '16:10' ? '16 / 10' : '16 / 9',
                   backgroundColor: '#ffffff',
                   border: '1px solid var(--folio-border-light)',
                   borderRadius: '3px',
@@ -622,8 +1216,8 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
                   color: 'var(--folio-ink-muted)',
                 }}
               >
-                {s.elements.find((e) => e.type === 'text')?.text?.slice(0, 50) ||
-                  (s.elements.some((e) => e.type === 'video') ? 'Video' : 'Blank Slide')}
+                {s.elements.find((e) => e.type === 'text' || (e.type === 'rect' && e.text))?.text?.slice(0, 50) ||
+                  (s.elements.some((e) => e.type === 'video') ? t('slides.video') : t('slides.blank'))}
               </div>
             </div>
           ))}
@@ -645,7 +1239,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
             role="status"
             style={{
               marginBottom: '12px',
-              maxWidth: '960px',
+              maxWidth: `${canvasWidth}px`,
               width: '100%',
               background: '#fff8e8',
               border: '1px solid #e6d3a1',
@@ -666,199 +1260,11 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
         )}
 
         <div
-          style={{
-            marginBottom: '16px',
-            background: 'var(--folio-panel)',
-            border: '1px solid var(--folio-border)',
-            borderRadius: 'var(--folio-radius-md)',
-            padding: '6px 12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: 'var(--folio-shadow-sm)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={applyUndo}
-            disabled={!undoSlot}
-            title="Undo move or resize"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-              opacity: undoSlot ? 1 : 0.4,
-            }}
-          >
-            <Undo2 size={14} /> Undo
-          </button>
-          <button
-            type="button"
-            onClick={handleAddTextBox}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-            }}
-          >
-            <Type size={14} /> Add Text
-          </button>
-          <button
-            type="button"
-            onClick={handleAddImage}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-            }}
-          >
-            <ImageIcon size={14} /> Add Picture
-          </button>
-          <button
-            type="button"
-            onClick={handleAddVideo}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: 'var(--folio-bg)',
-              fontWeight: 500,
-            }}
-          >
-            <Video size={14} /> Add Video
-          </button>
-
-          {selectedElem && (
-            <>
-              <div style={{ height: '16px', width: '1px', background: 'var(--folio-border)' }} />
-
-              {selectedElem.type === 'text' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { bold: !selectedElem.bold }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.bold ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <Bold size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { italic: !selectedElem.italic }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.italic ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <Italic size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { underline: !selectedElem.underline }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.underline ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <Underline size={14} />
-                  </button>
-
-                  <select
-                    value={selectedElem.fontSize || 18}
-                    onChange={(e) =>
-                      patchElement(selectedElem.id, { fontSize: parseInt(e.target.value, 10) }, true)
-                    }
-                    style={{
-                      padding: '2px 4px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--folio-border)',
-                      fontSize: '12px',
-                    }}
-                  >
-                    {[12, 14, 16, 18, 20, 24, 28, 32, 36, 44, 54, 72].map((sz) => (
-                      <option key={sz} value={sz}>
-                        {sz}pt
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { align: 'left' }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.align === 'left' ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <AlignLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { align: 'center' }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.align === 'center' ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <AlignCenter size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => patchElement(selectedElem.id, { align: 'right' }, true)}
-                    style={{
-                      padding: '4px',
-                      borderRadius: '4px',
-                      background: selectedElem.align === 'right' ? 'var(--folio-teal-light)' : 'transparent',
-                    }}
-                  >
-                    <AlignRight size={14} />
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={handleDeleteSelectedElement}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  color: '#dc2626',
-                  marginLeft: 'auto',
-                }}
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-            </>
-          )}
-        </div>
-
-        <div
           ref={canvasRef}
           className="folio-slide-canvas"
           style={{
-            width: '960px',
-            height: '540px',
+            width: `${canvasWidth}px`,
+            height: `${canvasHeight}px`,
             backgroundColor: currentSlide?.background || '#ffffff',
             borderRadius: '4px',
             boxShadow: 'var(--folio-shadow-paper)',
@@ -870,20 +1276,61 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setSelectedElementId(null);
+              setSelectedElementIds([]);
               setEditingId(null);
             }
           }}
         >
+          {activeGuides.vertical && (
+            <div
+              data-testid="snap-guide-vertical"
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: 0,
+                bottom: 0,
+                width: 1,
+                borderLeft: '1px dashed #ef4444',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+          {activeGuides.horizontal && (
+            <div
+              data-testid="snap-guide-horizontal"
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: 0,
+                right: 0,
+                height: 1,
+                borderTop: '1px dashed #ef4444',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            />
+          )}
           {currentSlide?.elements.map((elem, elemIndex) => {
-            const isSelected = elem.id === selectedElementId;
+            const isSelected = selectedElementIds.includes(elem.id) || elem.id === selectedElementId;
             const isEditing = editingId === elem.id;
             return (
               <div
                 key={elem.id}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelectedElementId(elem.id);
+                  setSelectedElementIds((prev) => (prev.includes(elem.id) ? prev : [elem.id]));
+                  setContextMenu({ x: e.clientX, y: e.clientY });
+                }}
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
-                  if (target.closest('[data-folio-no-drag]')) return;
-                  if (elem.type === 'text' && isEditing) return;
+                  if (target.closest('[data-folio-no-drag]')) {
+                    setSelectedElementId(elem.id);
+                    return;
+                  }
+                  if ((elem.type === 'text' || elem.type === 'rect' || elem.type === 'table') && isEditing) return;
                   e.stopPropagation();
                   beginGesture(e, elem, 'move');
                 }}
@@ -927,7 +1374,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
                       border: 'none',
                       outline: 'none',
                       resize: 'none',
-                      fontFamily: elem.fontFamily || 'system-ui, sans-serif',
+                      fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
                       fontSize: `${elem.fontSize || 18}px`,
                       fontWeight: elem.bold ? 700 : 400,
                       fontStyle: elem.italic ? 'italic' : 'normal',
@@ -952,14 +1399,205 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
 
                 {elem.type === 'rect' && (
                   <div
+                    onDoubleClick={(e) => {
+                      if (elem.shape !== 'line') {
+                        e.stopPropagation();
+                        setEditingId(elem.id);
+                      }
+                    }}
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {elem.shape === 'line' ? (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                        <div style={{ width: '100%', borderTop: `${elem.borderWidth || 2}px solid ${elem.borderColor || '#0f766e'}` }} />
+                      </div>
+                    ) : elem.shape === 'triangle' ? (
+                      <svg
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, pointerEvents: 'none' }}
+                      >
+                        <polygon
+                          points="50,0 100,100 0,100"
+                          fill={elem.fill || '#d6f3ef'}
+                          stroke={elem.borderColor || 'none'}
+                          strokeWidth={elem.borderColor ? elem.borderWidth || 1 : 0}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    ) : elem.shape === 'ellipse' ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          top: 0,
+                          left: 0,
+                          borderRadius: '50%',
+                          backgroundColor: elem.fill || '#d6f3ef',
+                          border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                          boxSizing: 'border-box',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ) : elem.shape === 'roundRect' ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          top: 0,
+                          left: 0,
+                          borderRadius: '12px',
+                          backgroundColor: elem.fill || '#d6f3ef',
+                          border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                          boxSizing: 'border-box',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          top: 0,
+                          left: 0,
+                          backgroundColor: elem.fill || '#e2ded6',
+                          border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
+                          boxSizing: 'border-box',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    )}
+
+                    {elem.shape !== 'line' && isEditing && (
+                      <textarea
+                        data-folio-no-drag=""
+                        autoFocus
+                        value={elem.text || ''}
+                        onChange={(e) => {
+                          clearUndo();
+                          patchElement(elem.id, { text: e.target.value });
+                        }}
+                        onBlur={() => setEditingId(null)}
+                        style={{
+                          position: 'relative',
+                          zIndex: 2,
+                          width: '100%',
+                          height: '100%',
+                          background: 'transparent',
+                          border: 'none',
+                          outline: 'none',
+                          resize: 'none',
+                          fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
+                          fontSize: `${elem.fontSize || 18}px`,
+                          fontWeight: elem.bold ? 700 : 400,
+                          fontStyle: elem.italic ? 'italic' : 'normal',
+                          textDecoration: elem.underline ? 'underline' : 'none',
+                          color: elem.color || '#1e2022',
+                          textAlign: elem.align || 'center',
+                          lineHeight: 1.3,
+                          padding: '8px',
+                          boxSizing: 'border-box',
+                          cursor: 'text',
+                        }}
+                      />
+                    )}
+
+                    {elem.shape !== 'line' && !isEditing && elem.text && (
+                      <div
+                        style={{
+                          position: 'relative',
+                          zIndex: 2,
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: elem.align === 'left' ? 'flex-start' : elem.align === 'right' ? 'flex-end' : 'center',
+                          textAlign: elem.align || 'center',
+                          fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
+                          fontSize: `${elem.fontSize || 18}px`,
+                          fontWeight: elem.bold ? 700 : 400,
+                          fontStyle: elem.italic ? 'italic' : 'normal',
+                          textDecoration: elem.underline ? 'underline' : 'none',
+                          color: elem.color || '#1e2022',
+                          padding: '8px',
+                          boxSizing: 'border-box',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {elem.text}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {elem.type === 'table' && elem.rows && (
+                  <table
                     style={{
                       width: '100%',
                       height: '100%',
-                      background: elem.fill || '#e2ded6',
-                      border: elem.borderColor ? `${elem.borderWidth || 1}px solid ${elem.borderColor}` : undefined,
-                      pointerEvents: 'none',
+                      borderCollapse: 'collapse',
+                      tableLayout: 'fixed',
+                      backgroundColor: '#ffffff',
                     }}
-                  />
+                  >
+                    <tbody>
+                      {elem.rows.map((row, rIdx) => (
+                        <tr key={rIdx}>
+                          {row.map((cellText, cIdx) => (
+                            <td
+                              key={cIdx}
+                              style={{
+                                border: '1px solid #1e2022',
+                                padding: '2px',
+                                verticalAlign: 'top',
+                              }}
+                            >
+                              <textarea
+                                data-folio-no-drag=""
+                                value={cellText}
+                                onChange={(e) => {
+                                  clearUndo();
+                                  const newText = e.target.value;
+                                  mapActive((elements) =>
+                                    elements.map((el) => {
+                                      if (el.id !== elem.id || !el.rows) return el;
+                                      const nextRows = el.rows.map((r, rI) =>
+                                        rI === rIdx ? r.map((c, cI) => (cI === cIdx ? newText : c)) : r
+                                      );
+                                      return { ...el, rows: nextRows };
+                                    })
+                                  );
+                                }}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  border: 'none',
+                                  outline: 'none',
+                                  resize: 'none',
+                                  background: 'transparent',
+                                  fontSize: '13px',
+                                  fontFamily: cssFamily(elem.fontFamily, 'Noto Sans'),
+                                  color: elem.color || '#1e2022',
+                                  padding: '2px 4px',
+                                  boxSizing: 'border-box',
+                                }}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
 
                 {elem.type === 'video' && elem.src && (
@@ -988,10 +1626,63 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({
             );
           })}
         </div>
+
+        {/* Notes field */}
+        <div
+          style={{
+            width: `${canvasWidth}px`,
+            marginTop: '16px',
+            backgroundColor: '#ffffff',
+            borderRadius: '4px',
+            boxShadow: 'var(--folio-shadow-sm)',
+            border: '1px solid var(--folio-border)',
+            padding: '8px 12px',
+            boxSizing: 'border-box',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'var(--folio-ink-muted)',
+              marginBottom: '4px',
+            }}
+          >
+            {t('slides.notes')}
+          </div>
+          <textarea
+            value={currentSlide?.notes || ''}
+            placeholder={t('slides.notesPlaceholder')}
+            onChange={(e) => {
+              clearUndo();
+              const val = e.target.value;
+              const next = (presentationRef.current.slides || []).map((slide, i) =>
+                i === indexRef.current ? { ...slide, notes: val } : slide
+              );
+              commit(next);
+            }}
+            rows={3}
+            style={{
+              width: '100%',
+              border: '1px solid var(--folio-border-light)',
+              borderRadius: '3px',
+              padding: '6px 8px',
+              fontSize: '13px',
+              color: 'var(--folio-ink)',
+              resize: 'vertical',
+              outline: 'none',
+              boxSizing: 'border-box',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
       </div>
+      </>
+      )}
     </div>
   );
-};
+});
 
 function VideoBlock({
   src,
@@ -1069,7 +1760,7 @@ function VideoBlock({
         <button
           type="button"
           onClick={toggle}
-          aria-label={paused ? 'Play' : 'Pause'}
+          aria-label={paused ? t('pdf.play') : t('pdf.pause')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1086,7 +1777,7 @@ function VideoBlock({
           max={duration || 0}
           step={0.1}
           value={Math.min(time, duration || 0)}
-          aria-label="Seek"
+          aria-label={t('pdf.seek')}
           onChange={(e) => {
             const node = ref.current;
             const next = Number(e.target.value);

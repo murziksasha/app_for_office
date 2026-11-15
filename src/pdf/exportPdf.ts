@@ -1,7 +1,18 @@
 import { PDFDocument, PDFPage, rgb, RGB, PDFImage } from 'pdf-lib';
 import { EditorState } from '../types';
-import { embedNotoFonts, EmbeddedFonts } from './fonts';
+import { createFontBook, type PdfFontBook } from './fontBook';
+import { familiesInState, defaultFontFor } from '../fonts/collect';
+import { loadCustomFonts } from '../fonts/registry';
 import { getActiveSheet } from '../files/session';
+import { defaultPrintSetup, calculateFitWidthScale } from '../spreadsheet/sheetPrint';
+import { mmToPt, PAGE_MM, pageSetupFromDoc } from '../document/pageSetup';
+import {
+  chromeFromDoc,
+  hasChromeContent,
+  resolveStoryForPage,
+  type ChromeStory,
+  type ChromeZone,
+} from '../document/chrome';
 
 export interface ExportPdfOptions {
   scope?: 'current' | 'all';
@@ -92,30 +103,11 @@ interface TextToken {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  fontFamily?: string;
 }
 
-function filterGlyphs(
-  token: TextToken,
-  fonts: EmbeddedFonts,
-  recordOmission: (msg: string) => void
-): TextToken {
-  let clean = '';
-  for (const ch of token.text) {
-    const cp = ch.codePointAt(0)!;
-    if (fonts.hasGlyph(cp)) {
-      clean += ch;
-    } else {
-      recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-    }
-  }
-  return { ...token, text: clean };
-}
-
-function selectFont(bold: boolean, italic: boolean, fonts: EmbeddedFonts) {
-  if (bold && italic) return fonts.boldItalic;
-  if (bold) return fonts.bold;
-  if (italic) return fonts.italic;
-  return fonts.regular;
+function tokenWidth(token: TextToken, size: number, fonts: PdfFontBook, record: (msg: string) => void) {
+  return fonts.measure(token.text, size, token.bold, token.italic, token.fontFamily, record);
 }
 
 /**
@@ -133,7 +125,8 @@ export async function exportPdf(
   };
 
   const doc = await PDFDocument.create();
-  const fonts = await embedNotoFonts(doc);
+  await loadCustomFonts();
+  const fonts = await createFontBook(doc, familiesInState(state), defaultFontFor(state.kind));
 
   if (state.kind === 'document') {
     await exportDocument(doc, state, fonts, recordOmission);
@@ -162,21 +155,26 @@ export async function exportPdf(
 async function exportDocument(
   doc: PDFDocument,
   state: EditorState,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void
 ) {
-  const PAGE_WIDTH = 612; // US Letter portrait
-  const PAGE_HEIGHT = 792;
-  const MARGIN = 54;
-  const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2; // 504 pt
+  const setup = pageSetupFromDoc(state.documentContent);
+  const pageBox = PAGE_MM[setup.size];
+  const PAGE_WIDTH = mmToPt(pageBox.width);
+  const PAGE_HEIGHT = mmToPt(pageBox.height);
+  const marginLeft = mmToPt(setup.marginLeft);
+  const marginRight = mmToPt(setup.marginRight);
+  const marginTop = mmToPt(setup.marginTop);
+  const marginBottom = mmToPt(setup.marginBottom);
+  const CONTENT_WIDTH = PAGE_WIDTH - marginLeft - marginRight;
 
   let currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let cursorY = PAGE_HEIGHT - MARGIN;
+  let cursorY = PAGE_HEIGHT - marginTop;
 
   const ensureSpace = (neededHeight: number): PDFPage => {
-    if (cursorY - neededHeight < MARGIN) {
+    if (cursorY - neededHeight < marginBottom) {
       currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      cursorY = PAGE_HEIGHT - MARGIN;
+      cursorY = PAGE_HEIGHT - marginTop;
     }
     return currentPage;
   };
@@ -186,7 +184,7 @@ async function exportDocument(
   for (const node of nodes) {
     if (node.type === 'pageBreak') {
       currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      cursorY = PAGE_HEIGHT - MARGIN;
+      cursorY = PAGE_HEIGHT - marginTop;
       continue;
     }
 
@@ -201,7 +199,7 @@ async function exportDocument(
         currentPage,
         ensureSpace,
         tokens,
-        MARGIN,
+        marginLeft,
         cursorY,
         CONTENT_WIDTH,
         fontSize,
@@ -227,7 +225,7 @@ async function exportDocument(
         currentPage,
         ensureSpace,
         tokens,
-        MARGIN,
+        marginLeft,
         cursorY,
         CONTENT_WIDTH,
         fontSize,
@@ -261,7 +259,7 @@ async function exportDocument(
           currentPage,
           ensureSpace,
           itemTokens,
-          MARGIN + indent,
+          marginLeft + indent,
           cursorY,
           CONTENT_WIDTH - indent,
           fontSize,
@@ -293,7 +291,7 @@ async function exportDocument(
 
       ensureSpace(drawHeight + 10);
       currentPage.drawImage(img, {
-        x: MARGIN,
+        x: marginLeft,
         y: cursorY - drawHeight,
         width: drawWidth,
         height: drawHeight,
@@ -334,7 +332,7 @@ async function exportDocument(
         ensureSpace(rowHeight);
 
         for (let c = 0; c < colCount; c++) {
-          const cellX = MARGIN + c * colWidth;
+          const cellX = marginLeft + c * colWidth;
           const cellY = cursorY - rowHeight;
 
           // Border
@@ -353,15 +351,20 @@ async function exportDocument(
           for (const line of lines) {
             let lineX = cellX + 4;
             for (const token of line) {
-              const font = selectFont(token.bold, token.italic, fonts);
-              currentPage.drawText(token.text, {
-                x: lineX,
-                y: lineY,
-                size: 10,
-                font,
-                color: rgb(0, 0, 0),
-              });
-              const w = font.widthOfTextAtSize(token.text, 10);
+              const w = fonts.draw(
+                currentPage,
+                token.text,
+                {
+                  x: lineX,
+                  y: lineY,
+                  size: 10,
+                  bold: token.bold,
+                  italic: token.italic,
+                  family: token.fontFamily,
+                  color: rgb(0, 0, 0),
+                },
+                recordOmission
+              );
               if (token.underline) {
                 currentPage.drawLine({
                   start: { x: lineX, y: lineY - 1 },
@@ -383,6 +386,198 @@ async function exportDocument(
       continue;
     }
   }
+
+  const chrome = chromeFromDoc(state.documentContent);
+  if (hasChromeContent(chrome)) {
+    const pages = doc.getPages();
+    const totalPages = pages.length;
+    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+      const page = pages[pIdx];
+      const pageNumber = pIdx + 1;
+      const headerStory = resolveStoryForPage(chrome, 'header', pageNumber);
+      const footerStory = resolveStoryForPage(chrome, 'footer', pageNumber);
+
+      await renderPdfStory(
+        doc,
+        page,
+        headerStory,
+        'header',
+        pageNumber,
+        totalPages,
+        marginLeft,
+        CONTENT_WIDTH,
+        PAGE_HEIGHT - marginTop,
+        marginTop,
+        fonts,
+        recordOmission
+      );
+
+      await renderPdfStory(
+        doc,
+        page,
+        footerStory,
+        'footer',
+        pageNumber,
+        totalPages,
+        marginLeft,
+        CONTENT_WIDTH,
+        marginBottom,
+        marginBottom,
+        fonts,
+        recordOmission
+      );
+    }
+  }
+}
+
+async function renderPdfStory(
+  doc: PDFDocument,
+  page: PDFPage,
+  story: ChromeStory,
+  bandType: 'header' | 'footer',
+  pageNumber: number,
+  totalPages: number,
+  marginLeft: number,
+  contentWidth: number,
+  marginBoundY: number,
+  marginHeight: number,
+  fonts: PdfFontBook,
+  recordOmission: (msg: string) => void
+) {
+  if (!story) return;
+  const l0 = story.line0;
+  const hasLine0 =
+    (l0.left.runs && l0.left.runs.length > 0) ||
+    (l0.center.runs && l0.center.runs.length > 0) ||
+    (l0.right.runs && l0.right.runs.length > 0);
+  const hasLines = story.lines && story.lines.length > 0;
+  if (!hasLine0 && !hasLines) return;
+
+  const defaultFontSize = 10;
+  const lineHeight = 13;
+
+  let baseY =
+    bandType === 'header'
+      ? marginBoundY + marginHeight - 18
+      : marginBoundY - 14;
+
+  const renderZone = async (
+    zone: ChromeZone,
+    zoneAlign: 'left' | 'center' | 'right',
+    currentY: number
+  ) => {
+    if (!zone.runs || zone.runs.length === 0) return;
+
+    const textRuns: { token: TextToken; fontSize: number; color?: RGB }[] = [];
+    const imageRuns: { src: string; width?: number; height?: number }[] = [];
+
+    for (const run of zone.runs) {
+      if (run.type === 'image') {
+        imageRuns.push(run);
+      } else {
+        const text =
+          run.type === 'field'
+            ? run.field === 'page'
+              ? String(pageNumber)
+              : `Page ${pageNumber} of ${totalPages}`
+            : run.text;
+
+        const token: TextToken = {
+          text,
+          bold: Boolean(run.bold),
+          italic: Boolean(run.italic),
+          underline: Boolean(run.underline),
+          fontFamily: run.fontFamily,
+        };
+        const fontSize = run.fontSize || defaultFontSize;
+        const color = run.color ? parseColor(run.color) : rgb(0, 0, 0);
+        textRuns.push({ token, fontSize, color });
+      }
+    }
+
+    let totalTextWidth = 0;
+    const filteredRuns: { token: TextToken; fontSize: number; font: any; width: number; color?: RGB }[] = [];
+
+    for (const r of textRuns) {
+      const w = tokenWidth(r.token, r.fontSize, fonts, recordOmission);
+      filteredRuns.push({ token: r.token, fontSize: r.fontSize, font: fonts.regular, width: w, color: r.color });
+      totalTextWidth += w;
+    }
+
+    let currentX = marginLeft;
+    if (zoneAlign === 'center') {
+      currentX = marginLeft + (contentWidth - totalTextWidth) / 2;
+    } else if (zoneAlign === 'right') {
+      currentX = marginLeft + contentWidth - totalTextWidth;
+    }
+
+    for (const imgRun of imageRuns) {
+      const embedded = await embedBase64Image(doc, imgRun.src);
+      if (embedded.error) {
+        recordOmission(embedded.error);
+        continue;
+      }
+      if (embedded.image) {
+        const img = embedded.image;
+        const maxH = Math.min(img.height, marginHeight * 0.7);
+        const scale = maxH / img.height;
+        const drawW = img.width * scale;
+        const drawH = maxH;
+        let imgX = currentX;
+        if (zoneAlign === 'right') {
+          imgX = currentX - drawW - 4;
+        }
+        page.drawImage(img, {
+          x: imgX,
+          y: currentY - 2,
+          width: drawW,
+          height: drawH,
+        });
+        if (zoneAlign === 'left') {
+          currentX += drawW + 4;
+        }
+      }
+    }
+
+    for (const r of filteredRuns) {
+      fonts.draw(
+        page,
+        r.token.text,
+        {
+          x: currentX,
+          y: currentY,
+          size: r.fontSize,
+          bold: r.token.bold,
+          italic: r.token.italic,
+          family: r.token.fontFamily,
+          color: r.color || rgb(0, 0, 0),
+        },
+        recordOmission
+      );
+
+      if (r.token.underline) {
+        page.drawLine({
+          start: { x: currentX, y: currentY - 1 },
+          end: { x: currentX + r.width, y: currentY - 1 },
+          thickness: 0.75,
+          color: r.color || rgb(0, 0, 0),
+        });
+      }
+      currentX += r.width;
+    }
+  };
+
+  if (hasLine0) {
+    await renderZone(l0.left, l0.left.align || 'left', baseY);
+    await renderZone(l0.center, l0.center.align || 'center', baseY);
+    await renderZone(l0.right, l0.right.align || 'right', baseY);
+    baseY -= lineHeight;
+  }
+
+  for (const line of story.lines) {
+    await renderZone(line, line.align || 'left', baseY);
+    baseY -= lineHeight;
+  }
 }
 
 function extractTokens(node: any, forceBold = false): TextToken[] {
@@ -394,7 +589,8 @@ function extractTokens(node: any, forceBold = false): TextToken[] {
       const bold = forceBold || marks.some((m: any) => m.type === 'bold');
       const italic = marks.some((m: any) => m.type === 'italic');
       const underline = marks.some((m: any) => m.type === 'underline');
-      tokens.push({ text: n.text, bold, italic, underline });
+      const textStyle = marks.find((m: any) => m.type === 'textStyle');
+      tokens.push({ text: n.text, bold, italic, underline, fontFamily: textStyle?.attrs?.fontFamily });
       return;
     }
     if (n.content && Array.isArray(n.content)) {
@@ -411,12 +607,10 @@ function wrapTokensToLines(
   tokens: TextToken[],
   maxWidth: number,
   fontSize: number,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void
 ): TextToken[][] {
-  const cleanTokens = tokens
-    .map((t) => filterGlyphs(t, fonts, recordOmission))
-    .filter((t) => t.text.length > 0);
+  const cleanTokens = tokens.filter((t) => t.text.length > 0);
 
   if (cleanTokens.length === 0) return [[]];
 
@@ -425,13 +619,11 @@ function wrapTokensToLines(
   let currentLineWidth = 0;
 
   for (const token of cleanTokens) {
-    const font = selectFont(token.bold, token.italic, fonts);
-    // Split token into words
     const words = token.text.split(/(\s+)/);
 
     for (const word of words) {
       if (!word) continue;
-      const wordWidth = font.widthOfTextAtSize(word, fontSize);
+      const wordWidth = tokenWidth({ ...token, text: word }, fontSize, fonts, recordOmission);
 
       if (currentLineWidth + wordWidth <= maxWidth || currentLine.length === 0) {
         currentLine.push({ ...token, text: word });
@@ -468,7 +660,7 @@ function renderParagraph(
   fontSize: number,
   lineHeight: number,
   gapAfter: number,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   recordOmission: (msg: string) => void,
   firstLineOffset = 0
 ): number {
@@ -487,16 +679,20 @@ function renderParagraph(
     const baselineY = y - fontSize;
 
     for (const token of line) {
-      const font = selectFont(token.bold, token.italic, fonts);
-      page.drawText(token.text, {
-        x: lineX,
-        y: baselineY,
-        size: fontSize,
-        font,
-        color: rgb(0, 0, 0),
-      });
-
-      const w = font.widthOfTextAtSize(token.text, fontSize);
+      const w = fonts.draw(
+        page,
+        token.text,
+        {
+          x: lineX,
+          y: baselineY,
+          size: fontSize,
+          bold: token.bold,
+          italic: token.italic,
+          family: token.fontFamily,
+          color: rgb(0, 0, 0),
+        },
+        recordOmission
+      );
       if (token.underline) {
         page.drawLine({
           start: { x: lineX, y: baselineY - 2 },
@@ -520,7 +716,7 @@ function renderParagraph(
 async function exportSpreadsheet(
   doc: PDFDocument,
   state: EditorState,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   scope: 'current' | 'all',
   recordOmission: (msg: string) => void
 ) {
@@ -576,7 +772,8 @@ async function exportSpreadsheet(
     }
 
     // Shrink wide sheet uniformly to page width
-    const scale = Math.min(1, AVAILABLE_WIDTH / Math.max(1, totalColsWidth));
+    const setup = (sheet as any).printSetup || defaultPrintSetup;
+    const scale = calculateFitWidthScale(totalColsWidth, AVAILABLE_WIDTH, setup.fitWidth);
     const scaledColWidths = colWidths.map((w) => w * scale);
     const fontSize = Math.max(4, 9 * scale);
     const rowHeight = Math.max(8, 16 * scale);
@@ -588,6 +785,43 @@ async function exportSpreadsheet(
       if (cursorY - rowHeight < MARGIN) {
         page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
         cursorY = PAGE_HEIGHT - MARGIN;
+        if (setup.repeatHeaderRow && r > minR) {
+          const headerRow = grid[minR] || [];
+          let hX = MARGIN;
+          for (let hc = minC; hc <= maxC; hc++) {
+            const hw = scaledColWidths[hc - minC];
+            const hcell = headerRow[hc];
+            if (setup.gridlines || hcell?.bd) {
+              page.drawRectangle({
+                x: hX,
+                y: cursorY - rowHeight,
+                width: hw,
+                height: rowHeight,
+                borderColor: rgb(0.85, 0.85, 0.85),
+                borderWidth: 0.5,
+              });
+            }
+            const htext = hcell?.m != null ? String(hcell.m) : hcell?.v != null ? String(hcell.v) : '';
+            if (htext.length > 0) {
+              fonts.draw(
+                page,
+                htext,
+                {
+                  x: hX + 2 * scale,
+                  y: cursorY - rowHeight + 3.5 * scale,
+                  size: fontSize,
+                  bold: Boolean(hcell?.bl === 1),
+                  italic: Boolean(hcell?.it === 1),
+                  family: typeof hcell?.ff === 'string' ? hcell.ff : undefined,
+                  color: rgb(0, 0, 0),
+                },
+                recordOmission
+              );
+            }
+            hX += hw;
+          }
+          cursorY -= rowHeight;
+        }
       }
 
       const row = grid[r] || [];
@@ -597,7 +831,7 @@ async function exportSpreadsheet(
         const w = scaledColWidths[c - minC];
         const cell = row[c];
 
-        // Draw cell border
+        if (setup.gridlines || cell?.bd) {
         page.drawRectangle({
           x: cellX,
           y: cursorY - rowHeight,
@@ -607,36 +841,26 @@ async function exportSpreadsheet(
           borderWidth: 0.5,
         });
 
+        }
+
         // Displayed text (m, otherwise v; formula strings f are NOT written)
         const rawText = cell?.m != null ? String(cell.m) : cell?.v != null ? String(cell.v) : '';
 
         if (rawText.length > 0) {
-          const isBold = Boolean(cell?.bl === 1);
-          const isItalic = Boolean(cell?.it === 1);
-          const font = selectFont(isBold, isItalic, fonts);
-
-          // Drop unsupported glyphs
-          let clean = '';
-          for (const ch of rawText) {
-            const cp = ch.codePointAt(0)!;
-            if (fonts.hasGlyph(cp)) {
-              clean += ch;
-            } else {
-              recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-            }
-          }
-
-          if (clean.length > 0) {
-            // Clip / single line inside cell
-            page.drawText(clean, {
+          fonts.draw(
+            page,
+            rawText,
+            {
               x: cellX + 2 * scale,
               y: cursorY - rowHeight + 3.5 * scale,
               size: fontSize,
-              font,
+              bold: Boolean(cell?.bl === 1),
+              italic: Boolean(cell?.it === 1),
+              family: typeof cell?.ff === 'string' ? cell.ff : undefined,
               color: rgb(0, 0, 0),
-              maxWidth: Math.max(1, w - 4 * scale),
-            });
-          }
+            },
+            recordOmission
+          );
         }
 
         cellX += w;
@@ -653,7 +877,7 @@ async function exportSpreadsheet(
 async function exportPresentation(
   doc: PDFDocument,
   state: EditorState,
-  fonts: EmbeddedFonts,
+  fonts: PdfFontBook,
   scope: 'current' | 'all',
   slideIndex: number,
   recordOmission: (msg: string) => void
@@ -669,9 +893,9 @@ async function exportPresentation(
       ? slides
       : [{ id: 'slide1', elements: [] }];
 
-  // 16:9 slide frame centered uniformly onto the landscape page
+  const slideSize = state.presentationData?.slideSize || '16:9';
   const frameWidth = 720;
-  const frameHeight = 405;
+  const frameHeight = slideSize === '4:3' ? 540 : slideSize === '16:10' ? 450 : 405;
   const frameX = (PAGE_WIDTH - frameWidth) / 2;
   const frameY = (PAGE_HEIGHT - frameHeight) / 2;
 
@@ -696,18 +920,174 @@ async function exportPresentation(
       const elemY = frameY + frameHeight - (elem.y / 100) * frameHeight - elemH;
 
       if (elem.type === 'rect') {
+        const shape = elem.shape || 'rect';
         const fill = elem.fill ? parseColor(elem.fill) : undefined;
         const borderColor = elem.borderColor ? parseColor(elem.borderColor) : undefined;
         const borderWidth = elem.borderWidth || (borderColor ? 1 : 0);
-        page.drawRectangle({
-          x: elemX,
-          y: elemY,
-          width: elemW,
-          height: elemH,
-          color: fill,
-          borderColor,
-          borderWidth,
-        });
+
+        if (shape === 'line') {
+          page.drawLine({
+            start: { x: elemX, y: elemY + elemH / 2 },
+            end: { x: elemX + elemW, y: elemY + elemH / 2 },
+            thickness: borderWidth || 2,
+            color: borderColor || fill || rgb(0, 0, 0),
+          });
+        } else if (shape === 'ellipse') {
+          page.drawEllipse({
+            x: elemX + elemW / 2,
+            y: elemY + elemH / 2,
+            xScale: elemW / 2,
+            yScale: elemH / 2,
+            color: fill,
+            borderColor,
+            borderWidth,
+          });
+        } else if (shape === 'triangle') {
+          let drawnTriangle = false;
+          if (typeof page.drawSvgPath === 'function') {
+            try {
+              const path = `M 0 0 L ${elemW / 2} ${elemH} L ${elemW} 0 Z`;
+              page.drawSvgPath(path, {
+                x: elemX,
+                y: elemY,
+                color: fill,
+                borderColor,
+                borderWidth,
+              });
+              drawnTriangle = true;
+            } catch {
+              drawnTriangle = false;
+            }
+          }
+          if (!drawnTriangle) {
+            page.drawRectangle({
+              x: elemX,
+              y: elemY,
+              width: elemW,
+              height: elemH,
+              color: fill,
+              borderColor,
+              borderWidth,
+            });
+            recordOmission('A triangle shape was simplified to a rectangle in the PDF.');
+          }
+        } else if (shape === 'roundRect') {
+          let drawnRoundRect = false;
+          if (typeof page.drawSvgPath === 'function') {
+            try {
+              const r = Math.min(8, elemW / 4, elemH / 4);
+              const path = `M ${r} 0 L ${elemW - r} 0 Q ${elemW} 0 ${elemW} ${r} L ${elemW} ${elemH - r} Q ${elemW} ${elemH} ${elemW - r} ${elemH} L ${r} ${elemH} Q 0 ${elemH} 0 ${elemH - r} L 0 ${r} Q 0 0 ${r} 0 Z`;
+              page.drawSvgPath(path, {
+                x: elemX,
+                y: elemY,
+                color: fill,
+                borderColor,
+                borderWidth,
+              });
+              drawnRoundRect = true;
+            } catch {
+              drawnRoundRect = false;
+            }
+          }
+          if (!drawnRoundRect) {
+            page.drawRectangle({
+              x: elemX,
+              y: elemY,
+              width: elemW,
+              height: elemH,
+              color: fill,
+              borderColor,
+              borderWidth,
+            });
+          }
+        } else {
+          page.drawRectangle({
+            x: elemX,
+            y: elemY,
+            width: elemW,
+            height: elemH,
+            color: fill,
+            borderColor,
+            borderWidth,
+          });
+        }
+
+        if (elem.text && shape !== 'line') {
+          const textColor = elem.color ? parseColor(elem.color) : rgb(0, 0, 0);
+          const baseSize = elem.fontSize || 18;
+          const fontSize = Math.max(6, (baseSize * frameWidth) / 960);
+          const lineHeight = fontSize * 1.25;
+          const rawLines = elem.text.split('\n');
+          const totalTextHeight = rawLines.length * lineHeight;
+          let textY = elemY + (elemH + totalTextHeight) / 2 - fontSize;
+          for (const rawLine of rawLines) {
+            const w = fonts.measure(rawLine, fontSize, Boolean(elem.bold), Boolean(elem.italic), elem.fontFamily, recordOmission);
+            let lineX = elemX + (elemW - w) / 2;
+            if (elem.align === 'left') lineX = elemX + 8;
+            else if (elem.align === 'right') lineX = elemX + elemW - w - 8;
+            fonts.draw(
+              page,
+              rawLine,
+              {
+                x: Math.max(elemX, lineX),
+                y: textY,
+                size: fontSize,
+                bold: Boolean(elem.bold),
+                italic: Boolean(elem.italic),
+                family: elem.fontFamily,
+                color: textColor,
+              },
+              recordOmission
+            );
+            textY -= lineHeight;
+          }
+        }
+        continue;
+      }
+
+      if (elem.type === 'table' && elem.rows && elem.rows.length > 0) {
+        const numRows = elem.rows.length;
+        const numCols = elem.rows[0]?.length || 1;
+        const cellW = elemW / numCols;
+        const cellH = elemH / numRows;
+
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < numCols; c++) {
+            const cellX = elemX + c * cellW;
+            const cellY = elemY + elemH - (r + 1) * cellH;
+
+            page.drawRectangle({
+              x: cellX,
+              y: cellY,
+              width: cellW,
+              height: cellH,
+              borderColor: rgb(0, 0, 0),
+              borderWidth: 0.5,
+            });
+
+            const rawText = elem.rows[r]?.[c] || '';
+            if (rawText) {
+              let fontSize = Math.max(6, (12 * frameWidth) / 960);
+              const textW = fonts.measure(rawText, fontSize, Boolean(elem.bold), Boolean(elem.italic), elem.fontFamily, recordOmission);
+              const maxW = Math.max(1, cellW - 4);
+              if (textW > maxW) fontSize = Math.max(4, fontSize * (maxW / textW));
+              fonts.draw(
+                page,
+                rawText,
+                {
+                  x: cellX + 2,
+                  y: cellY + (cellH - fontSize) / 2,
+                  size: fontSize,
+                  bold: Boolean(elem.bold),
+                  italic: Boolean(elem.italic),
+                  family: elem.fontFamily,
+                  color: rgb(0, 0, 0),
+                },
+                recordOmission
+              );
+            }
+          }
+        }
         continue;
       }
 
@@ -734,65 +1114,43 @@ async function exportPresentation(
       }
 
       if (elem.type === 'text' && elem.text) {
-        const isBold = Boolean(elem.bold);
-        const isItalic = Boolean(elem.italic);
-        const font = selectFont(isBold, isItalic, fonts);
         const textColor = elem.color ? parseColor(elem.color) : rgb(0, 0, 0);
-
-        // Scale font size according to slide frame ratio
         const baseSize = elem.fontSize || 18;
         const fontSize = Math.max(6, (baseSize * frameWidth) / 960);
         const lineHeight = fontSize * 1.25;
-
-        // Clean text of unsupported glyphs
-        let cleanText = '';
-        for (const ch of elem.text) {
-          const cp = ch.codePointAt(0)!;
-          if (fonts.hasGlyph(cp)) {
-            cleanText += ch;
-          } else {
-            recordOmission(`Dropped unsupported character: '${ch}' (U+${cp.toString(16).toUpperCase()})`);
-          }
-        }
-
-        // Split text by lines and wrap
-        const rawLines = cleanText.split('\n');
+        const rawLines = elem.text.split('\n');
         let textY = elemY + elemH - fontSize;
-
-        for (const rawLine of rawLines) {
-          const words = rawLine.split(/(\s+)/);
-          let currentLine = '';
-
-          for (const word of words) {
-            const testLine = currentLine + word;
-            const w = font.widthOfTextAtSize(testLine, fontSize);
-            if (w <= elemW || !currentLine) {
-              currentLine = testLine;
-            } else {
-              if (textY >= elemY) {
-                page.drawText(currentLine, {
-                  x: elemX,
-                  y: textY,
-                  size: fontSize,
-                  font,
-                  color: textColor,
-                });
-                textY -= lineHeight;
-              }
-              currentLine = word.trimStart();
-            }
-          }
-
-          if (currentLine && textY >= elemY) {
-            page.drawText(currentLine, {
+        const paint = (line: string) => {
+          fonts.draw(
+            page,
+            line,
+            {
               x: elemX,
               y: textY,
               size: fontSize,
-              font,
+              bold: Boolean(elem.bold),
+              italic: Boolean(elem.italic),
+              family: elem.fontFamily,
               color: textColor,
-            });
-            textY -= lineHeight;
+            },
+            recordOmission
+          );
+          textY -= lineHeight;
+        };
+        for (const rawLine of rawLines) {
+          const words = rawLine.split(/(\s+)/);
+          let currentLine = '';
+          for (const word of words) {
+            const testLine = currentLine + word;
+            const w = fonts.measure(testLine, fontSize, Boolean(elem.bold), Boolean(elem.italic), elem.fontFamily, recordOmission);
+            if (w <= elemW || !currentLine) {
+              currentLine = testLine;
+            } else {
+              if (textY >= elemY) paint(currentLine);
+              currentLine = word.trimStart();
+            }
           }
+          if (currentLine && textY >= elemY) paint(currentLine);
         }
       }
     }

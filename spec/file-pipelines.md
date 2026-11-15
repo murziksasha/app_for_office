@@ -6,19 +6,19 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 1. Word Documents (`.docx`)
 
-- **Read Pipeline**: Decompressed via `JSZip`. `word/document.xml` is parsed with `fast-xml-parser` extracting paragraphs, runs, headings, tables, and images into HTML.
+- **Read Pipeline**: Decompressed via `JSZip`. `word/document.xml` is parsed with `fast-xml-parser` extracting paragraphs, runs, headings, tables, and images into HTML. When `word/styles.xml` is present, `docDefaults` and named styles (`Normal`, `Heading 1`–`Heading 6`, `Title`, `Subtitle`) are resolved onto runs lacking direct font, size, color, bold, or italic. Paragraph `w:pPr/w:pStyle/@w:val` is read and mapped to `data-style-name` attributes (`Normal`, `Title`, `Heading 1`–`Heading 6`, `Quote`). Paragraph `w:spacing/@w:line` is read as `lineSpacing` when `w:lineRule` is `auto`. A zero-byte file or an empty package yields one empty paragraph and the resolved or default page setup. `sectPr` page size, orientation (`w:pgSz/@w:orient`), columns (`w:cols/@w:num`), and margins are read. Portrait and landscape Letter and A4 are preserved natively. Missing section properties use the default page setup. `word/header*.xml` and `word/footer*.xml` are parsed via section references: line 0 maps tabs or single 3-cell table into left/center/right zones, floating logo into left zone, and later paragraphs into full-width lines. Mapped stories are stored in `doc.attrs.chrome`. `word/footnotes.xml` is parsed when present, mapping `<w:footnote>` definitions and `<w:footnoteReference>` runs into document footnotes and inline reference markers.
 - **Mammoth Fallback**: If the custom XML parser fails or encounters corrupt markup, the file is automatically processed using `mammoth.convertToHtml` as a resilient fallback. The import report records `fallbackUsed: true`.
-- **Write Pipeline**: Exported using the `docx` library, translating HTML nodes into native Open XML paragraphs, tables, images, and text runs.
-- **Skipped Features**: VBA macros, complex shape drawing art, SmartArt diagrams, tracked revision history.
-- **Fixture**: `fixtures/sample.docx`.
+- **Write Pipeline**: Exported using the `docx` library, translating HTML nodes into native Open XML paragraphs, tables, images, and text runs. `w:pStyle` is written from `styleName` attributes (`Title`, `Heading1`–`Heading6`, `Quote`, `Normal`). Other formats keep the node shape and omit the style name. `spacing.line` is written from `lineSpacing` (240 twips per line). The section page size, orientation, multi-column count (`w:cols`), and margins are written from the document `pageSetup`. Document chrome is written into native headers and footers; line 0 is written as a borderless 1-row 3-cell table for round-trip fidelity, and page fields are real PAGE and NUMPAGES fields. Footnotes are serialized into `word/footnotes.xml` and referenced via native `FootnoteReferenceRun` elements. ODT, RTF, HTML, Markdown, and plain text stay body-only; saving one of those with chrome adds an omission warning.
+- **Skipped Features**: VBA macros, complex shape drawing art, SmartArt diagrams, tracked revision history, odd/even headers, extra sections, multi-row header tables, extra floating shapes, EMF/WMF images, and unsupported fields (reported as diagnostic warnings on import).
+- **Fixtures**: `fixtures/sample.docx`, `fixtures/empty.docx`, and `fixtures/styles_sample.docx`.
 - **Failure Behavior**: Never present a blank document with no report. Any unparseable file triggers an `ImportReport` with diagnostic notices.
 
 ---
 
 ## 2. OpenDocument Text (`.odt`)
 
-- **Read Pipeline**: Decompressed via `JSZip`. `content.xml` is parsed into semantic HTML.
-- **Write Pipeline**: Repackaged into an ODF container ZIP with valid `mimetype`, `META-INF/manifest.xml`, and `content.xml`.
+- **Read Pipeline**: Decompressed via `JSZip`. `content.xml` is parsed into semantic HTML. Paragraph `fo:line-height` is mapped as percentage (`115%`, `150%`, `200%`) onto `lineSpacing`. Page width, height, margins, orientation, and column count are read from `styles.xml` when present, otherwise from `content.xml`. Inline `<text:note>` elements are parsed into document footnotes and inline reference markers.
+- **Write Pipeline**: Repackaged into an ODF container ZIP with valid `mimetype`, `META-INF/manifest.xml`, and `content.xml`. Paragraph line-height is written as `fo:line-height` percentage. `styles.xml` stores the document page size, orientation, multi-column count (`style:columns`), and margins. Document footnotes are serialized inline as standard `<text:note>` elements with `<text:note-citation>` and `<text:note-body>`.
 - **Skipped Features**: Complex frame styles, embedded OLE objects.
 - **Fixture**: `fixtures/sample.odt`.
 
@@ -62,9 +62,9 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 7. Excel Spreadsheets (`.xlsx`)
 
-- **Read Pipeline**: Loaded via `ExcelJS.Workbook`, iterating worksheets, rows, cells, formulas, and styles into FortuneSheet matrix data.
-- **Write Pipeline**: Serialized via `ExcelJS.Workbook` into modern Open XML spreadsheet packages.
-- **Skipped Features**: VBA macros, pivot tables, dynamic external data connections.
+- **Read Pipeline**: Loaded via `ExcelJS.Workbook`, iterating worksheets, rows, cells, formulas, and styles into FortuneSheet matrix data. Merged cells, row heights, freeze panes, cell borders, underline, wrap, tab color, conditional formatting rules, and autofilter ranges are kept. Formula text is kept. A formula with no cached result is recalculated by Formula.js when the sheet opens. A function Formula.js does not provide stays as text and is named on the import report.
+- **Write Pipeline**: Serialized via `ExcelJS.Workbook` into modern Open XML spreadsheet packages, including merges, row heights, freeze panes, borders, underline, wrap, sheet tab colors, conditional formatting rules (with computed fill fallback), and the autofilter range.
+- **Skipped Features**: VBA macros (not run), pivot tables, charts (reported, not drawn), dynamic external data connections.
 - **Fixture**: `fixtures/sample.xlsx`.
 
 ---
@@ -80,9 +80,9 @@ This document details the import, export, fallback behavior, and fixture require
 
 ## 9. PowerPoint Presentations (`.pptx`)
 
-- **Read Pipeline**: Decompressed via `JSZip`, parsing `ppt/slides/slide{N}.xml` and relationship files into `PresentationModel`. The first mp4 on each slide is kept. Further videos, videos that are not mp4, and audio that is not inside a video are reported and left out.
-- **Write Pipeline**: Generated using `PptxGenJS` into valid Open XML presentation packages, including one mp4 per slide. Bytes are written aside and then replace the previous file, so a failed write leaves that file in place.
-- **Skipped Features**: 3D animations, transition audio effects, speaker notes narration, extra videos, non-mp4 video, standalone audio.
+- **Read Pipeline**: Decompressed via `JSZip`, parsing `ppt/slides/slide{N}.xml` and relationship files into `PresentationModel`. Slide size is mapped by aspect ratio to `16:9`, `16:10`, or `4:3` (with a warning for non-standard aspect ratios). Preset geometries map to rect, roundRect, ellipse, triangle, and line (including straight connectors); other presets convert to rectangle with an import warning. Text speaker notes are read from body placeholders in `ppt/notesSlides/`, skipping thumbnail placeholders. Tables (`p:graphicFrame` / `a:tbl`) are read into uniform `rows: string[][]` with merged cells simplified to empty cells (warning once per slide) and cell styles/borders dropped (warning once). The first mp4 on each slide is kept. Further videos, videos that are not mp4, and audio that is not inside a video are reported and left out.
+- **Write Pipeline**: Generated using `PptxGenJS` into valid Open XML presentation packages, matching slide layout (`LAYOUT_16x9`, `LAYOUT_16x10`, or `LAYOUT_4x3`), shapes, tables, and notes via `addNotes`. One mp4 per slide is preserved. Bytes are written aside and then replace the previous file, so a failed write leaves that file in place.
+- **Skipped Features**: 3D animations, transition audio effects, speaker notes recorded narration audio, extra videos, non-mp4 video, standalone audio, table cell fills/borders/nested graphics.
 - **Fixture**: `fixtures/sample.pptx`.
 
 ---
@@ -99,10 +99,18 @@ This document details the import, export, fallback behavior, and fixture require
 ## 11. Save as PDF Pipeline
 
 - **Trigger & Scope**: Available via the File ribbon on Document, Spreadsheet, and Presentation editors (including Documents created via Edit as Document). Spreadsheets and presentations reuse the print scope prompt (Active sheet vs All sheets, All slides vs This slide) when there are multiple units.
-- **Write Pipeline**: Built entirely in memory using `pdf-lib` with subset embedded Noto Sans fonts (Regular, Bold, Italic, Bold Italic covering Latin, Greek, and Cyrillic). The caller writes the file to the chosen path via platform I/O only after complete byte generation succeeds. The active tab's path, format, name, and clean/dirty state remain unchanged.
-- **Document Export**: US Letter portrait, 54 pt margins, flowing text. Headings, paragraphs, bullet/numbered lists, tables (shrunk to content width), images (JPEG/PNG), bold, italic, underline, and page breaks are rendered. Link URLs, strikethrough, text color, highlight, font family, font size, alignment, and indentation are omitted.
-- **Spreadsheet Export**: US Letter portrait, used cell range, displayed text (`m` or `v`), one line per cell, uniform shrink-to-fit width, rows flowing to subsequent pages. Sheet bold and italic are preserved; formula strings and colors are omitted.
-- **Presentation Export**: US Letter landscape (one slide per page, scaled uniformly). Slide text runs, images, and rectangles are placed from percentages with background, fill, and font colors preserved. Videos are omitted and recorded.
-- **Omissions & Fallback**: Characters not covered by the font are dropped and recorded as omissions. Non-JPEG/PNG images that cannot be embedded are omitted and recorded. Folio displays a notice summarizing any omissions after writing. Export or write failures leave no file on disk.
+- **Write Pipeline**: Built entirely in memory using `pdf-lib` and `@pdf-lib/fontkit`. Folio embeds the faces used by the document, plus Noto Sans and Noto Serif, when the font license allows embedding. Measurement and wrapping use that face. The caller writes the file to the chosen path via platform I/O only after complete byte generation succeeds. The active tab's path, format, name, and clean/dirty state remain unchanged. Editable files keep family names and do not embed font files.
+- **Document Export**: The document `pageSetup` chooses Letter or A4 portrait and the four margins, converted to points. Flowing text. Headings, paragraphs, bullet/numbered lists, tables (shrunk to content width), images (JPEG/PNG), bold, italic, underline, and page breaks are rendered. Header and footer bands are rendered into the page margins matching the in-app document chrome. Font family is embedded and used for width. Link URLs, strikethrough, text color, highlight, font size, alignment, and indentation stay on the existing omission path when the exporter does not draw them.
+- **Spreadsheet Export**: US Letter portrait, used cell range, displayed text (`m` or `v`), one line per cell, uniform shrink-to-fit width, rows flowing to subsequent pages. Sheet bold, italic, and font family are preserved; formula strings and colors are omitted.
+- **Presentation Export**: US Letter landscape with centered slide frame matching aspect ratio (16:9, 16:10, or 4:3). Slide text runs, images, tables (even grid with hairlines and shrink-to-fit text), and shapes (rectangle, rounded rectangle, ellipse, line, and triangle via filled path or rectangle fallback) are placed with background, fill, border, font colors, and font family preserved. Videos and speaker notes are omitted.
+- **Omissions & Fallback**: A missing glyph is taken from Noto Sans. A character in no bundled face is skipped and recorded as `No bundled font contains U+XXXX`. Restricted embedding, a missing family, an unsupported face, and a simulated bold or italic style are recorded on the export report. A missing style uses the nearest real face. Non-JPEG/PNG images that cannot be embedded are omitted and recorded. Folio displays a notice summarizing any omissions after writing. Export or write failures leave no file on disk.
 
+---
 
+## 12. SoftMaker packages (`.tmdx`, `.pmdx`, `.prdx`, and older `.tmd`, `.pmd`, `.prd`)
+
+- **Read Pipeline**: `.tmdx` and a ZIP `.tmd` that contains `word/document.xml` use the Document importer. `.pmdx` and a ZIP `.pmd` that contains `xl/workbook.xml` use the Spreadsheet importer. `.prdx` and a ZIP `.prd` that contains `ppt/presentation.xml` use the Presentation importer. The format stays `tmdx`, `pmdx`, or `prdx`. A saved package may be plainer than the original. Skipped pieces stay on the import report.
+- **Older Packages**: Opening `.tmd`, `.pmd`, or `.prd` clears the save path, renames the tab to `.tmdx`, `.pmdx`, or `.prdx`, and leaves the tab dirty. The first Save asks for a path. The original file is never overwritten. A recent entry may still point at the original path.
+- **Failure Behavior**: A binary file, or a ZIP without the matching part, shows `Folio cannot open this .ext file. It is not a package Folio can read.` and does not open. That message is separate from the Office 97–2003 message. There is no binary parser.
+- **Write Pipeline**: Save and Save As call the existing Document, Spreadsheet, and Presentation exporters. The extension on the name stays `.tmdx`, `.pmdx`, or `.prdx`. Save As offers those three formats. Windows file associations are unchanged, so a double-click stays with the program that already owns the extension.
+- **Fixtures**: `fixtures/hello.tmdx`, `fixtures/New Документ PlanMaker.pmdx`, `fixtures/New Документ Presentations.prdx`, and `fixtures/sample_binary.tmd`.

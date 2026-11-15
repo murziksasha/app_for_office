@@ -57,9 +57,12 @@ fn folio_pick_open(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, St
             "Supported Office Files",
             &[
                 "docx", "odt", "rtf", "txt", "md", "html", "htm", "xlsx", "csv", "tsv", "pptx",
-                "pdf",
+                "pdf", "tmdx", "pmdx", "prdx", "tmd", "pmd", "prd",
             ],
         )
+        .add_filter("Document (*.tmdx)", &["tmdx"])
+        .add_filter("Spreadsheet (*.pmdx)", &["pmdx"])
+        .add_filter("Presentation (*.prdx)", &["prdx"])
         .add_filter("Documents (*.docx)", &["docx"])
         .add_filter("OpenDocument Text (*.odt)", &["odt"])
         .add_filter("Rich Text Format (*.rtf)", &["rtf"])
@@ -282,10 +285,169 @@ fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::rename(from, to)
 }
 
+#[cfg(windows)]
+fn read_user_region() -> String {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetUserDefaultGeoName(geo_name: *mut u16, geo_name_count: i32) -> i32;
+    }
+    let mut buf = [0u16; 16];
+    let written = unsafe { GetUserDefaultGeoName(buf.as_mut_ptr(), buf.len() as i32) };
+    if written <= 1 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buf[..(written as usize) - 1])
+}
+
+#[cfg(not(windows))]
+fn read_user_region() -> String {
+    String::new()
+}
+
+#[tauri::command]
+fn folio_user_region() -> String {
+    read_user_region()
+}
+
 #[tauri::command]
 fn folio_allow_path(path: String, state: tauri::State<AppState>) -> Result<(), String> {
     state.allow_path(PathBuf::from(path));
     Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct FontFilePayload {
+    #[serde(rename = "fileName")]
+    file_name: String,
+    bytes: Vec<u8>,
+}
+
+fn font_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| err.to_string())?
+        .join("fonts");
+    std::fs::create_dir_all(dir.join("files")).map_err(|err| err.to_string())?;
+    Ok(dir)
+}
+
+fn safe_font_name(name: &str) -> Result<(), String> {
+    let ok = name.len() == 68
+        && (name.ends_with(".ttf") || name.ends_with(".otf"))
+        && name.as_bytes()[..64].iter().all(|byte| byte.is_ascii_hexdigit())
+        && !name.contains(['/', '\\']);
+    if ok {
+        Ok(())
+    } else {
+        Err("Font file name is not allowed.".to_string())
+    }
+}
+
+#[tauri::command]
+fn folio_pick_fonts(state: tauri::State<AppState>) -> Result<Vec<FilePayload>, String> {
+    let files = rfd::FileDialog::new()
+        .add_filter("Fonts", &["ttf", "otf"])
+        .pick_files();
+    let mut opened = Vec::new();
+    if let Some(paths) = files {
+        for path in paths {
+            let path_str = path.to_string_lossy().to_string();
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let bytes = std::fs::read(&path).map_err(|err| format!("Failed to read file: {}", err))?;
+            state.allow_path(&path);
+            opened.push(FilePayload {
+                path: path_str,
+                name,
+                bytes,
+            });
+        }
+    }
+    Ok(opened)
+}
+
+#[tauri::command]
+fn folio_font_list(app: tauri::AppHandle) -> Result<String, String> {
+    let index = font_root(&app)?.join("index.json");
+    if !index.exists() {
+        return Ok("{\"families\":[]}".to_string());
+    }
+    std::fs::read_to_string(index).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn folio_font_put(
+    app: tauri::AppHandle,
+    index_json: String,
+    files: Vec<FontFilePayload>,
+) -> Result<(), String> {
+    let root = font_root(&app)?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&index_json).map_err(|err| err.to_string())?;
+    let families = parsed
+        .get("families")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| "Font index is missing families.".to_string())?;
+    for file in &files {
+        safe_font_name(&file.file_name)?;
+        std::fs::write(root.join("files").join(&file.file_name), &file.bytes)
+            .map_err(|err| err.to_string())?;
+    }
+    std::fs::write(root.join("index.json"), index_json).map_err(|err| err.to_string())?;
+    let mut keep = HashSet::new();
+    for family in families {
+        if let Some(faces) = family.get("faces").and_then(|value| value.as_array()) {
+            for face in faces {
+                if let Some(name) = face.get("file").and_then(|value| value.as_str()) {
+                    keep.insert(name.to_string());
+                }
+            }
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(root.join("files")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !keep.contains(&name) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn folio_font_read(app: tauri::AppHandle, file_name: String) -> Result<Vec<u8>, String> {
+    safe_font_name(&file_name)?;
+    std::fs::read(font_root(&app)?.join("files").join(file_name)).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn folio_font_remove(app: tauri::AppHandle, family: String) -> Result<(), String> {
+    let root = font_root(&app)?;
+    let index_path = root.join("index.json");
+    let current = if index_path.exists() {
+        std::fs::read_to_string(&index_path).map_err(|err| err.to_string())?
+    } else {
+        "{\"families\":[]}".to_string()
+    };
+    let mut parsed: serde_json::Value =
+        serde_json::from_str(&current).map_err(|err| err.to_string())?;
+    let families = parsed
+        .get_mut("families")
+        .and_then(|value| value.as_array_mut())
+        .ok_or_else(|| "Font index is missing families.".to_string())?;
+    families.retain(|item| {
+        item.get("family").and_then(|value| value.as_str()).unwrap_or("") != family
+    });
+    folio_font_put(
+        app,
+        serde_json::to_string(&parsed).map_err(|err| err.to_string())?,
+        Vec::new(),
+    )
 }
 
 pub fn run() {
@@ -336,9 +498,15 @@ pub fn run() {
             folio_read,
             folio_write,
             folio_allow_path,
+            folio_pick_fonts,
+            folio_font_list,
+            folio_font_put,
+            folio_font_read,
+            folio_font_remove,
             folio_path_status,
             folio_take_launch_paths,
-            folio_choose
+            folio_choose,
+            folio_user_region
         ])
         .run(tauri::generate_context!())
         .expect("error while running folio tauri application");

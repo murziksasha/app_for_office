@@ -23,6 +23,12 @@ interface FormatContext {
   underline?: boolean;
   strike?: boolean;
   fontSize?: number;
+  fontIndex?: number;
+}
+
+function fontNameFromElement(el: HTMLElement): string {
+  const match = (el.getAttribute('style') || '').match(/font-family:\s*['"]?([^'";,]+)/i);
+  return match?.[1]?.trim() || '';
 }
 
 function processInlineNode(node: Node, ctx: FormatContext = {}): string {
@@ -52,6 +58,10 @@ function processInlineNode(node: Node, ctx: FormatContext = {}): string {
       prefix += `\\fs${ctx.fontSize * 2} `;
       suffix = '\\fs24 ' + suffix;
     }
+    if (ctx.fontIndex) {
+      prefix += `\\f${ctx.fontIndex} `;
+      suffix = '\\f0 ' + suffix;
+    }
 
     return prefix + encodeRtfText(raw) + suffix;
   }
@@ -67,6 +77,15 @@ function processInlineNode(node: Node, ctx: FormatContext = {}): string {
     if (tag === 'em' || tag === 'i') nextCtx.italic = true;
     if (tag === 'u') nextCtx.underline = true;
     if (tag === 's' || tag === 'del' || tag === 'strike') nextCtx.strike = true;
+    const family = fontNameFromElement(el);
+    if (family) {
+      const known = rtfFontTable.indexOf(family);
+      if (known >= 0) nextCtx.fontIndex = known;
+      else {
+        rtfFontTable.push(family);
+        nextCtx.fontIndex = rtfFontTable.length - 1;
+      }
+    }
 
     return Array.from(el.childNodes)
       .map((child) => processInlineNode(child, nextCtx))
@@ -76,7 +95,10 @@ function processInlineNode(node: Node, ctx: FormatContext = {}): string {
   return '';
 }
 
+const rtfFontTable = ['Noto Serif'];
+
 export async function exportRtf(htmlContent: string): Promise<Blob> {
+  rtfFontTable.splice(1);
   const parser = new (globalThis.DOMParser || DOMParser)();
   const doc = parser.parseFromString(htmlContent, 'text/html');
   const docElement = doc.body;
@@ -130,8 +152,11 @@ export async function exportRtf(htmlContent: string): Promise<Blob> {
     bodyRtf = '\\pard\\par\r\n';
   }
 
+  const fonttbl = rtfFontTable
+    .map((name, index) => `{\\f${index}\\fnil\\fcharset0 ${name.replace(/[\\{}]/g, '')};}`)
+    .join('');
   const rtfFull = `{\\rtf1\\ansi\\ansicpg1252\\deff0\\nouicompat
-{\\fonttbl{\\f0\\fnil\\fcharset0 Calibri;}{\\f1\\fnil\\fcharset0 Segoe UI;}}
+{\\fonttbl${fonttbl}}
 {\\colortbl ;\\red15\\green118\\blue110;\\red180\\green83\\blue9;}
 \\viewkind4\\uc1\\pard\\f0\\fs24
 ${bodyRtf}}`;

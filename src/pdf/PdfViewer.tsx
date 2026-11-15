@@ -3,8 +3,16 @@ import * as pdfjsLib from 'pdfjs-dist';
 // @ts-ignore
 import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Search, X, FileText } from 'lucide-react';
+import { t } from '../i18n/instance';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+
+function searchLabel(status: string): string {
+  if (status === 'searching') return t('pdf.searching');
+  if (status === 'none') return t('pdf.none');
+  if (status.startsWith('found:')) return t('pdf.found', { pages: status.slice('found:'.length) });
+  return status;
+}
 
 interface PdfViewerProps {
   pdfData: Uint8Array;
@@ -41,7 +49,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
         console.error('Failed to load PDF document:', err);
         if (!isCancelled) {
           setPdfDoc(null);
-          setLoadError('This PDF is protected or unreadable');
+          setLoadError('protected');
         }
       }
     };
@@ -101,7 +109,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
       return;
     }
 
-    setSearchStatus('Searching...');
+    setSearchStatus('searching');
     const matches: number[] = [];
     const term = searchText.toLowerCase();
 
@@ -120,11 +128,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
 
     setSearchMatches(matches);
     if (matches.length > 0) {
-      setSearchStatus(`Found on page(s): ${matches.join(', ')}`);
+      setSearchStatus(`found:${matches.join(', ')}`);
       // Jump to first matching page
       setCurrentPage(matches[0]);
     } else {
-      setSearchStatus('No matches found');
+      setSearchStatus('none');
     }
   };
 
@@ -165,7 +173,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
             <ChevronLeft size={18} />
           </button>
           <span style={{ fontSize: '12px', color: 'var(--folio-ink)' }}>
-            Page {currentPage} of {numPages}
+            {t('pdf.page', { current: currentPage, total: numPages })}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
@@ -185,7 +193,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
           <button
             onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
             style={{ padding: '4px', borderRadius: '4px' }}
-            title="Zoom Out"
+            title={t('pdf.zoomOut')}
           >
             <ZoomOut size={16} />
           </button>
@@ -195,7 +203,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
           <button
             onClick={() => setScale((s) => Math.min(2.5, s + 0.2))}
             style={{ padding: '4px', borderRadius: '4px' }}
-            title="Zoom In"
+            title={t('pdf.zoomIn')}
           >
             <ZoomIn size={16} />
           </button>
@@ -205,7 +213,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <input
             type="text"
-            placeholder="Search in PDF..."
+            placeholder={t('pdf.searchPlaceholder')}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             onKeyUp={(e) => e.key === 'Enter' && handleSearch()}
@@ -231,7 +239,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
             <Search size={14} />
           </button>
           {searchStatus && (
-            <span style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>{searchStatus}</span>
+            <span style={{ fontSize: '11px', color: 'var(--folio-ink-muted)' }}>{searchLabel(searchStatus)}</span>
           )}
         </div>
 
@@ -240,7 +248,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
           <button
             onClick={onEditAsDocument}
             disabled={Boolean(loadError) || !pdfDoc}
-            title="Edit as Document"
+            title={t('pdf.edit')}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -254,7 +262,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
               opacity: Boolean(loadError) || !pdfDoc ? 0.4 : 1,
             }}
           >
-            <FileText size={14} /> Edit as Document
+            <FileText size={14} /> {t('pdf.edit')}
           </button>
         )}
       </div>
@@ -285,10 +293,10 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ pdfData, onPageInfo, onEdi
             }}
           >
             <div style={{ fontWeight: 600, fontSize: '15px', marginBottom: '8px' }}>
-              This PDF is protected or unreadable
+              {t('pdf.protected')}
             </div>
             <div style={{ fontSize: '13px', opacity: 0.9 }}>
-              Folio cannot display this document. It may be password-protected or have an unsupported structure.
+              {t('pdf.protectedDetail')}
             </div>
           </div>
         ) : (

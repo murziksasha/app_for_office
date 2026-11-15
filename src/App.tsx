@@ -14,7 +14,8 @@ import {
   verifyPermission,
   type PlatformFileResult,
 } from './platform';
-import { loadFileToEditor } from './files/open';
+import { finishOpenedTab, loadFileToEditor } from './files/open';
+import { i18n, t } from './i18n/instance';
 import { saveEditorContent } from './files/save';
 import { clearDraft, getAllDrafts, saveDraft } from './files/drafts';
 import { addRecentFile, getRecentFiles, removeRecentFile } from './files/recent';
@@ -52,11 +53,15 @@ import { htmlToDocument } from './document/model';
 import { markdownToHtml, plainTextToHtml } from './document/textMdHtml';
 import { importCsvTsv } from './spreadsheet/adapters';
 import { applyEdit, blankTab, draftContent, newTabId, stampClean, tabFromDraft } from './files/tabs';
+import { getTemplateById } from './templates';
 import { exportPdf } from './pdf/exportPdf';
 import { extractTextFromPdf } from './pdf/extractText';
 import { StartScreen } from './shell/StartScreen';
+import { SettingsDialog } from './shell/SettingsDialog';
+import { ShortcutPanel } from './shell/ShortcutPanel';
 import { Ribbon } from './shell/Ribbon';
 import { StatusBar } from './shell/StatusBar';
+import type { SheetSelectionStats } from './spreadsheet/sheetCommands';
 import { ImportReportDialog } from './shell/ImportReportDialog';
 import { SaveAsDialog } from './shell/SaveAsDialog';
 import { ChoiceDialog } from './shell/ChoiceDialog';
@@ -64,8 +69,14 @@ import { TabStrip } from './shell/TabStrip';
 import { PrintView } from './shell/PrintView';
 import { DocumentEditor } from './document/DocumentEditor';
 import { SpreadsheetEditor } from './spreadsheet/SpreadsheetEditor';
-import { SlideEditor } from './slides/SlideEditor';
+import { SlideEditor, emptySlideCommandState, type SlideCommandState, type SlideEditorHandle } from './slides/SlideEditor';
+import { Slideshow } from './slides/Slideshow';
+import type { WorkbookInstance } from '@fortune-sheet/react';
 import { PdfViewer } from './pdf/PdfViewer';
+import { applyStoredTheme, readThemePreference, watchSystemTheme } from './shell/theme';
+import { familiesInState, defaultFontFor, missingFontNames } from './fonts/collect';
+import { ensureFamilies, getFontPackState, retryFontPackCache, startFontPackCache, subscribeFontPack } from './fonts/load';
+import { loadCustomFonts, subscribeFonts } from './fonts/registry';
 
 interface ChoiceState {
   title: string;
@@ -87,10 +98,10 @@ export const App: React.FC = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [homeOpen, setHomeOpen] = useState(false);
   const [documentEditorInstance, setDocumentEditorInstance] = useState<any>(null);
-  const [pageSize, setPageSize] = useState<'letter' | 'a4'>('letter');
   const [zoom, setZoom] = useState<number>(100);
   const [showSaveAs, setShowSaveAs] = useState(false);
   const [showImportReport, setShowImportReport] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentItem[]>([]);
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [listsRevision, setListsRevision] = useState(0);
@@ -99,6 +110,22 @@ export const App: React.FC = () => {
   const [pdfPage, setPdfPage] = useState(1);
   const [pdfCount, setPdfCount] = useState(1);
   const [printJob, setPrintJob] = useState<{ tab: EditorState; scope: 'current' | 'all' } | null>(null);
+  const [findSignal, setFindSignal] = useState(0);
+  const [slideState, setSlideState] = useState<SlideCommandState>(emptySlideCommandState);
+  const [docPageInfo, setDocPageInfo] = useState<{ page: number; totalPages: number } | undefined>();
+  const [sheetStats, setSheetStats] = useState<SheetSelectionStats | null>(null);
+  const [slideshowState, setSlideshowState] = useState<{ active: boolean; mode: 'beginning' | 'current' } | null>(null);
+  const [showOutline, setShowOutline] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [uiLanguage, setUiLanguage] = useState(i18n.language);
+  const [fontPack, setFontPack] = useState(getFontPackState);
+  const [fontRevision, setFontRevision] = useState(0);
+  const slideCommands = useRef<SlideEditorHandle>(null);
+  const sheetApi = useRef<WorkbookInstance | null>(null);
+  const handleWorkbookReady = useCallback((api: WorkbookInstance | null) => {
+    sheetApi.current = api;
+  }, []);
 
   const tabsRef = useRef<EditorState[]>([]);
   const activeRef = useRef<string | null>(null);
@@ -190,6 +217,33 @@ export const App: React.FC = () => {
   const activeTab = tabs.find((tab) => tab.id === activeId) || null;
 
   useEffect(() => {
+    applyStoredTheme();
+    return watchSystemTheme(() => {
+      if (readThemePreference() === 'system') applyStoredTheme();
+    });
+  }, []);
+
+  useEffect(() => {
+    void loadCustomFonts().then(() => startFontPackCache());
+    return subscribeFontPack(() => setFontPack(getFontPackState()));
+  }, []);
+
+  useEffect(() => subscribeFonts(() => setFontRevision((value) => value + 1)), []);
+
+  const activeFontKey = activeTab
+    ? `${activeTab.id}:${defaultFontFor(activeTab.kind)}:${familiesInState(activeTab).join('\n')}`
+    : '';
+
+  useEffect(() => {
+    if (!activeFontKey || !activeTab) return;
+    void ensureFamilies([defaultFontFor(activeTab.kind), ...familiesInState(activeTab)]);
+  }, [activeFontKey, activeTab]);
+
+  useEffect(() => {
+    document.documentElement.dataset.folioKind = activeTab?.kind || 'home';
+  }, [activeTab?.kind]);
+
+  useEffect(() => {
     const title = activeTab ? `Folio — ${activeTab.fileName}${activeTab.isDirty ? ' *' : ''}` : 'Folio';
     setWindowTitle(title);
   }, [activeTab?.fileName, activeTab?.isDirty, activeTab]);
@@ -225,7 +279,10 @@ export const App: React.FC = () => {
           path: tab.filePath,
           cleanHash: tab.cleanHash,
           diskStamp: tab.diskStamp,
-        }).then(() => refreshLists());
+        }).then(() => {
+          refreshLists();
+          setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        });
       }, 1500)
     );
     return () => timers.forEach((timer) => window.clearTimeout(timer));
@@ -260,14 +317,15 @@ export const App: React.FC = () => {
         name = read.name;
         handle = read.handle;
       }
-      if (!file) return { error: 'Could not read the file.' };
-      const loaded = await loadFileToEditor(file, name || file.name, handle, item.path);
-      const tab = stampClean(loaded);
+      if (!file) return { error: t('dialog.couldNotRead') };
+      const originalName = name || file.name;
+      const loaded = await loadFileToEditor(file, originalName, handle, item.path);
+      const tab = finishOpenedTab(loaded, originalName);
       tab.diskStamp = await rememberStamp(tab.filePath);
       commit([...tabsRef.current, tab]);
       return { id: tab.id };
     } catch (err: any) {
-      return { error: err?.message || 'Could not open the file.' };
+      return { error: err?.message || t('dialog.couldNotOpen') };
     }
   };
 
@@ -308,7 +366,7 @@ export const App: React.FC = () => {
       await refreshLists();
       return 'ok';
     } catch (err: any) {
-      await ask('Save failed', err?.message || 'The file could not be saved.', ['OK']);
+      await ask(t('dialog.saveFailed'), err?.message || t('dialog.couldNotSave'), ['OK']);
       return 'failed';
     }
   };
@@ -319,14 +377,14 @@ export const App: React.FC = () => {
   ): Promise<SaveOutcome> => {
     const resolved = resolvePickedName(target.rawName, tab.kind, tab.fileName, target.formatHint || tab.format);
     if (!resolved.ok) {
-      await ask('Cannot save file', resolved.message, ['OK']);
+      await ask(t('dialog.cannotSave'), resolved.message, ['OK']);
       return 'failed';
     }
 
     if (target.path) {
       const conflict = tabsRef.current.find((t) => t.id !== tab.id && pathsMatch(t.filePath, target.path));
       if (conflict) {
-        await ask('Already open', `${resolved.fileName} is already open in another tab.`, ['OK']);
+        await ask(t('dialog.alreadyOpen'), t('dialog.alreadyOpenNamed', { name: resolved.fileName }), ['OK']);
         return 'failed';
       }
     }
@@ -336,7 +394,7 @@ export const App: React.FC = () => {
         target.handle
       );
       if (owner) {
-        await ask('Already open', 'That file is already open in another tab.', ['OK']);
+        await ask(t('dialog.alreadyOpen'), t('dialog.alreadyOpenThat'), ['OK']);
         return 'failed';
       }
     }
@@ -345,7 +403,7 @@ export const App: React.FC = () => {
     if (lossy) {
       const activeSheet = getActiveSheet(tab.spreadsheetData);
       const msg = lossyWarningMessage(resolved.format, activeSheet?.name);
-      const choice = await ask('Save As', msg, ['Save', 'Cancel']);
+      const choice = await ask(t('dialog.saveAs'), msg, ['Save', 'Cancel']);
       if (choice !== 'Save') {
         return 'cancelled';
       }
@@ -395,6 +453,7 @@ export const App: React.FC = () => {
       }
 
       updatedTab = stampClean(updatedTab);
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       updatedTab.diskStamp = await rememberStamp(updatedTab.filePath);
       commit(tabsRef.current.map((item) => (item.id === tab.id ? updatedTab : item)));
 
@@ -413,7 +472,7 @@ export const App: React.FC = () => {
       await refreshLists();
       return 'ok';
     } catch (err: any) {
-      await ask('Save failed', err?.message || 'The file could not be saved.', ['OK']);
+      await ask(t('dialog.saveFailed'), err?.message || t('dialog.couldNotSave'), ['OK']);
       return 'failed';
     }
   };
@@ -477,14 +536,14 @@ export const App: React.FC = () => {
           openTabs: snapshotTabs(),
         });
         if (decision.kind === 'already-open') {
-          await ask('Already open', 'That file is already open in another tab.', ['OK']);
+          await ask(t('dialog.alreadyOpen'), t('dialog.alreadyOpenThat'), ['OK']);
           return 'failed';
         }
         if (decision.kind === 'save-as') return pickAndSave(current);
         if (decision.kind === 'conflict') {
           const choice = await ask(
-            'File changed',
-            `${current.fileName} changed on disk. Overwrite it, Save As, or Cancel?`,
+            t('dialog.fileChanged'),
+            t('dialog.changedOverwrite', { name: current.fileName }),
             [...CONFLICT_BUTTONS]
           );
           if (choice === 'Overwrite') return writeTab(current);
@@ -540,19 +599,19 @@ export const App: React.FC = () => {
       if (action.type === 'focus' || action.type === 'focus-dirty') {
         commit(tabsRef.current, action.tabId);
         if (action.type === 'focus-dirty') {
-          await ask('Already open', action.message, ['OK']);
+          await ask(t('dialog.alreadyOpen'), action.message, ['OK']);
         }
         continue;
       }
       if (action.type === 'ask-reload') {
         commit(tabsRef.current, action.tabId);
-        const choice = await ask('File changed', `${item.name} changed on disk. Reload it?`, [...RELOAD_BUTTONS]);
+        const choice = await ask(t('dialog.fileChanged'), t('dialog.changedReload', { name: item.name }), [...RELOAD_BUTTONS]);
         if (choice === 'Reload') {
           const loaded = await openLoaded({ ...item, path: undefined });
           const fresh = loaded.id ? tabsRef.current.find((tab) => tab.id === loaded.id) : undefined;
           const previous = tabsRef.current.find((tab) => tab.id === action.tabId);
           if (!loaded.id || !fresh || !previous) {
-            failures.push({ name: item.name, message: loaded.error || 'Could not reload the file.' });
+            failures.push({ name: item.name, message: loaded.error || t('dialog.couldNotReload') });
             if (fresh) commit(tabsRef.current.filter((tab) => tab.id !== fresh.id), action.tabId);
           } else {
             const replaced = {
@@ -572,8 +631,8 @@ export const App: React.FC = () => {
       }
       if (action.type === 'ask-draft') {
         const choice = await ask(
-          'Recovered draft',
-          `An unsaved copy of ${item.name} was recovered. Restore it, or open the file on disk?`,
+          t('dialog.recovered'),
+          t('dialog.recoveredAsk', { name: item.name }),
           [...DRAFT_OPEN_BUTTONS]
         );
         if (choice === 'Restore' && item.draft) {
@@ -585,14 +644,14 @@ export const App: React.FC = () => {
           if (loaded.id) {
             if (!hadActive && !opened) commit(tabsRef.current, loaded.id);
             opened = true;
-          } else failures.push({ name: item.name, message: loaded.error || 'Could not open the file.' });
+          } else failures.push({ name: item.name, message: loaded.error || t('dialog.couldNotOpen') });
         }
         continue;
       }
       if (action.type === 'ask-replace') {
         const choice = await ask(
-          'Recovered draft',
-          `${item.name} is already open. Replace it with the recovered unsaved copy?`,
+          t('dialog.recovered'),
+          t('dialog.replaceAsk', { name: item.name }),
           [...DRAFT_REPLACE_BUTTONS]
         );
         if (choice === 'Replace' && item.draft) insertDraft(item.draft, action.tabId);
@@ -609,11 +668,11 @@ export const App: React.FC = () => {
       if (loaded.id) {
         if (!hadActive && !opened) commit(tabsRef.current, loaded.id);
         opened = true;
-      } else failures.push({ name: item.name, message: loaded.error || 'Could not open the file.' });
+      } else failures.push({ name: item.name, message: loaded.error || t('dialog.couldNotOpen') });
     }
 
     if (failures.length) {
-      await ask('Some files did not open', failures.map((failure) => `${failure.name}: ${failure.message}`).join('\n'), ['OK']);
+      await ask(t('dialog.someFailed'), failures.map((failure) => `${failure.name}: ${failure.message}`).join('\n'), ['OK']);
     }
     await refreshLists();
     } finally {
@@ -664,7 +723,7 @@ export const App: React.FC = () => {
         if (isDesktopPlatform()) await getPlatformAdapter().allowPath(path);
         files.push(await readFileFromPath(path));
       } catch (err: any) {
-        failures.push({ key: path, path, name: path.split(/[\\/]/).pop() || path, error: err?.message || 'Could not open the file.' });
+        failures.push({ key: path, path, name: path.split(/[\\/]/).pop() || path, error: err?.message || t('dialog.couldNotOpen') });
       }
     }
     await runOpen([...(await filesToIncoming(files)), ...failures], held);
@@ -679,13 +738,13 @@ export const App: React.FC = () => {
         await getPlatformAdapter().allowPath(item.path);
         const status = await getPlatformAdapter().pathStatus(item.path);
         if (status && !status.exists) {
-          await ask('Cannot find file', `${item.name} cannot be found.`, ['OK']);
+          await ask(t('dialog.cannotFind'), t('dialog.cannotFindBody', { name: item.name }), ['OK']);
           if (shouldRemoveRecent(status)) await removeRecentFile(item.id);
           await refreshLists();
           return;
         }
       } catch (err: any) {
-        await ask('Cannot open file', err?.message || 'Could not open the file.', ['OK']);
+        await ask(t('dialog.cannotOpen'), err?.message || t('dialog.couldNotOpen'), ['OK']);
         return;
       }
       await openPaths([item.path], true);
@@ -716,7 +775,7 @@ export const App: React.FC = () => {
       if (!tab) return true;
       if (tab.isDirty) {
         commit(tabsRef.current, id);
-        const choice = await ask('Save changes', `${tab.fileName} has unsaved changes. Save before closing?`, [...SAVE_BUTTONS]);
+        const choice = await ask(t('dialog.saveChanges'), t('dialog.saveChangesBody', { name: tab.fileName }), [...SAVE_BUTTONS]);
         if (choice === 'Save') {
           const outcome = await saveTab(tab, 'save', undefined, undefined, true);
           if (!closeContinues('Save', outcome)) {
@@ -782,6 +841,26 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
+    const bump = (lng: string) => setUiLanguage(lng);
+    i18n.on('languageChanged', bump);
+    return () => {
+      i18n.off('languageChanged', bump);
+    };
+  }, []);
+
+  useEffect(() => {
+    const blockNavigate = (event: DragEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('dragover', blockNavigate);
+    window.addEventListener('drop', blockNavigate);
+    return () => {
+      window.removeEventListener('dragover', blockNavigate);
+      window.removeEventListener('drop', blockNavigate);
+    };
+  }, []);
+
+  useEffect(() => {
     const stopClose = setupCloseGuard(
       () => tabsRef.current.some((tab) => tab.isDirty),
       () => actionsRef.current.confirmClose()
@@ -813,8 +892,34 @@ export const App: React.FC = () => {
       const hasActiveTab = Boolean(activeRef.current);
 
       const isF12 = event.key === 'F12';
+      const isF5 = event.key === 'F5';
       const mod = event.ctrlKey || event.metaKey;
       const isCtrlShiftS = Boolean(mod && event.shiftKey && event.key.toLowerCase() === 's');
+
+      if (event.key === '?' && !mod && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        const isEditing = target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          Boolean(target.closest('.ProseMirror')) ||
+          Boolean(target.closest('.luckysheet-input-box'))
+        );
+        if (!isEditing && !isPromptOpen) {
+          event.preventDefault();
+          setShowShortcuts((prev) => !prev);
+          return;
+        }
+      }
+
+      if (isF5 && !mod && !event.altKey) {
+        const currentTab = tabsRef.current.find((t) => t.id === activeRef.current);
+        if (currentTab?.kind === 'presentation') {
+          event.preventDefault();
+          setSlideshowState({ active: true, mode: event.shiftKey ? 'current' : 'beginning' });
+          return;
+        }
+      }
 
       if (isF12 || isCtrlShiftS) {
         event.preventDefault();
@@ -847,8 +952,38 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [choice, showSaveAs, showImportReport]);
 
-  const createNew = (kind: DocumentKind) => {
-    const tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+  const createNew = (kind: DocumentKind, templateId?: string) => {
+    let tab: EditorState;
+    if (templateId) {
+      const template = getTemplateById(templateId);
+      if (template) {
+        const fileName = nextFileName(
+          template.kind,
+          tabsRef.current.map((item) => item.fileName),
+        );
+        const format =
+          template.kind === 'spreadsheet'
+            ? 'xlsx'
+            : template.kind === 'presentation'
+              ? 'pptx'
+              : 'docx';
+        const content = template.getContent();
+        tab = {
+          id: newTabId(),
+          kind: template.kind,
+          fileName,
+          format,
+          isDirty: true,
+          documentContent: template.kind === 'document' ? (content as any) : undefined,
+          spreadsheetData: template.kind === 'spreadsheet' ? (content as any) : undefined,
+          presentationData: template.kind === 'presentation' ? (content as any) : undefined,
+        };
+      } else {
+        tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+      }
+    } else {
+      tab = blankTab(kind, tabsRef.current.map((item) => item.fileName));
+    }
     commit([...tabsRef.current, tab], tab.id || null);
   };
 
@@ -867,14 +1002,12 @@ export const App: React.FC = () => {
       const count = tab.kind === 'spreadsheet' ? tab.spreadsheetData?.length || 1 : tab.kind === 'presentation' ? tab.presentationData?.slides.length || 1 : tab.kind === 'pdf' ? pdfCount : 1;
       let scope: 'current' | 'all' = tab.kind === 'spreadsheet' ? 'current' : 'all';
       if (tab.kind !== 'document' && printScopeNeeded(tab.kind, count)) {
-        const selected = printScopeFromChoice(await ask('Print', `What should Folio print from ${tab.fileName}?`, printButtons(tab.kind)));
+        const selected = printScopeFromChoice(await ask(t('dialog.print'), t('dialog.printBody', { name: tab.fileName }), printButtons(tab.kind)));
         if (selected === 'cancel') return;
         scope = selected;
       }
       if (tab.kind === 'document') {
-        document.body.dataset.folioPrint = 'document';
-        window.print();
-        delete document.body.dataset.folioPrint;
+        setPrintJob({ tab, scope: 'all' });
         return;
       }
       setPrintJob({ tab, scope });
@@ -900,8 +1033,8 @@ export const App: React.FC = () => {
       let scope: 'current' | 'all' = tab.kind === 'spreadsheet' ? 'current' : 'all';
       if (tab.kind !== 'document' && printScopeNeeded(tab.kind, count)) {
         const choice = await ask(
-          'Save as PDF',
-          `What should Folio export to PDF from ${tab.fileName}?`,
+          t('dialog.exportPdf'),
+          t('dialog.exportBody', { name: tab.fileName }),
           printButtons(tab.kind)
         );
         const selected = printScopeFromChoice(choice);
@@ -938,19 +1071,19 @@ export const App: React.FC = () => {
           { handle: saveHandle, path: savePath }
         );
         if (!saveRes.success) {
-          await ask('Export failed', 'The PDF could not be written to disk.', ['OK']);
+          await ask(t('dialog.exportFailed'), t('dialog.exportDisk'), ['OK']);
           return;
         }
 
         if (omissions.length > 0) {
           await ask(
-            'PDF exported with notices',
-            `The PDF was saved, but some content was omitted:\n${Array.from(new Set(omissions)).join('\n')}`,
+            t('dialog.exportNotices'),
+            t('dialog.exportNoticesBody', { items: Array.from(new Set(omissions)).join('\n') }),
             ['OK']
           );
         }
       } catch (err: any) {
-        await ask('Export failed', err?.message || 'The PDF could not be exported.', ['OK']);
+        await ask(t('dialog.exportFailed'), err?.message || t('dialog.exportError'), ['OK']);
       }
     } finally {
       busyRef.current = false;
@@ -968,12 +1101,12 @@ export const App: React.FC = () => {
       try {
         result = await extractTextFromPdf(tab.pdfData);
       } catch {
-        await ask('Edit failed', 'This PDF is protected or unreadable.', ['OK']);
+        await ask(t('dialog.editFailed'), t('dialog.protected'), ['OK']);
         return;
       }
 
       if (result.paragraphsCount === 0) {
-        await ask('Nothing to edit', 'This PDF contains no selectable text to edit.', ['OK']);
+        await ask(t('dialog.nothing'), t('dialog.nothingBody'), ['OK']);
         return;
       }
 
@@ -987,19 +1120,25 @@ export const App: React.FC = () => {
         importedAt: new Date().toISOString(),
         warnings: [
           {
-            item: 'Layout discarded',
-            reason: 'Layout was discarded and reading order may be wrong.',
+            item: t('dialog.layoutItem'),
+            reason: t('dialog.layoutDiscarded'),
           },
           ...(result.skippedPages.length > 0
             ? [
                 {
-                  item: 'Skipped empty pages',
-                  reason: `Pages with no selectable text were skipped: ${result.skippedPages.join(', ')}`,
+                  item: t('dialog.skippedEmpty'),
+                  reason: t('dialog.skippedPages', { pages: result.skippedPages.join(', ') }),
                 },
               ]
             : []),
         ],
-        skippedFeatures: ['Layout', 'Columns', 'Tables', 'Images', 'Headers and footers'],
+        skippedFeatures: [
+          t('dialog.skipLayout'),
+          t('dialog.skipColumns'),
+          t('dialog.skipTables'),
+          t('dialog.skipImages'),
+          t('dialog.skipHeaders'),
+        ],
       };
 
       const newTab: EditorState = {
@@ -1079,7 +1218,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
+    <div data-ui-lang={uiLanguage} style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <input
         type="file"
         multiple
@@ -1111,6 +1250,7 @@ export const App: React.FC = () => {
           onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
           onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
           onFileDrop={(files) => void onBrowserDrop(files)}
+          onOpenSettings={() => setSettingsOpen(true)}
           listsRevision={listsRevision}
         />
       ) : (
@@ -1118,8 +1258,6 @@ export const App: React.FC = () => {
           <Ribbon
             editorState={activeTab}
             documentEditor={documentEditorInstance}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
             zoom={zoom}
             onZoomChange={setZoom}
             onSave={() => void actionsRef.current.saveActive()}
@@ -1136,17 +1274,29 @@ export const App: React.FC = () => {
             onOpenRecent={(item) => void openRecent(item)}
             onRestoreDraft={(draft) => void runOpen([{ key: draft.id, name: draft.name, path: draft.path, intent: 'draft', draft }])}
             onDismissDraft={(draft) => void clearDraft(draft.id).then(() => refreshLists())}
+            onFind={() => setFindSignal((n) => n + 1)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            slideCommands={slideCommands}
+            slideState={slideState}
+            sheetApi={sheetApi}
+            showOutline={showOutline}
+            onToggleOutline={() => setShowOutline((prev) => !prev)}
+            onStartSlideshow={(mode) => setSlideshowState({ active: true, mode })}
+            docPageInfo={docPageInfo}
           />
           <main className="folio-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
             {activeTab.kind === 'document' && (
               <DocumentEditor
                 key={`${activeTab.id}-${activeTab.historyEpoch || 0}`}
                 content={activeTab.documentContent || { type: 'doc', content: [{ type: 'paragraph' }] }}
-                pageSize={pageSize}
                 zoom={zoom}
                 onChange={(doc) => updateActive({ documentContent: doc })}
                 onEditorReady={setDocumentEditorInstance}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
+                findSignal={findSignal}
+                onPageInfoChange={setDocPageInfo}
+                showOutline={showOutline}
+                onToggleOutline={() => setShowOutline((prev) => !prev)}
               />
             )}
             {activeTab.kind === 'spreadsheet' && (
@@ -1155,15 +1305,21 @@ export const App: React.FC = () => {
                 sheets={activeTab.spreadsheetData || []}
                 onChange={(sheets) => updateActive({ spreadsheetData: sheets })}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
+                onWorkbookReady={handleWorkbookReady}
+                findSignal={findSignal}
+                onSelectionChange={setSheetStats}
               />
             )}
             {activeTab.kind === 'presentation' && (
               <SlideEditor
                 key={`${activeTab.id}-${activeTab.historyEpoch || 0}`}
+                ref={slideCommands}
                 presentation={activeTab.presentationData || { title: activeTab.fileName, slides: [] }}
                 onChange={(presentation) => updateActive({ presentationData: presentation })}
                 onSaveShortcut={() => void actionsRef.current.saveActive()}
                 onActiveSlideChange={setSlideIndex}
+                onSelectionChange={setSlideState}
+                findSignal={findSignal}
               />
             )}
             {activeTab.kind === 'pdf' && activeTab.pdfData && (
@@ -1178,7 +1334,18 @@ export const App: React.FC = () => {
               />
             )}
           </main>
-          <StatusBar editorState={activeTab} documentEditor={documentEditorInstance} pageSize={pageSize} zoom={zoom} onZoomChange={setZoom} />
+          <StatusBar
+            editorState={activeTab}
+            documentEditor={documentEditorInstance}
+            pageInfo={docPageInfo}
+            sheetStats={sheetStats}
+            zoom={zoom}
+            onZoomChange={setZoom}
+            lastSavedTime={lastSavedTime}
+            missingFonts={fontRevision >= 0 ? missingFontNames(familiesInState(activeTab)) : []}
+            fontPack={fontPack}
+            onRetryFontPack={retryFontPackCache}
+          />
         </>
       )}
 
@@ -1198,6 +1365,12 @@ export const App: React.FC = () => {
         />
       )}
       {choice && <ChoiceDialog title={choice.title} message={choice.message} buttons={choice.buttons} onChoose={resolveChoice} />}
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <ShortcutPanel
+        open={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+        activeKind={activeTab?.kind}
+      />
       {printJob && (
         <PrintView
           tab={printJob.tab}
@@ -1205,6 +1378,15 @@ export const App: React.FC = () => {
           slideIndex={slideIndex}
           pdfPage={pdfPage}
           onDone={() => setPrintJob(null)}
+        />
+      )}
+      {slideshowState?.active && activeTab?.kind === 'presentation' && (
+        <Slideshow
+          slides={activeTab.presentationData?.slides || []}
+          slideSize={activeTab.presentationData?.slideSize}
+          mode={slideshowState.mode}
+          initialIndex={slideIndex}
+          onExit={() => setSlideshowState(null)}
         />
       )}
     </div>

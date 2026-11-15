@@ -1,6 +1,9 @@
 import type { JSONContent } from '@tiptap/core';
 
 export type DocumentKind = 'document' | 'spreadsheet' | 'presentation' | 'pdf';
+export type SupportedDocumentKind = 'document' | 'spreadsheet' | 'presentation';
+export type RecentFileRecord = RecentItem;
+export type RecoveredDraft = DraftItem;
 
 export type SupportedFormat =
   | 'docx'
@@ -13,6 +16,9 @@ export type SupportedFormat =
   | 'csv'
   | 'tsv'
   | 'pptx'
+  | 'tmdx'
+  | 'pmdx'
+  | 'prdx'
   | 'pdf';
 
 export interface ImportWarning {
@@ -54,7 +60,8 @@ export interface DraftItem {
 // Slide model
 export interface SlideElement {
   id: string;
-  type: 'text' | 'image' | 'rect' | 'video';
+  type: 'text' | 'image' | 'rect' | 'video' | 'table';
+  shape?: 'rect' | 'roundRect' | 'ellipse' | 'triangle' | 'line';
   x: number; // percentage or pt (0-100% or px)
   y: number;
   width: number;
@@ -74,6 +81,8 @@ export interface SlideElement {
   fill?: string;
   borderColor?: string;
   borderWidth?: number;
+  // table properties
+  rows?: string[][];
 }
 
 export interface Slide {
@@ -81,11 +90,13 @@ export interface Slide {
   title?: string;
   background?: string;
   elements: SlideElement[];
+  notes?: string;
 }
 
 export interface PresentationModel {
   title: string;
   slides: Slide[];
+  slideSize?: '16:9' | '16:10' | '4:3';
 }
 
 export interface EditorState {
@@ -94,8 +105,10 @@ export interface EditorState {
   fileName: string;
   format: SupportedFormat;
   filePath?: string;
+  path?: string;
   fileHandle?: FileSystemFileHandle;
   isDirty: boolean;
+  dirty?: boolean;
   cleanHash?: string;
   contentHash?: string;
   diskStamp?: { modifiedMs: number; len: number } | null;
@@ -108,4 +121,3 @@ export interface EditorState {
   presentationData?: PresentationModel;
   pdfData?: Uint8Array;
 }
-

@@ -1,4 +1,5 @@
 import { DocumentKind, SupportedFormat } from '../types';
+import { t } from '../i18n/instance';
 
 export interface DiskStamp {
   modifiedMs: number;
@@ -218,7 +219,7 @@ export function planOpenBatch(items: OpenCandidate[], tabs: TabRef[], hasActiveT
           action: {
             type: 'focus-dirty',
             tabId: tab.id,
-            message: 'This file is already open with unsaved edits.',
+            message: t('dialog.alreadyOpenDirty'),
           } as OpenAction,
         };
       }
@@ -236,7 +237,7 @@ export function planOpenBatch(items: OpenCandidate[], tabs: TabRef[], hasActiveT
           action: {
             type: 'focus-dirty',
             tabId: tab.id,
-            message: 'This file is already open with unsaved edits.',
+            message: t('dialog.alreadyOpenDirty'),
           } as OpenAction,
         };
       }
@@ -315,6 +316,7 @@ export interface FormatFilter {
 
 const DOCUMENT_FILTERS: FormatFilter[] = [
   { format: 'docx', label: 'Document', extensions: ['docx'] },
+  { format: 'tmdx', label: 'Document', extensions: ['tmdx'] },
   { format: 'odt', label: 'OpenDocument Text', extensions: ['odt'] },
   { format: 'rtf', label: 'Rich Text Format', extensions: ['rtf'] },
   { format: 'txt', label: 'Plain Text', extensions: ['txt'] },
@@ -324,12 +326,14 @@ const DOCUMENT_FILTERS: FormatFilter[] = [
 
 const SPREADSHEET_FILTERS: FormatFilter[] = [
   { format: 'xlsx', label: 'Spreadsheet', extensions: ['xlsx'] },
+  { format: 'pmdx', label: 'Spreadsheet', extensions: ['pmdx'] },
   { format: 'csv', label: 'Comma Separated Values', extensions: ['csv'] },
   { format: 'tsv', label: 'Tab Separated Values', extensions: ['tsv'] },
 ];
 
 const PRESENTATION_FILTERS: FormatFilter[] = [
   { format: 'pptx', label: 'Presentation', extensions: ['pptx'] },
+  { format: 'prdx', label: 'Presentation', extensions: ['prdx'] },
 ];
 
 const PDF_FILTERS: FormatFilter[] = [
@@ -401,7 +405,7 @@ export function resolvePickedName(
     if (kind === 'document') {
       return { ok: true, fileName: name, format: 'html' };
     }
-    return { ok: false, message: `Folio cannot save "${name}". The extension ".htm" is not supported for ${kind}s.` };
+    return { ok: false, message: t('dialog.badExtension', { name, ext: '.htm', kind }) };
   }
 
   const allowedFilters = saveFiltersForKind(kind);
@@ -412,7 +416,7 @@ export function resolvePickedName(
 
   return {
     ok: false,
-    message: `Folio cannot save "${name}". The extension ".${ext}" is not supported for ${kind}s.`,
+    message: t('dialog.badExtension', { name, ext: `.${ext}`, kind }),
   };
 }
 
@@ -433,13 +437,13 @@ export function getActiveSheet<T extends { status?: number; name?: string }>(
 export function lossyWarningMessage(targetFormat: SupportedFormat, sheetName?: string): string {
   if (targetFormat === 'csv' || targetFormat === 'tsv') {
     const sheet = sheetName || 'Sheet1';
-    return `Saving as ${targetFormat.toUpperCase()} only saves the active sheet "${sheet}". Formulas, formatting, and other sheets will not be saved.`;
+    return t('dialog.lossySheet', { format: targetFormat.toUpperCase(), sheet });
   }
   if (targetFormat === 'txt') {
-    return 'Saving as plain text will remove all formatting, images, and layout.';
+    return t('dialog.lossyTxt');
   }
   if (targetFormat === 'md') {
-    return 'Saving as Markdown may remove rich text formatting, styles, and layout.';
+    return t('dialog.lossyMd');
   }
-  return 'Some formatting or content may be lost in this format.';
+  return t('dialog.lossyGeneric');
 }
